@@ -26,11 +26,6 @@ python -m src.main --tz Asia/Shanghai
 ### flomo Sync (optional)
 
 - `FLOMO_API_URL` (enable sync when provided)
-- `FLOMO_API_TOKEN`
-- `FLOMO_TOKEN_HEADER` (default: `Authorization`)
-- `FLOMO_TOKEN_PREFIX` (default: `Bearer`)
-- `FLOMO_CONTENT_FIELD` (default: `content`)
-- `FLOMO_DEDUPE_FIELD` (optional, webhook 场景可留空)
 
 ## Run Modes
 

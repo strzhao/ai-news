@@ -19,20 +19,10 @@ class FlomoClient:
     def __init__(
         self,
         api_url: str | None = None,
-        api_token: str | None = None,
-        token_header: str | None = None,
-        token_prefix: str | None = None,
-        content_field: str | None = None,
-        dedupe_field: str | None = None,
         timeout_seconds: int = 20,
         max_retries: int = 3,
     ) -> None:
         self.api_url = api_url or os.getenv("FLOMO_API_URL")
-        self.api_token = api_token or os.getenv("FLOMO_API_TOKEN")
-        self.token_header = token_header or os.getenv("FLOMO_TOKEN_HEADER", "Authorization")
-        self.token_prefix = token_prefix or os.getenv("FLOMO_TOKEN_PREFIX", "Bearer")
-        self.content_field = content_field or os.getenv("FLOMO_CONTENT_FIELD", "content")
-        self.dedupe_field = dedupe_field if dedupe_field is not None else os.getenv("FLOMO_DEDUPE_FIELD", "")
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
 
@@ -41,13 +31,7 @@ class FlomoClient:
 
     def send(self, payload: FlomoPayload) -> None:
         headers = {"Content-Type": "application/json"}
-        if self.api_token:
-            token_value = f"{self.token_prefix} {self.api_token}".strip()
-            headers[self.token_header] = token_value
-
-        body = {self.content_field: payload.content}
-        if self.dedupe_field:
-            body[self.dedupe_field] = payload.dedupe_key
+        body = {"content": payload.content}
 
         backoff_seconds = 1.0
         last_error: Exception | None = None

@@ -20,12 +20,7 @@ def test_flomo_webhook_payload_without_dedupe(monkeypatch):
         return response
 
     monkeypatch.setattr("requests.post", _fake_post)
-    client = FlomoClient(
-        api_url="https://flomoapp.com/iwh/demo",
-        api_token=None,
-        dedupe_field="",
-        content_field="content",
-    )
+    client = FlomoClient(api_url="https://flomoapp.com/iwh/demo")
     client.send(FlomoPayload(content="Hello, #flomo", dedupe_key="digest-2026-02-26"))
 
     assert captured["json"] == {"content": "Hello, #flomo"}
