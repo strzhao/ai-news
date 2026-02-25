@@ -1,0 +1,54 @@
+name: Daily AI Digest
+
+on:
+  schedule:
+    # 23:00 UTC = 07:00 Asia/Shanghai (next day)
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-digest:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
+      FLOMO_API_URL: ${{ secrets.FLOMO_API_URL }}
+      FLOMO_API_TOKEN: ${{ secrets.FLOMO_API_TOKEN }}
+      FLOMO_TOKEN_HEADER: ${{ vars.FLOMO_TOKEN_HEADER || 'Authorization' }}
+      FLOMO_TOKEN_PREFIX: ${{ vars.FLOMO_TOKEN_PREFIX || 'Bearer' }}
+      FLOMO_CONTENT_FIELD: ${{ vars.FLOMO_CONTENT_FIELD || 'content' }}
+      FLOMO_DEDUPE_FIELD: ${{ vars.FLOMO_DEDUPE_FIELD || '' }}
+      AUTO_COMMIT_REPORTS: ${{ vars.AUTO_COMMIT_REPORTS || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate daily digest
+        run: python -m src.main --tz Asia/Shanghai
+
+      - name: Commit report
+        if: env.AUTO_COMMIT_REPORTS == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          if git diff --staged --quiet; then
+            echo "No report changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: add daily digest report"
+          git push

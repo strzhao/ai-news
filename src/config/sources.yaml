@@ -1,0 +1,33 @@
+sources:
+  - id: openai_blog
+    name: OpenAI Blog
+    url: https://openai.com/blog/rss.xml
+    source_weight: 1.0
+  - id: cohere_blog
+    name: Cohere Blog
+    url: https://www.cohere.com/blog/rss.xml
+    source_weight: 0.9
+  - id: deepmind_blog
+    name: Google DeepMind Blog
+    url: https://deepmind.google/blog/rss.xml
+    source_weight: 0.95
+  - id: huggingface_blog
+    name: Hugging Face Blog
+    url: https://huggingface.co/blog/feed.xml
+    source_weight: 0.9
+  - id: nvidia_dev_blog
+    name: NVIDIA Developer Blog
+    url: https://developer.nvidia.com/blog/feed/
+    source_weight: 0.9
+  - id: aws_ml_blog
+    name: AWS ML Blog
+    url: https://aws.amazon.com/blogs/machine-learning/feed/
+    source_weight: 0.85
+  - id: google_ai_blog
+    name: Google AI Blog
+    url: https://blog.google/technology/ai/rss/
+    source_weight: 0.85
+  - id: langchain_blog
+    name: LangChain Blog
+    url: https://blog.langchain.dev/rss/
+    source_weight: 0.85

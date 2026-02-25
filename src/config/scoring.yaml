@@ -1,0 +1,33 @@
+weights:
+  engineering_value: 35
+  novelty: 25
+  authority: 20
+  actionability: 15
+  recency: 5
+worth_thresholds:
+  must_read: 75
+  worth_reading: 55
+source_authority_defaults:
+  openai_blog: 95
+  cohere_blog: 86
+  deepmind_blog: 90
+  huggingface_blog: 88
+  nvidia_dev_blog: 86
+  aws_ml_blog: 84
+  google_ai_blog: 84
+  langchain_blog: 84
+keyword_signals:
+  engineering_value:
+    strong: [production, latency, benchmark, deployment, inference, optimization, case study, real-world, architecture, cost]
+    medium: [tooling, integration, workflow, sdk, api, pipeline]
+  novelty:
+    strong: [state-of-the-art, sota, breakthrough, first, launch, release, new model, major update]
+    medium: [update, improved, upgraded, enhancement]
+  actionability:
+    strong: [code, github, tutorial, how-to, implementation, walkthrough]
+    medium: [guide, best practices, lessons learned]
+penalties:
+  outdated_days: 14
+  outdated_penalty: 12
+  overly_marketing_terms: [best ever, game changer, revolutionary]
+  marketing_penalty: 6

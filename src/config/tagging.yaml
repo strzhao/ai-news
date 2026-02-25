@@ -1,0 +1,42 @@
+domain_tags:
+  大模型: [llm, large language model, foundation model, gpt, claude, gemini]
+  AI工程: [production, deployment, serving, pipeline, mlops, llmops]
+  AI应用: [assistant, application, use case, workflow]
+  多模态: [multimodal, vision-language, audio, video]
+  语音: [speech, asr, tts]
+  计算机视觉: [vision, image, detection, segmentation]
+  数据与评测: [benchmark, evaluation, leaderboard, dataset]
+task_tags:
+  推理优化: [inference, latency, throughput, quantization, kernel]
+  训练优化: [training, fine-tuning, finetuning, optimization]
+  RAG: [rag, retrieval, vector database, embedding]
+  Agent: [agent, tool use, function calling, orchestration]
+  模型发布: [model release, launch, update, preview]
+  工程实践: [best practices, case study, lessons learned, architecture]
+  安全与治理: [safety, alignment, governance, policy]
+  成本优化: [cost, efficiency, pricing]
+tech_tags:
+  LoRA: [lora, low-rank]
+  MoE: [moe, mixture of experts]
+  RLHF: [rlhf]
+  SFT: [sft, supervised fine-tuning]
+  vLLM: [vllm]
+  TensorRT-LLM: [tensorrt-llm]
+  ONNX: [onnx]
+  CUDA: [cuda]
+  KV Cache: [kv cache]
+  Transformer: [transformer]
+  Diffusion: [diffusion]
+synonyms:
+  检索增强生成: RAG
+  retrieval-augmented generation: RAG
+  llmops: AI工程
+  mlops: AI工程
+  function calling: Agent
+  fine tuning: 训练优化
+blocked_tags:
+  - AI
+  - 人工智能
+  - 技术
+  - 新闻
+  - 文章
