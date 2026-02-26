@@ -32,9 +32,10 @@ python -m src.main --tz Asia/Shanghai
 - `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
 - `MAX_EVAL_ARTICLES` (default: `60`)
 - `MIN_HIGHLIGHT_SCORE` (default: `62`, 低于阈值不进入重点文章)
+- `MIN_WORTH_READING_SCORE` (default: `58`, 可读文章进入重点清单的最低分)
 - `MIN_HIGHLIGHT_CONFIDENCE` (default: `0.55`, 低置信度评估不进入重点文章)
 - `HIGHLIGHT_DYNAMIC_PERCENTILE` (default: `70`, 按当日评分分布抬高重点门槛)
-- `HIGHLIGHT_SELECTION_RATIO` (default: `0.35`, 重点文章按评估池比例精选)
+- `HIGHLIGHT_SELECTION_RATIO` (default: `0.45`, 重点文章按评估池比例精选)
 - `HIGHLIGHT_MIN_COUNT` (default: `4`, 保底最少重点文章数)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。

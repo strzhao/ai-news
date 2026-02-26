@@ -14,7 +14,7 @@ from src.integrations.flomo_client import FlomoClient, FlomoSyncError
 from src.llm.article_evaluator import ArticleEvaluator
 from src.llm.deepseek_client import DeepSeekClient, DeepSeekError
 from src.llm.summarizer import DigestSummarizer
-from src.models import DailyDigest, ScoredArticle, TaggedArticle, WORTH_SKIP
+from src.models import DailyDigest, ScoredArticle, TaggedArticle, WORTH_MUST_READ, WORTH_SKIP, WORTH_WORTH_READING
 from src.output.flomo_formatter import build_flomo_payload
 from src.output.markdown_writer import render_digest_markdown, write_digest_markdown
 from src.process.dedupe import dedupe_articles
@@ -48,7 +48,7 @@ def _percentile(values: list[float], percentile: float) -> float:
 
 
 def _highlight_cap(total_assessed: int, top_n: int) -> int:
-    ratio = min(1.0, max(0.05, float(os.getenv("HIGHLIGHT_SELECTION_RATIO", "0.35"))))
+    ratio = min(1.0, max(0.05, float(os.getenv("HIGHLIGHT_SELECTION_RATIO", "0.45"))))
     minimum = max(1, int(os.getenv("HIGHLIGHT_MIN_COUNT", "4")))
     capped = max(minimum, int(round(total_assessed * ratio)))
     return max(1, min(top_n, capped))
@@ -173,6 +173,7 @@ def run() -> int:
     article_map = {article.id: article for article in deduped}
     tagged_highlights: list[TaggedArticle] = []
     min_highlight_score = float(os.getenv("MIN_HIGHLIGHT_SCORE", "62"))
+    min_worth_reading_score = float(os.getenv("MIN_WORTH_READING_SCORE", "58"))
     min_highlight_confidence = float(os.getenv("MIN_HIGHLIGHT_CONFIDENCE", "0.55"))
     dynamic_percentile = float(os.getenv("HIGHLIGHT_DYNAMIC_PERCENTILE", "70"))
     scored_assessments = [item.quality_score for item in assessments.values() if item.worth != WORTH_SKIP]
@@ -180,14 +181,17 @@ def run() -> int:
     effective_threshold = max(min_highlight_score, dynamic_threshold)
     selection_cap = _highlight_cap(len(scored_assessments), args.top_n)
     LOGGER.info(
-        "Highlight gating: threshold=%.1f (base=%.1f, p%.0f=%.1f), min_confidence=%.2f, cap=%d",
+        "Highlight gating: must_read>=%.1f (base=%.1f, p%.0f=%.1f), worth_reading>=%.1f, min_confidence=%.2f, cap=%d",
         effective_threshold,
         min_highlight_score,
         dynamic_percentile,
         dynamic_threshold,
+        min_worth_reading_score,
         min_highlight_confidence,
         selection_cap,
     )
+
+    fallback_worth_reading: list[tuple] = []
     for highlight in ai_highlights:
         if highlight.worth == WORTH_SKIP:
             continue
@@ -199,10 +203,20 @@ def run() -> int:
             continue
         if assessment.worth == WORTH_SKIP:
             continue
-        if assessment.quality_score < effective_threshold:
-            continue
         if assessment.confidence < min_highlight_confidence:
             continue
+        if assessment.worth == WORTH_MUST_READ and assessment.quality_score < effective_threshold:
+            continue
+        if assessment.worth == WORTH_WORTH_READING and assessment.quality_score < min_worth_reading_score:
+            continue
+
+        tuple_item = (highlight, article, assessment)
+        if assessment.worth == WORTH_MUST_READ:
+            target = tagged_highlights
+        else:
+            fallback_worth_reading.append(tuple_item)
+            continue
+
         scored_article = ScoredArticle(
             id=article.id,
             title=article.title,
@@ -211,16 +225,37 @@ def run() -> int:
             source_name=article.source_name,
             published_at=article.published_at,
             summary_raw=article.summary_raw,
-            lead_paragraph=highlight.one_line_summary or (assessment.one_line_summary if assessment else ""),
+            lead_paragraph=highlight.one_line_summary or assessment.one_line_summary,
             content_text=article.content_text,
             tags=[],
             score=float(assessment.quality_score),
             worth=assessment.worth,
             reason_short=highlight.reason_short or assessment.reason_short,
         )
-        tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
+        target.append(TaggedArticle(article=scored_article, generated_tags=[]))
         if len(tagged_highlights) >= selection_cap:
             break
+
+    if len(tagged_highlights) < selection_cap:
+        for highlight, article, assessment in fallback_worth_reading:
+            scored_article = ScoredArticle(
+                id=article.id,
+                title=article.title,
+                url=article.url,
+                source_id=article.source_id,
+                source_name=article.source_name,
+                published_at=article.published_at,
+                summary_raw=article.summary_raw,
+                lead_paragraph=highlight.one_line_summary or assessment.one_line_summary,
+                content_text=article.content_text,
+                tags=[],
+                score=float(assessment.quality_score),
+                worth=assessment.worth,
+                reason_short=highlight.reason_short or assessment.reason_short,
+            )
+            tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
+            if len(tagged_highlights) >= selection_cap:
+                break
 
     digest = DailyDigest(
         date=report_date,
