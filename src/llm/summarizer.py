@@ -90,8 +90,14 @@ class DigestSummarizer:
                     "actionability_score": assessment.actionability_score,
                     "novelty_score": assessment.novelty_score,
                     "clarity_score": assessment.clarity_score,
+                    "company_impact": assessment.company_impact,
+                    "team_impact": assessment.team_impact,
+                    "personal_impact": assessment.personal_impact,
+                    "execution_clarity": assessment.execution_clarity,
                     "one_line_summary": assessment.one_line_summary,
                     "reason_short": assessment.reason_short,
+                    "action_hint": assessment.action_hint,
+                    "best_for_roles": assessment.best_for_roles,
                     "evidence_signals": assessment.evidence_signals,
                     "confidence": assessment.confidence,
                 }
@@ -108,9 +114,9 @@ class DigestSummarizer:
                 "3) 每篇一句话总结（20-35字，可沿用单篇评估结论）；"
                 "4) 阅读建议(必读/可读/跳过)；5) 阅读理由（12-28字）；"
                 "6) 生成本期日报级技术标签 daily_tags（3-10个），只保留技术维度。"
-                "排序规则：优先 practicality/actionability/quality_score 与 evidence_signals，"
-                "同分时参考时效性与 source_quality_score。"
-                "请减少把泛观点文章标为必读的概率。"
+                "排序规则：优先 reading ROI（quality_score）和 company/team/personal impact、execution_clarity，"
+                "再参考 novelty、时效性、source_quality_score。"
+                "核心目标是帮助公司、团队和个人在 AI 上持续进步，不做机械化“必须有代码”判断。"
                 "输出字段：top_summary:string[]，highlights:object[]，daily_tags:string[]。"
                 "highlights 字段：article_id, rank, one_line_summary, worth, reason_short。"
             )

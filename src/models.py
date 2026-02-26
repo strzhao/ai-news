@@ -66,6 +66,12 @@ class ArticleAssessment:
     clarity_score: float
     one_line_summary: str
     reason_short: str
+    company_impact: float = 0.0
+    team_impact: float = 0.0
+    personal_impact: float = 0.0
+    execution_clarity: float = 0.0
+    action_hint: str = ""
+    best_for_roles: list[str] = field(default_factory=list)
     evidence_signals: list[str] = field(default_factory=list)
     confidence: float = 0.0
     cache_key: str = ""

@@ -68,6 +68,12 @@ class ArticleEvalCache:
             clarity_score=float(payload.get("clarity_score", 0.0)),
             one_line_summary=str(payload.get("one_line_summary", "")),
             reason_short=str(payload.get("reason_short", "")),
+            company_impact=float(payload.get("company_impact", 0.0)),
+            team_impact=float(payload.get("team_impact", 0.0)),
+            personal_impact=float(payload.get("personal_impact", 0.0)),
+            execution_clarity=float(payload.get("execution_clarity", 0.0)),
+            action_hint=str(payload.get("action_hint", "")),
+            best_for_roles=[str(item) for item in payload.get("best_for_roles", []) if str(item).strip()],
             evidence_signals=[str(item) for item in payload.get("evidence_signals", []) if str(item).strip()],
             confidence=float(payload.get("confidence", 0.0)),
             cache_key=cache_key,
@@ -95,6 +101,12 @@ class ArticleEvalCache:
             "clarity_score": assessment.clarity_score,
             "one_line_summary": assessment.one_line_summary,
             "reason_short": assessment.reason_short,
+            "company_impact": assessment.company_impact,
+            "team_impact": assessment.team_impact,
+            "personal_impact": assessment.personal_impact,
+            "execution_clarity": assessment.execution_clarity,
+            "action_hint": assessment.action_hint,
+            "best_for_roles": assessment.best_for_roles,
             "evidence_signals": assessment.evidence_signals,
             "confidence": assessment.confidence,
         }
@@ -197,4 +209,3 @@ class ArticleEvalCache:
                         now,
                     ),
                 )
-

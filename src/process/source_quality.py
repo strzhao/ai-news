@@ -73,6 +73,9 @@ def compute_source_quality_scores(
             continue
         count = len(rows)
         avg_quality = sum(item.quality_score for _, item in rows) / count
+        avg_impact = (
+            sum((item.company_impact + item.team_impact + item.personal_impact) / 3 for _, item in rows) / count
+        )
         must_read_rate = sum(1 for _, item in rows if item.worth == WORTH_MUST_READ) / count
         avg_confidence = sum(item.confidence for _, item in rows) / count
         freshness = sum(
@@ -82,10 +85,11 @@ def compute_source_quality_scores(
         ) / count
 
         batch_quality = (
-            avg_quality * 0.45
-            + must_read_rate * 100 * 0.30
-            + avg_confidence * 100 * 0.15
-            + freshness * 100 * 0.10
+            avg_quality * 0.40
+            + avg_impact * 0.25
+            + must_read_rate * 100 * 0.20
+            + avg_confidence * 100 * 0.10
+            + freshness * 100 * 0.05
         )
         historical = historical_scores.get(source_id)
         if historical and count < min_articles_for_reliable_score:
