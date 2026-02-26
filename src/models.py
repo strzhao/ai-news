@@ -56,6 +56,32 @@ class AIHighlight:
 
 
 @dataclass(slots=True)
+class ArticleAssessment:
+    article_id: str
+    worth: str
+    quality_score: float
+    practicality_score: float
+    actionability_score: float
+    novelty_score: float
+    clarity_score: float
+    one_line_summary: str
+    reason_short: str
+    evidence_signals: list[str] = field(default_factory=list)
+    confidence: float = 0.0
+    cache_key: str = ""
+
+
+@dataclass(slots=True)
+class SourceQualityScore:
+    source_id: str
+    quality_score: float
+    article_count: int
+    must_read_rate: float
+    avg_confidence: float
+    freshness: float
+
+
+@dataclass(slots=True)
 class TaggedArticle:
     article: ScoredArticle
     generated_tags: list[str]

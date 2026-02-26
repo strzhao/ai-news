@@ -5,7 +5,15 @@ import re
 from typing import Any, Iterable
 
 from src.llm.deepseek_client import DeepSeekClient, DeepSeekError
-from src.models import AIHighlight, Article, WORTH_MUST_READ, WORTH_SKIP, WORTH_WORTH_READING
+from src.models import (
+    AIHighlight,
+    Article,
+    ArticleAssessment,
+    SourceQualityScore,
+    WORTH_MUST_READ,
+    WORTH_SKIP,
+    WORTH_WORTH_READING,
+)
 
 VALID_WORTH = {WORTH_MUST_READ, WORTH_WORTH_READING, WORTH_SKIP}
 TAG_SPLIT_RE = re.compile(r"[,/\n，、;；|]+")
@@ -22,6 +30,8 @@ class DigestSummarizer:
         timezone_name: str,
         top_n: int = 8,
         language: str = "zh-CN",
+        assessments: dict[str, ArticleAssessment] | None = None,
+        source_quality_scores: dict[str, SourceQualityScore] | None = None,
     ) -> tuple[str, list[AIHighlight], list[str]]:
         article_list = list(articles)
         if not article_list:
@@ -33,6 +43,8 @@ class DigestSummarizer:
             timezone_name=timezone_name,
             language=language,
             top_n=top_n,
+            assessments=assessments,
+            source_quality_scores=source_quality_scores,
         )
         summary_lines = llm_result.get("top_summary", [])
         top_summary = "\n".join(f"- {line}" for line in summary_lines if str(line).strip())
@@ -53,9 +65,15 @@ class DigestSummarizer:
         timezone_name: str,
         language: str,
         top_n: int,
+        assessments: dict[str, ArticleAssessment] | None = None,
+        source_quality_scores: dict[str, SourceQualityScore] | None = None,
     ) -> dict[str, Any]:
-        inputs = [
-            {
+        inputs = []
+        source_quality_scores = source_quality_scores or {}
+        for article in articles:
+            assessment = (assessments or {}).get(article.id)
+            source_quality = source_quality_scores.get(article.source_id)
+            row = {
                 "article_id": article.id,
                 "title": article.title,
                 "source": article.source_name,
@@ -64,21 +82,52 @@ class DigestSummarizer:
                 "summary": article.summary_raw,
                 "lead_paragraph": article.lead_paragraph,
             }
-            for article in articles
-        ]
-        system_prompt = (
-            "你是顶级 AI 资讯主编，偏产业实战。"
-            "必须严格输出 JSON，不允许输出 Markdown 或解释。"
-            "请基于文章内容完成：1) 今日速览 4-6 条；2) 重点文章排序（最多 top_n）；"
-            "3) 每篇一句话总结（20-35字）；4) 阅读建议(必读/可读/跳过)；"
-            "5) 阅读理由（12-28字，强调是否值得投入阅读时间）；"
-            "6) 生成本期日报级技术标签 daily_tags（4-12个），只保留技术维度，避免业务/来源/泛化标签。"
-            "排序必须优先实战价值：有代码/架构细节/部署经验/评测数据/成本与性能优化的内容优先；"
-            "纯市场宣传、融资新闻、泛产品公告降级。"
-            "daily_tags 中每个标签都要简短、准确、有聚类价值。"
-            "输出字段：top_summary:string[]，highlights:object[]，daily_tags:string[]。"
-            "highlights 中每项字段：article_id, rank, one_line_summary, worth, reason_short。"
-        )
+            if assessment:
+                row["assessment"] = {
+                    "worth": assessment.worth,
+                    "quality_score": assessment.quality_score,
+                    "practicality_score": assessment.practicality_score,
+                    "actionability_score": assessment.actionability_score,
+                    "novelty_score": assessment.novelty_score,
+                    "clarity_score": assessment.clarity_score,
+                    "one_line_summary": assessment.one_line_summary,
+                    "reason_short": assessment.reason_short,
+                    "evidence_signals": assessment.evidence_signals,
+                    "confidence": assessment.confidence,
+                }
+            if source_quality:
+                row["source_quality_score"] = source_quality.quality_score
+            inputs.append(row)
+
+        if assessments:
+            system_prompt = (
+                "你是顶级 AI 资讯主编，偏产业实战。"
+                "你收到的是文章基础信息+单篇AI评估结果。单篇评估已完成，你需要做二次编排。"
+                "必须严格输出 JSON，不允许输出 Markdown 或解释。"
+                "请完成：1) 今日速览 4-6 条；2) 重点文章排序（最多 top_n）；"
+                "3) 每篇一句话总结（20-35字，可沿用单篇评估结论）；"
+                "4) 阅读建议(必读/可读/跳过)；5) 阅读理由（12-28字）；"
+                "6) 生成本期日报级技术标签 daily_tags（3-10个），只保留技术维度。"
+                "排序规则：优先 practicality/actionability/quality_score 与 evidence_signals，"
+                "同分时参考时效性与 source_quality_score。"
+                "请减少把泛观点文章标为必读的概率。"
+                "输出字段：top_summary:string[]，highlights:object[]，daily_tags:string[]。"
+                "highlights 字段：article_id, rank, one_line_summary, worth, reason_short。"
+            )
+        else:
+            system_prompt = (
+                "你是顶级 AI 资讯主编，偏产业实战。"
+                "必须严格输出 JSON，不允许输出 Markdown 或解释。"
+                "请基于文章内容完成：1) 今日速览 4-6 条；2) 重点文章排序（最多 top_n）；"
+                "3) 每篇一句话总结（20-35字）；4) 阅读建议(必读/可读/跳过)；"
+                "5) 阅读理由（12-28字，强调是否值得投入阅读时间）；"
+                "6) 生成本期日报级技术标签 daily_tags（4-12个），只保留技术维度，避免业务/来源/泛化标签。"
+                "排序必须优先实战价值：有代码/架构细节/部署经验/评测数据/成本与性能优化的内容优先；"
+                "纯市场宣传、融资新闻、泛产品公告降级。"
+                "daily_tags 中每个标签都要简短、准确、有聚类价值。"
+                "输出字段：top_summary:string[]，highlights:object[]，daily_tags:string[]。"
+                "highlights 中每项字段：article_id, rank, one_line_summary, worth, reason_short。"
+            )
         user_prompt = {
             "date": date,
             "timezone": timezone_name,

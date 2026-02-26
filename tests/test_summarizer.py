@@ -6,7 +6,7 @@ import pytest
 
 from src.llm.deepseek_client import DeepSeekError
 from src.llm.summarizer import DigestSummarizer
-from src.models import Article
+from src.models import Article, ArticleAssessment, SourceQualityScore
 
 
 class _FakeClient:
@@ -82,3 +82,55 @@ def test_build_digest_content_accepts_string_daily_tags() -> None:
     summarizer = DigestSummarizer(client=_FakeClient(payload))
     _, _, daily_tags = summarizer.build_digest_content([_article("a1")], "2026-02-26", "Asia/Shanghai", top_n=8)
     assert daily_tags == ["#RAG", "#vLLM", "#MoE"]
+
+
+def test_build_digest_content_with_assessments() -> None:
+    payload = {
+        "top_summary": ["要点1"],
+        "highlights": [
+            {
+                "article_id": "a1",
+                "rank": 1,
+                "one_line_summary": "一句话总结",
+                "worth": "可读",
+                "reason_short": "有参考价值",
+            }
+        ],
+        "daily_tags": ["Agent", "Cursor"],
+    }
+    summarizer = DigestSummarizer(client=_FakeClient(payload))
+    assessments = {
+        "a1": ArticleAssessment(
+            article_id="a1",
+            worth="必读",
+            quality_score=88,
+            practicality_score=90,
+            actionability_score=87,
+            novelty_score=80,
+            clarity_score=86,
+            one_line_summary="单篇评估总结",
+            reason_short="单篇评估理由",
+            evidence_signals=["code"],
+            confidence=0.9,
+        )
+    }
+    source_scores = {
+        "s": SourceQualityScore(
+            source_id="s",
+            quality_score=83,
+            article_count=10,
+            must_read_rate=0.4,
+            avg_confidence=0.8,
+            freshness=0.5,
+        )
+    }
+    _, highlights, daily_tags = summarizer.build_digest_content(
+        [_article("a1")],
+        "2026-02-26",
+        "Asia/Shanghai",
+        top_n=8,
+        assessments=assessments,
+        source_quality_scores=source_scores,
+    )
+    assert highlights[0].worth == "可读"
+    assert daily_tags == ["#Agent", "#Cursor"]

@@ -65,9 +65,14 @@ def fetch_articles(
     sources: Iterable[SourceConfig],
     timeout_seconds: int = 20,
     max_per_source: int = 25,
+    per_source_limits: dict[str, int] | None = None,
+    total_budget: int = 0,
 ) -> list[Article]:
     articles: list[Article] = []
+    per_source_limits = per_source_limits or {}
     for source in sources:
+        if total_budget > 0 and len(articles) >= total_budget:
+            break
         try:
             response = requests.get(source.url, timeout=timeout_seconds)
             response.raise_for_status()
@@ -76,8 +81,11 @@ def fetch_articles(
             continue
 
         parsed = feedparser.parse(response.text)
-        entries = parsed.entries[:max_per_source]
+        per_source_cap = int(per_source_limits.get(source.id, max_per_source))
+        entries = parsed.entries[: max(0, per_source_cap)]
         for entry in entries:
+            if total_budget > 0 and len(articles) >= total_budget:
+                break
             title = _clean_html_text(entry.get("title", ""))
             url = entry.get("link", "").strip()
             if not title or not url:
