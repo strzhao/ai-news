@@ -38,7 +38,7 @@ def test_markdown_title_and_tag_placement() -> None:
     assert "## 本期技术标签" not in output
     assert "[t1](https://example.com/t1)" not in output
     assert "原文链接：https://example.com/t1" in output
-    assert output.rstrip().endswith("#RAG #MoE")
+    assert output.rstrip().endswith("#RAG#MoE")
 
 
 def test_markdown_star_marker_only_for_must_read() -> None:

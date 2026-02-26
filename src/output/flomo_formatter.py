@@ -20,7 +20,7 @@ def render_flomo_content(digest: DailyDigest, global_tag_limit: int = 20) -> str
         lines.append(f"链接：{article.url}")
 
     if digest.daily_tags:
-        lines.append(" ".join(digest.daily_tags[:global_tag_limit]))
+        lines.append("".join(digest.daily_tags[:global_tag_limit]))
 
     return "\n".join(lines).strip() + "\n"
 

@@ -28,7 +28,7 @@ def render_digest_markdown(digest: DailyDigest) -> str:
         lines.append("")
 
     if digest.daily_tags:
-        lines.append(" ".join(digest.daily_tags))
+        lines.append("".join(digest.daily_tags))
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
