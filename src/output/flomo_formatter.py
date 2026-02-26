@@ -17,9 +17,8 @@ def render_flomo_content(digest: DailyDigest, global_tag_limit: int = 20) -> str
         article = tagged_article.article
         marker = "⭐ " if article.worth == WORTH_MUST_READ else ""
         lines.append(f"{idx}. {marker}{article.title}")
-        lines.append(f"一句话：{article.lead_paragraph}")
+        lines.append(article.lead_paragraph)
         lines.append(f"链接：{article.url}")
-        lines.append("")
 
     if digest.daily_tags:
         lines.append(" ".join(digest.daily_tags[:global_tag_limit]))

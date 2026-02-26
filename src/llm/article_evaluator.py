@@ -77,7 +77,7 @@ class ArticleEvaluator:
     def __init__(self, client: DeepSeekClient, cache: ArticleEvalCache) -> None:
         self.client = client
         self.cache = cache
-        self.prompt_version = os.getenv("AI_EVAL_PROMPT_VERSION", "v5")
+        self.prompt_version = os.getenv("AI_EVAL_PROMPT_VERSION", "v6")
         self.max_retries = max(0, int(os.getenv("AI_EVAL_MAX_RETRIES", "2")))
 
     def evaluate_articles(self, articles: list[Article]) -> dict[str, ArticleAssessment]:
@@ -132,6 +132,9 @@ class ArticleEvaluator:
             "请避免把“常识型建议”过度评为必读：如果主要是团队早已普遍采用的基础实践，"
             "且缺少新的数据、反直觉经验、可迁移方法框架或失败教训，通常应为可读。"
             "execution_clarity 不等于高价值；容易执行但信息增量很低的文章，reading_roi_score 不应过高。"
+            "评分请拉开：70+ 仅用于高杠杆内容，55-69 为普通可读，55 以下通常应为跳过。"
+            "必读要严格：应有明确证据信号（如 code/benchmark/deployment/case_study）"
+            "或高价值方法论，且能显著影响公司、团队或个人中的至少两项。"
             "校准示例：总结“何时适合引入 Coding Agent、如何在团队落地”的结构化实践文章，"
             "若可迁移性高可倾向必读；而“先跑测试”这类基础工程纪律提醒，若缺少新证据通常为可读。"
             "你必须只输出 JSON，不能输出解释文本。"

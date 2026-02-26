@@ -20,7 +20,7 @@ python -m src.main --tz Asia/Shanghai
 - `DEEPSEEK_API_KEY` (required)
 - `DEEPSEEK_MODEL` (default: `deepseek-chat`)
 - `DEEPSEEK_BASE_URL` (default: `https://api.deepseek.com`)
-- `AI_EVAL_PROMPT_VERSION` (default: `v5`)
+- `AI_EVAL_PROMPT_VERSION` (default: `v6`)
 
 未配置 `DEEPSEEK_API_KEY` 时，程序会直接报错退出（不再提供规则摘要降级）。
 
@@ -31,9 +31,14 @@ python -m src.main --tz Asia/Shanghai
 - `SOURCE_FETCH_BUDGET` (default: `60`, `0` 表示不限制)
 - `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
 - `MAX_EVAL_ARTICLES` (default: `60`)
-- `MIN_HIGHLIGHT_SCORE` (default: `55`, 低于阈值不进入重点文章)
+- `MIN_HIGHLIGHT_SCORE` (default: `62`, 低于阈值不进入重点文章)
+- `MIN_HIGHLIGHT_CONFIDENCE` (default: `0.55`, 低置信度评估不进入重点文章)
+- `HIGHLIGHT_DYNAMIC_PERCENTILE` (default: `70`, 按当日评分分布抬高重点门槛)
+- `HIGHLIGHT_SELECTION_RATIO` (default: `0.35`, 重点文章按评估池比例精选)
+- `HIGHLIGHT_MIN_COUNT` (default: `4`, 保底最少重点文章数)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。
+重点文章是“最多 Top 16”，会按当日质量门槛动态收缩，宁缺毋滥。
 
 ### flomo Sync (optional)
 

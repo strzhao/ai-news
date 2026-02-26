@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from math import ceil, floor
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -26,6 +27,31 @@ from src.process.source_quality import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    if percentile <= 0:
+        return sorted_values[0]
+    if percentile >= 100:
+        return sorted_values[-1]
+
+    index = (len(sorted_values) - 1) * (percentile / 100.0)
+    lower = floor(index)
+    upper = ceil(index)
+    if lower == upper:
+        return sorted_values[lower]
+    weight = index - lower
+    return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
+
+
+def _highlight_cap(total_assessed: int, top_n: int) -> int:
+    ratio = min(1.0, max(0.05, float(os.getenv("HIGHLIGHT_SELECTION_RATIO", "0.35"))))
+    minimum = max(1, int(os.getenv("HIGHLIGHT_MIN_COUNT", "4")))
+    capped = max(minimum, int(round(total_assessed * ratio)))
+    return max(1, min(top_n, capped))
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,7 +172,22 @@ def run() -> int:
 
     article_map = {article.id: article for article in deduped}
     tagged_highlights: list[TaggedArticle] = []
-    min_highlight_score = float(os.getenv("MIN_HIGHLIGHT_SCORE", "55"))
+    min_highlight_score = float(os.getenv("MIN_HIGHLIGHT_SCORE", "62"))
+    min_highlight_confidence = float(os.getenv("MIN_HIGHLIGHT_CONFIDENCE", "0.55"))
+    dynamic_percentile = float(os.getenv("HIGHLIGHT_DYNAMIC_PERCENTILE", "70"))
+    scored_assessments = [item.quality_score for item in assessments.values() if item.worth != WORTH_SKIP]
+    dynamic_threshold = _percentile(scored_assessments, dynamic_percentile) if scored_assessments else min_highlight_score
+    effective_threshold = max(min_highlight_score, dynamic_threshold)
+    selection_cap = _highlight_cap(len(scored_assessments), args.top_n)
+    LOGGER.info(
+        "Highlight gating: threshold=%.1f (base=%.1f, p%.0f=%.1f), min_confidence=%.2f, cap=%d",
+        effective_threshold,
+        min_highlight_score,
+        dynamic_percentile,
+        dynamic_threshold,
+        min_highlight_confidence,
+        selection_cap,
+    )
     for highlight in ai_highlights:
         if highlight.worth == WORTH_SKIP:
             continue
@@ -154,7 +195,13 @@ def run() -> int:
         if not article:
             continue
         assessment = assessments.get(article.id)
-        if assessment and assessment.quality_score < min_highlight_score:
+        if not assessment:
+            continue
+        if assessment.worth == WORTH_SKIP:
+            continue
+        if assessment.quality_score < effective_threshold:
+            continue
+        if assessment.confidence < min_highlight_confidence:
             continue
         scored_article = ScoredArticle(
             id=article.id,
@@ -167,11 +214,13 @@ def run() -> int:
             lead_paragraph=highlight.one_line_summary or (assessment.one_line_summary if assessment else ""),
             content_text=article.content_text,
             tags=[],
-            score=float(assessment.quality_score if assessment else max(0, 100 - (highlight.rank - 1) * 5)),
-            worth=highlight.worth or (assessment.worth if assessment else ""),
-            reason_short=highlight.reason_short or (assessment.reason_short if assessment else ""),
+            score=float(assessment.quality_score),
+            worth=assessment.worth,
+            reason_short=highlight.reason_short or assessment.reason_short,
         )
         tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
+        if len(tagged_highlights) >= selection_cap:
+            break
 
     digest = DailyDigest(
         date=report_date,
