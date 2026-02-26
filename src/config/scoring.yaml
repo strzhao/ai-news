@@ -8,14 +8,16 @@ worth_thresholds:
   must_read: 75
   worth_reading: 55
 source_authority_defaults:
-  openai_blog: 95
-  cohere_blog: 86
-  deepmind_blog: 90
-  huggingface_blog: 88
-  nvidia_dev_blog: 86
-  aws_ml_blog: 84
-  google_ai_blog: 84
-  langchain_blog: 84
+  baoyu_ai: 94
+  simon_willison: 96
+  latent_space: 93
+  swyx_buttondown: 92
+  stable_diffusion_art: 88
+  bens_bites: 86
+  sspai: 85
+  huggingface_blog: 90
+  langchain_blog: 89
+  understanding_ai: 86
 keyword_signals:
   engineering_value:
     strong: [production, latency, benchmark, deployment, inference, optimization, case study, real-world, architecture, cost]
