@@ -117,6 +117,10 @@ class DigestSummarizer:
                 "排序规则：优先 reading ROI（quality_score）和 company/team/personal impact、execution_clarity，"
                 "再参考 novelty、时效性、source_quality_score。"
                 "核心目标是帮助公司、团队和个人在 AI 上持续进步，不做机械化“必须有代码”判断。"
+                "今日速览必须做主题级整合：每条覆盖多篇文章的共同趋势或结论，"
+                "禁止按“每篇文章一句话”逐条罗列。"
+                "highlights 只保留值得投入阅读时间的文章，若质量不够可少于 top_n；"
+                "默认不应把 worth=跳过 的文章放进 highlights。"
                 "输出字段：top_summary:string[]，highlights:object[]，daily_tags:string[]。"
                 "highlights 字段：article_id, rank, one_line_summary, worth, reason_short。"
             )

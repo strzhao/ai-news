@@ -13,7 +13,7 @@ from src.integrations.flomo_client import FlomoClient, FlomoSyncError
 from src.llm.article_evaluator import ArticleEvaluator
 from src.llm.deepseek_client import DeepSeekClient, DeepSeekError
 from src.llm.summarizer import DigestSummarizer
-from src.models import DailyDigest, ScoredArticle, TaggedArticle
+from src.models import DailyDigest, ScoredArticle, TaggedArticle, WORTH_SKIP
 from src.output.flomo_formatter import build_flomo_payload
 from src.output.markdown_writer import render_digest_markdown, write_digest_markdown
 from src.process.dedupe import dedupe_articles
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate daily AI RSS digest")
     parser.add_argument("--date", help="Target date in YYYY-MM-DD, defaults to today in --tz")
     parser.add_argument("--tz", default="Asia/Shanghai", help="Timezone name, default Asia/Shanghai")
-    parser.add_argument("--top-n", type=int, default=8, help="Number of highlight articles")
+    parser.add_argument("--top-n", type=int, default=16, help="Max number of highlight articles")
     parser.add_argument("--output-dir", default="reports", help="Directory for markdown reports")
     parser.add_argument("--sources-config", default="src/config/sources.yaml")
     parser.add_argument("--sync-flomo", action="store_true", help="Force sync to flomo")
@@ -146,11 +146,16 @@ def run() -> int:
 
     article_map = {article.id: article for article in deduped}
     tagged_highlights: list[TaggedArticle] = []
+    min_highlight_score = float(os.getenv("MIN_HIGHLIGHT_SCORE", "55"))
     for highlight in ai_highlights:
+        if highlight.worth == WORTH_SKIP:
+            continue
         article = article_map.get(highlight.article_id)
         if not article:
             continue
         assessment = assessments.get(article.id)
+        if assessment and assessment.quality_score < min_highlight_score:
+            continue
         scored_article = ScoredArticle(
             id=article.id,
             title=article.title,

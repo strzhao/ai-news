@@ -1,6 +1,6 @@
 # AI News Daily Digest
 
-每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（Top 8 + 一句话总结 + 必读/可读/跳过 + 本期技术标签），并可同步到 flomo。
+每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（最多 Top 16 + 一句话总结 + 日报技术标签），并可同步到 flomo。
 
 ## Quick Start
 
@@ -31,6 +31,7 @@ python -m src.main --tz Asia/Shanghai
 - `SOURCE_FETCH_BUDGET` (default: `60`, `0` 表示不限制)
 - `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
 - `MAX_EVAL_ARTICLES` (default: `60`)
+- `MIN_HIGHLIGHT_SCORE` (default: `55`, 低于阈值不进入重点文章)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。
 

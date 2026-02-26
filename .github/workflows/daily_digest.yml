@@ -22,6 +22,7 @@ jobs:
       SOURCE_FETCH_BUDGET: "60"
       MAX_EVAL_ARTICLES: "60"
       MIN_FETCH_PER_SOURCE: "3"
+      MIN_HIGHLIGHT_SCORE: "55"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from src.models import DailyDigest, ScoredArticle, TaggedArticle
+from src.models import DailyDigest, ScoredArticle, TaggedArticle, WORTH_WORTH_READING
 from src.output.markdown_writer import render_digest_markdown
 
 
@@ -33,5 +33,22 @@ def test_markdown_title_and_tag_placement() -> None:
     output = render_digest_markdown(digest)
     assert "# AI 每日摘要" not in output
     assert output.startswith("## 今日速览")
+    assert "## 重点文章（最多 16）" in output
+    assert "阅读建议" not in output
     assert "## 本期技术标签" not in output
     assert output.rstrip().endswith("#RAG #MoE")
+
+
+def test_markdown_star_marker_only_for_must_read() -> None:
+    must_read = _tagged("must-read")
+    worth_reading = _tagged("worth-reading")
+    worth_reading.article.worth = WORTH_WORTH_READING
+    digest = DailyDigest(
+        date="2026-02-26",
+        timezone="Asia/Shanghai",
+        top_summary="- A",
+        highlights=[must_read, worth_reading],
+    )
+    output = render_digest_markdown(digest)
+    assert "⭐ [must-read]" in output
+    assert "⭐ [worth-reading]" not in output

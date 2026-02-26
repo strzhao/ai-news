@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from src.models import DailyDigest, ScoredArticle, TaggedArticle
+from src.models import DailyDigest, ScoredArticle, TaggedArticle, WORTH_WORTH_READING
 from src.output.flomo_formatter import build_flomo_payload
 
 
@@ -36,4 +36,20 @@ def test_build_flomo_payload_contains_daily_tags() -> None:
     assert payload.dedupe_key == "digest-2026-02-26"
     assert "2026-02-26" not in payload.content
     assert "【本期技术标签】" not in payload.content
+    assert "建议：" not in payload.content
     assert "#RAG #MoE" in payload.content
+
+
+def test_flomo_star_marker_only_for_must_read() -> None:
+    must_read = _tagged("t1")
+    worth_reading = _tagged("t2")
+    worth_reading.article.worth = WORTH_WORTH_READING
+    digest = DailyDigest(
+        date="2026-02-26",
+        timezone="Asia/Shanghai",
+        top_summary="- A",
+        highlights=[must_read, worth_reading],
+    )
+    payload = build_flomo_payload(digest)
+    assert "1. ⭐ t1" in payload.content
+    assert "2. ⭐ t2" not in payload.content
