@@ -28,7 +28,7 @@ python -m src.main --tz Asia/Shanghai
 
 - `AI_EVAL_CACHE_DB` (default: `.cache/ai-news/article_eval.sqlite3`)
 - `AI_EVAL_MAX_RETRIES` (default: `2`)
-- `SOURCE_FETCH_BUDGET` (default: `60`, `0` 表示不限制)
+- `SOURCE_FETCH_BUDGET` (default: `90`, `0` 表示不限制)
 - `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
 - `MAX_EVAL_ARTICLES` (default: `60`)
 - `MIN_HIGHLIGHT_SCORE` (default: `62`, 低于阈值不进入重点文章)

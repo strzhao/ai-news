@@ -118,7 +118,7 @@ def run() -> int:
     historical_source_scores = cache.load_source_scores()
     prioritized_sources = rank_sources_by_priority(sources, historical_source_scores)
     per_source_limits = build_source_fetch_limits(prioritized_sources)
-    fetch_budget = max(0, int(os.getenv("SOURCE_FETCH_BUDGET", "60")))
+    fetch_budget = max(0, int(os.getenv("SOURCE_FETCH_BUDGET", "90")))
     per_source_limits = build_budgeted_source_limits(
         prioritized_sources,
         per_source_limits,
