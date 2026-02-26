@@ -37,6 +37,8 @@ def test_build_flomo_payload_contains_daily_tags() -> None:
     assert "2026-02-26" not in payload.content
     assert "【本期技术标签】" not in payload.content
     assert "建议：" not in payload.content
+    assert "1. ⭐ One-line summary" in payload.content
+    assert "链接：https://example.com/t1" in payload.content
     assert "#RAG #MoE" in payload.content
 
 
@@ -51,5 +53,5 @@ def test_flomo_star_marker_only_for_must_read() -> None:
         highlights=[must_read, worth_reading],
     )
     payload = build_flomo_payload(digest)
-    assert "1. ⭐ t1" in payload.content
-    assert "2. ⭐ t2" not in payload.content
+    assert "1. ⭐ One-line summary" in payload.content
+    assert "2. ⭐ One-line summary" not in payload.content

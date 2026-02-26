@@ -17,8 +17,8 @@ def render_digest_markdown(digest: DailyDigest) -> str:
     for idx, tagged_article in enumerate(digest.highlights, start=1):
         article = tagged_article.article
         marker = "⭐ " if article.worth == WORTH_MUST_READ else ""
-        lines.append(f"### {idx}. {marker}[{article.title}]({article.url})")
-        lines.append(f"- {article.lead_paragraph}")
+        lines.append(f"### {idx}. {marker}{article.lead_paragraph}")
+        lines.append(f"- 原文链接：{article.url}")
 
     if digest.extras:
         lines.append("## 其他可关注")

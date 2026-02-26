@@ -36,6 +36,8 @@ def test_markdown_title_and_tag_placement() -> None:
     assert "## 重点文章（最多 16）" in output
     assert "阅读建议" not in output
     assert "## 本期技术标签" not in output
+    assert "[t1](https://example.com/t1)" not in output
+    assert "原文链接：https://example.com/t1" in output
     assert output.rstrip().endswith("#RAG #MoE")
 
 
@@ -50,5 +52,5 @@ def test_markdown_star_marker_only_for_must_read() -> None:
         highlights=[must_read, worth_reading],
     )
     output = render_digest_markdown(digest)
-    assert "⭐ [must-read]" in output
-    assert "⭐ [worth-reading]" not in output
+    assert "### 1. ⭐ One-line summary" in output
+    assert "### 2. ⭐ One-line summary" not in output
