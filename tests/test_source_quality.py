@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from src.models import Article, ArticleAssessment, SourceConfig, SourceQualityScore
 from src.process.source_quality import (
+    build_budgeted_source_limits,
     build_source_fetch_limits,
     compute_source_quality_scores,
     rank_sources_by_priority,
@@ -82,3 +83,13 @@ def test_build_source_fetch_limits() -> None:
     assert limits["s2"] == 20
     assert limits["s5"] == 10
 
+
+def test_build_budgeted_source_limits_guarantees_coverage() -> None:
+    sources = [
+        SourceConfig(id=f"s{idx}", name=f"s{idx}", url="https://x")
+        for idx in range(4)
+    ]
+    source_limits = {"s0": 30, "s1": 20, "s2": 10, "s3": 10}
+    budgeted = build_budgeted_source_limits(sources, source_limits, total_budget=12, min_per_source=2)
+    assert sum(budgeted.values()) == 12
+    assert all(budgeted[source.id] >= 2 for source in sources)

@@ -18,9 +18,10 @@ jobs:
       DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
       FLOMO_API_URL: ${{ secrets.FLOMO_API_URL }}
       AUTO_COMMIT_REPORTS: ${{ vars.AUTO_COMMIT_REPORTS || 'false' }}
-      AI_EVAL_PROMPT_VERSION: v2
+      AI_EVAL_PROMPT_VERSION: v5
       SOURCE_FETCH_BUDGET: "60"
       MAX_EVAL_ARTICLES: "60"
+      MIN_FETCH_PER_SOURCE: "3"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,9 +35,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/ai-news
-          key: ai-news-eval-v2-${{ runner.os }}-${{ hashFiles('src/llm/article_evaluator.py', 'src/llm/summarizer.py', 'src/process/source_quality.py') }}
+          key: ai-news-eval-v5-${{ runner.os }}-${{ hashFiles('src/llm/article_evaluator.py', 'src/llm/summarizer.py', 'src/process/source_quality.py') }}
           restore-keys: |
-            ai-news-eval-v2-${{ runner.os }}-
+            ai-news-eval-v5-${{ runner.os }}-
 
       - name: Install dependencies
         run: |

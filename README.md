@@ -20,7 +20,7 @@ python -m src.main --tz Asia/Shanghai
 - `DEEPSEEK_API_KEY` (required)
 - `DEEPSEEK_MODEL` (default: `deepseek-chat`)
 - `DEEPSEEK_BASE_URL` (default: `https://api.deepseek.com`)
-- `AI_EVAL_PROMPT_VERSION` (default: `v2`)
+- `AI_EVAL_PROMPT_VERSION` (default: `v5`)
 
 未配置 `DEEPSEEK_API_KEY` 时，程序会直接报错退出（不再提供规则摘要降级）。
 
@@ -29,6 +29,7 @@ python -m src.main --tz Asia/Shanghai
 - `AI_EVAL_CACHE_DB` (default: `.cache/ai-news/article_eval.sqlite3`)
 - `AI_EVAL_MAX_RETRIES` (default: `2`)
 - `SOURCE_FETCH_BUDGET` (default: `60`, `0` 表示不限制)
+- `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
 - `MAX_EVAL_ARTICLES` (default: `60`)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。

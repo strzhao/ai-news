@@ -24,6 +24,9 @@ LOGGER = logging.getLogger(__name__)
 
 def _coerce_score(value: Any) -> float:
     score = float(value)
+    # Some models return 0-10 despite the 0-100 instruction.
+    if 0.0 <= score <= 10.0:
+        score *= 10.0
     return max(0.0, min(100.0, score))
 
 
@@ -74,7 +77,7 @@ class ArticleEvaluator:
     def __init__(self, client: DeepSeekClient, cache: ArticleEvalCache) -> None:
         self.client = client
         self.cache = cache
-        self.prompt_version = os.getenv("AI_EVAL_PROMPT_VERSION", "v2")
+        self.prompt_version = os.getenv("AI_EVAL_PROMPT_VERSION", "v5")
         self.max_retries = max(0, int(os.getenv("AI_EVAL_MAX_RETRIES", "2")))
 
     def evaluate_articles(self, articles: list[Article]) -> dict[str, ArticleAssessment]:
@@ -126,6 +129,11 @@ class ArticleEvaluator:
             "核心是阅读 ROI：未来 7-30 天是否能带来更好的决策、执行或能力升级。"
             "优先考虑：company_impact、team_impact、personal_impact、execution_clarity、novelty。"
             "允许高杠杆认知框架和决策方法进入必读，不要求必须有代码；但空泛观点和营销宣传要降级。"
+            "请避免把“常识型建议”过度评为必读：如果主要是团队早已普遍采用的基础实践，"
+            "且缺少新的数据、反直觉经验、可迁移方法框架或失败教训，通常应为可读。"
+            "execution_clarity 不等于高价值；容易执行但信息增量很低的文章，reading_roi_score 不应过高。"
+            "校准示例：总结“何时适合引入 Coding Agent、如何在团队落地”的结构化实践文章，"
+            "若可迁移性高可倾向必读；而“先跑测试”这类基础工程纪律提醒，若缺少新证据通常为可读。"
             "你必须只输出 JSON，不能输出解释文本。"
             "输出字段：article_id, worth, reading_roi_score, company_impact, team_impact, personal_impact, "
             "execution_clarity, novelty, clarity_score, one_line_summary, reason_short, action_hint, "

@@ -19,6 +19,7 @@ from src.output.markdown_writer import render_digest_markdown, write_digest_mark
 from src.process.dedupe import dedupe_articles
 from src.process.normalize import normalize_articles
 from src.process.source_quality import (
+    build_budgeted_source_limits,
     build_source_fetch_limits,
     compute_source_quality_scores,
     rank_sources_by_priority,
@@ -92,12 +93,18 @@ def run() -> int:
     prioritized_sources = rank_sources_by_priority(sources, historical_source_scores)
     per_source_limits = build_source_fetch_limits(prioritized_sources)
     fetch_budget = max(0, int(os.getenv("SOURCE_FETCH_BUDGET", "60")))
+    per_source_limits = build_budgeted_source_limits(
+        prioritized_sources,
+        per_source_limits,
+        total_budget=fetch_budget,
+        min_per_source=max(1, int(os.getenv("MIN_FETCH_PER_SOURCE", "3"))),
+    )
     max_eval_articles = max(1, int(os.getenv("MAX_EVAL_ARTICLES", "60")))
 
     fetched = fetch_articles(
         prioritized_sources,
         per_source_limits=per_source_limits,
-        total_budget=fetch_budget,
+        total_budget=0,
     )
     normalized = normalize_articles(fetched)
     deduped = dedupe_articles(normalized)

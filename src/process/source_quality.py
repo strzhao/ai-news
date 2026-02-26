@@ -16,10 +16,16 @@ def rank_sources_by_priority(
     sources: list[SourceConfig],
     historical_scores: dict[str, SourceQualityScore],
 ) -> list[SourceConfig]:
+    total = max(1, len(sources))
+    index_map = {source.id: idx for idx, source in enumerate(sources)}
+
     def priority(source: SourceConfig) -> float:
         historical = historical_scores.get(source.id)
         source_quality = historical.quality_score if historical else 50.0
-        return source_quality * 0.7 + float(source.source_weight) * 100 * 0.3
+        # Respect manually curated source order first, then blend historical quality.
+        index = index_map.get(source.id, total - 1)
+        curated_priority = ((total - index) / total) * 100
+        return curated_priority * 0.5 + float(source.source_weight) * 100 * 0.3 + source_quality * 0.2
 
     return sorted(sources, key=priority, reverse=True)
 
@@ -43,6 +49,68 @@ def build_source_fetch_limits(
         else:
             limits[source.id] = low_limit
     return limits
+
+
+def build_budgeted_source_limits(
+    prioritized_sources: list[SourceConfig],
+    source_limits: dict[str, int],
+    total_budget: int,
+    min_per_source: int = 3,
+) -> dict[str, int]:
+    if total_budget <= 0 or not prioritized_sources:
+        return source_limits
+
+    count = len(prioritized_sources)
+    if total_budget < count:
+        # Guarantee at least one candidate from top sources when budget is tiny.
+        limited: dict[str, int] = {}
+        for idx, source in enumerate(prioritized_sources):
+            limited[source.id] = 1 if idx < total_budget else 0
+        return limited
+
+    base = min_per_source if total_budget >= count * min_per_source else max(1, total_budget // count)
+    allocated: dict[str, int] = {}
+    for source in prioritized_sources:
+        cap = int(source_limits.get(source.id, base))
+        allocated[source.id] = min(base, max(0, cap))
+
+    used = sum(allocated.values())
+    remaining = max(0, total_budget - used)
+    if remaining == 0:
+        return allocated
+
+    rooms = {
+        source.id: max(0, int(source_limits.get(source.id, allocated[source.id])) - allocated[source.id])
+        for source in prioritized_sources
+    }
+    total_room = sum(rooms.values())
+    if total_room <= 0:
+        return allocated
+
+    # First pass: proportional distribution to avoid one source monopolizing the budget.
+    proportional_budget = remaining
+    for source in prioritized_sources:
+        room = rooms[source.id]
+        if room <= 0 or proportional_budget <= 0:
+            continue
+        add = min(room, int((proportional_budget * room) / max(total_room, 1)))
+        if add <= 0:
+            continue
+        allocated[source.id] += add
+        rooms[source.id] -= add
+        remaining -= add
+
+    # Second pass: fill leftovers by priority.
+    for source in prioritized_sources:
+        if remaining <= 0:
+            break
+        room = rooms[source.id]
+        if room <= 0:
+            continue
+        add = min(room, remaining)
+        allocated[source.id] += add
+        remaining -= add
+    return allocated
 
 
 def compute_source_quality_scores(
