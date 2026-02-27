@@ -360,18 +360,15 @@ def run() -> int:
     must_read_candidates: list[tuple[int, ScoredArticle]] = []
     fallback_worth_reading: list[tuple[int, ScoredArticle]] = []
     max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
-    max_info_dup_lookback_days = int(os.getenv("MAX_INFO_DUP_LOOKBACK_DAYS", "365"))
-    historical_info_counts, historical_title_counts = cache.load_highlight_key_counts(
-        lookback_days=max_info_dup_lookback_days
-    )
+    historical_info_counts, historical_title_counts = cache.load_highlight_key_counts()
     info_key_counts: Counter[str] = Counter()
     title_key_counts: Counter[str] = Counter()
     if historical_info_counts or historical_title_counts:
         LOGGER.info(
-            "Historical duplicate guard loaded: info_keys=%d title_keys=%d lookback_days=%d",
+            "Historical duplicate guard loaded: info_keys=%d title_keys=%d max_per_article=%d",
             len(historical_info_counts),
             len(historical_title_counts),
-            max_info_dup_lookback_days,
+            max_info_dup,
         )
 
     def _reserve_info_slot(article: ScoredArticle) -> bool:
@@ -468,11 +465,9 @@ def run() -> int:
         daily_tags=daily_tags,
         extras=[],
     )
-    cache.record_highlight_entries(
-        report_date,
+    cache.record_highlight_keys(
         [
             (
-                item.article.id,
                 build_info_key(item.article),
                 build_title_key(item.article.title),
             )

@@ -42,8 +42,7 @@ python -m src.main --tz Asia/Shanghai
 - `HIGHLIGHT_SELECTION_RATIO` (default: `1.0` when `EXPANDED_DISCOVERY_MODE=true`, else `0.45`)
 - `HIGHLIGHT_MIN_COUNT` (default: `8` when `EXPANDED_DISCOVERY_MODE=true`, else `4`)
 - `RSSHUB_BASE_URL` (optional, 例如: `https://rsshub.example.com`，用于启用 `sources.yaml` 中的 X/Twitter 源)
-- `MAX_INFO_DUP_PER_DIGEST` (default: `2`, 同一信息在重点文章中最多出现次数)
-- `MAX_INFO_DUP_LOOKBACK_DAYS` (default: `365`, 重点文章去重历史回看天数；`0` 表示全量历史)
+- `MAX_INFO_DUP_PER_DIGEST` (default: `2`, 同一信息在重点文章中的全局最大出现次数，不区分日期)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。
 重点文章会按当日质量门槛动态收缩，宁缺毋滥。

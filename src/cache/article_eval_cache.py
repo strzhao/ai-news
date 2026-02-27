@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.models import ArticleAssessment, SourceQualityScore
@@ -50,33 +50,79 @@ class ArticleEvalCache:
             )
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS highlight_entries (
-                    digest_date TEXT NOT NULL,
-                    article_id TEXT NOT NULL,
-                    info_key TEXT NOT NULL,
-                    title_key TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    PRIMARY KEY (digest_date, article_id)
+                CREATE TABLE IF NOT EXISTS highlight_key_counts (
+                    key_kind TEXT NOT NULL,
+                    key_value TEXT NOT NULL,
+                    hit_count INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (key_kind, key_value)
                 )
                 """
             )
             conn.execute(
                 """
-                CREATE INDEX IF NOT EXISTS idx_highlight_entries_info_key
-                ON highlight_entries (info_key)
+                CREATE INDEX IF NOT EXISTS idx_highlight_key_counts_key_value
+                ON highlight_key_counts (key_value)
                 """
             )
+            self._migrate_legacy_highlight_entries(conn)
+
+    def _migrate_legacy_highlight_entries(self, conn: sqlite3.Connection) -> None:
+        has_legacy_table = conn.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'highlight_entries'
+            """
+        ).fetchone()
+        if not has_legacy_table:
+            return
+
+        existing_rows = conn.execute("SELECT COUNT(*) FROM highlight_key_counts").fetchone()
+        if existing_rows and int(existing_rows[0]) > 0:
+            return
+
+        now = datetime.now(timezone.utc).isoformat()
+        info_rows = conn.execute(
+            """
+            SELECT info_key, COUNT(*)
+            FROM highlight_entries
+            WHERE TRIM(info_key) != ''
+            GROUP BY info_key
+            """
+        ).fetchall()
+        title_rows = conn.execute(
+            """
+            SELECT title_key, COUNT(*)
+            FROM highlight_entries
+            WHERE TRIM(title_key) != ''
+            GROUP BY title_key
+            """
+        ).fetchall()
+
+        for key_value, hit_count in info_rows:
             conn.execute(
                 """
-                CREATE INDEX IF NOT EXISTS idx_highlight_entries_title_key
-                ON highlight_entries (title_key)
-                """
+                INSERT INTO highlight_key_counts (
+                    key_kind, key_value, hit_count, updated_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(key_kind, key_value) DO UPDATE SET
+                    hit_count = excluded.hit_count,
+                    updated_at = excluded.updated_at
+                """,
+                ("info", str(key_value), int(hit_count), now),
             )
+        for key_value, hit_count in title_rows:
             conn.execute(
                 """
-                CREATE INDEX IF NOT EXISTS idx_highlight_entries_digest_date
-                ON highlight_entries (digest_date)
-                """
+                INSERT INTO highlight_key_counts (
+                    key_kind, key_value, hit_count, updated_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(key_kind, key_value) DO UPDATE SET
+                    hit_count = excluded.hit_count,
+                    updated_at = excluded.updated_at
+                """,
+                ("title", str(key_value), int(hit_count), now),
             )
 
     def get_assessment(self, cache_key: str) -> ArticleAssessment | None:
@@ -246,77 +292,77 @@ class ArticleEvalCache:
 
     def load_highlight_key_counts(
         self,
-        *,
-        lookback_days: int = 365,
-        now_utc: datetime | None = None,
     ) -> tuple[dict[str, int], dict[str, int]]:
-        now_utc = now_utc or datetime.now(timezone.utc)
         with self._connect() as conn:
-            if lookback_days > 0:
-                threshold_date = (now_utc.date() - timedelta(days=max(1, lookback_days) - 1)).isoformat()
-                info_rows = conn.execute(
-                    """
-                    SELECT info_key, COUNT(*)
-                    FROM highlight_entries
-                    WHERE digest_date >= ?
-                    GROUP BY info_key
-                    """,
-                    (threshold_date,),
-                ).fetchall()
-                title_rows = conn.execute(
-                    """
-                    SELECT title_key, COUNT(*)
-                    FROM highlight_entries
-                    WHERE digest_date >= ?
-                    GROUP BY title_key
-                    """,
-                    (threshold_date,),
-                ).fetchall()
-            else:
-                info_rows = conn.execute(
-                    """
-                    SELECT info_key, COUNT(*)
-                    FROM highlight_entries
-                    GROUP BY info_key
-                    """
-                ).fetchall()
-                title_rows = conn.execute(
-                    """
-                    SELECT title_key, COUNT(*)
-                    FROM highlight_entries
-                    GROUP BY title_key
-                    """
-                ).fetchall()
+            rows = conn.execute(
+                """
+                SELECT key_kind, key_value, hit_count
+                FROM highlight_key_counts
+                """
+            ).fetchall()
 
-        info_counts = {str(row[0]): int(row[1]) for row in info_rows if str(row[0]).strip()}
-        title_counts = {str(row[0]): int(row[1]) for row in title_rows if str(row[0]).strip()}
+        info_counts: dict[str, int] = {}
+        title_counts: dict[str, int] = {}
+        for key_kind, key_value, hit_count in rows:
+            kind = str(key_kind).strip().lower()
+            key = str(key_value).strip()
+            if not kind or not key:
+                continue
+            if kind == "info":
+                info_counts[key] = int(hit_count)
+            elif kind == "title":
+                title_counts[key] = int(hit_count)
         return info_counts, title_counts
 
-    def record_highlight_entries(
+    def record_highlight_keys(
         self,
-        digest_date: str,
-        rows: list[tuple[str, str, str]],
+        rows: list[tuple[str, str]],
     ) -> None:
         if not rows:
             return
+        info_increments: dict[str, int] = {}
+        title_increments: dict[str, int] = {}
+        for info_key, title_key in rows:
+            normalized_info = str(info_key).strip()
+            normalized_title = str(title_key).strip()
+            if normalized_info:
+                info_increments[normalized_info] = info_increments.get(normalized_info, 0) + 1
+            if normalized_title:
+                title_increments[normalized_title] = title_increments.get(normalized_title, 0) + 1
+
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
-            for article_id, info_key, title_key in rows:
+            for key_value, increment in info_increments.items():
                 conn.execute(
                     """
-                    INSERT INTO highlight_entries (
-                        digest_date, article_id, info_key, title_key, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(digest_date, article_id) DO UPDATE SET
-                        info_key = excluded.info_key,
-                        title_key = excluded.title_key,
-                        created_at = excluded.created_at
+                    INSERT INTO highlight_key_counts (
+                        key_kind, key_value, hit_count, updated_at
+                    ) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(key_kind, key_value) DO UPDATE SET
+                        hit_count = highlight_key_counts.hit_count + excluded.hit_count,
+                        updated_at = excluded.updated_at
                     """,
                     (
-                        digest_date,
-                        article_id,
-                        info_key,
-                        title_key,
+                        "info",
+                        key_value,
+                        increment,
+                        now,
+                    ),
+                )
+            for key_value, increment in title_increments.items():
+                conn.execute(
+                    """
+                    INSERT INTO highlight_key_counts (
+                        key_kind, key_value, hit_count, updated_at
+                    ) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(key_kind, key_value) DO UPDATE SET
+                        hit_count = highlight_key_counts.hit_count + excluded.hit_count,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        "title",
+                        key_value,
+                        increment,
                         now,
                     ),
                 )

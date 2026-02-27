@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from src.cache.article_eval_cache import ArticleEvalCache
 from src.models import ArticleAssessment
 
@@ -63,45 +61,33 @@ def test_cache_prune(tmp_path) -> None:  # noqa: ANN001
     assert kept == 2
 
 
-def test_highlight_history_counts_and_lookback(tmp_path) -> None:  # noqa: ANN001
+def test_highlight_history_counts_are_global(tmp_path) -> None:  # noqa: ANN001
     db_path = tmp_path / "cache.sqlite3"
     cache = ArticleEvalCache(str(db_path))
-    cache.record_highlight_entries(
-        "2026-02-27",
+    cache.record_highlight_keys(
         [
-            ("a1", "info:k1", "title:t1"),
-            ("a2", "info:k1", "title:t2"),
-            ("a3", "info:k2", "title:t1"),
-        ],
-    )
-    cache.record_highlight_entries(
-        "2026-02-20",
-        [
-            ("a4", "info:k1", "title:t1"),
+            ("info:k1", "title:t1"),
+            ("info:k1", "title:t2"),
+            ("info:k2", "title:t1"),
+            ("info:k1", "title:t1"),
         ],
     )
 
-    info_counts, title_counts = cache.load_highlight_key_counts(
-        lookback_days=7,
-        now_utc=datetime(2026, 2, 27, tzinfo=timezone.utc),
-    )
+    info_counts, title_counts = cache.load_highlight_key_counts()
 
-    assert info_counts["info:k1"] == 2
+    assert info_counts["info:k1"] == 3
     assert info_counts["info:k2"] == 1
-    assert title_counts["title:t1"] == 2
+    assert title_counts["title:t1"] == 3
     assert title_counts["title:t2"] == 1
 
 
-def test_highlight_history_upsert_same_article_same_day(tmp_path) -> None:  # noqa: ANN001
+def test_highlight_history_counts_duplicate_entries(tmp_path) -> None:  # noqa: ANN001
     db_path = tmp_path / "cache.sqlite3"
     cache = ArticleEvalCache(str(db_path))
-    cache.record_highlight_entries("2026-02-27", [("a1", "info:k1", "title:t1")])
-    cache.record_highlight_entries("2026-02-27", [("a1", "info:k1", "title:t1")])
+    cache.record_highlight_keys([("info:k1", "title:t1")])
+    cache.record_highlight_keys([("info:k1", "title:t1")])
 
-    info_counts, title_counts = cache.load_highlight_key_counts(
-        lookback_days=30,
-        now_utc=datetime(2026, 2, 27, tzinfo=timezone.utc),
-    )
+    info_counts, title_counts = cache.load_highlight_key_counts()
 
-    assert info_counts["info:k1"] == 1
-    assert title_counts["title:t1"] == 1
+    assert info_counts["info:k1"] == 2
+    assert title_counts["title:t1"] == 2
