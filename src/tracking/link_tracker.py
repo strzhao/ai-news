@@ -22,6 +22,10 @@ def _sign(params: Mapping[str, str], secret: str) -> str:
     return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
+def _env_enabled(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() not in {"0", "false", "no", "off"}
+
+
 @dataclass(slots=True)
 class LinkTracker:
     base_url: str = ""
@@ -50,7 +54,7 @@ class LinkTracker:
             "ch": channel,
         }
         primary_type = article.primary_type.strip()
-        if primary_type:
+        if primary_type and _env_enabled("TRACKER_INCLUDE_TYPE_PARAM", "false"):
             params["pt"] = primary_type
         sig = _sign(params, self.signing_secret)
         query = f"{_canonical_query(params)}&sig={sig}"

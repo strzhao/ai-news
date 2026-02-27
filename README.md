@@ -52,6 +52,7 @@ python -m src.main --tz Asia/Shanghai
 - `TRACKER_BASE_URL` (optional, 例如: `https://ai-news-tracker.vercel.app`)
 - `TRACKER_SIGNING_SECRET` (optional, 与 tracker 服务保持一致)
 - `TRACKER_API_TOKEN` (optional, 用于读取点击统计)
+- `TRACKER_INCLUDE_TYPE_PARAM` (default: `false`，仅当 tracker 已部署支持 `pt` 参数时再开启)
 - `PERSONALIZATION_ENABLED` (default: `true`)
 - `PERSONALIZATION_LOOKBACK_DAYS` (default: `90`)
 - `PERSONALIZATION_HALF_LIFE_DAYS` (default: `21`)
