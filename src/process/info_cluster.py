@@ -31,7 +31,7 @@ def _normalize_url(url: str) -> str:
     return urlunparse(rebuilt)
 
 
-def _title_fingerprint(title: str) -> str:
+def build_title_key(title: str) -> str:
     normalized = NON_ALNUM_RE.sub(" ", title.lower()).strip()
     if not normalized:
         return "title:empty"
@@ -44,5 +44,4 @@ def build_info_key(article: Article) -> str:
         normalized = _normalize_url(candidate)
         if normalized:
             return normalized
-    return _title_fingerprint(article.title)
-
+    return build_title_key(article.title)

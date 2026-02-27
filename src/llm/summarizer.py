@@ -70,6 +70,8 @@ class DigestSummarizer:
     ) -> dict[str, Any]:
         inputs = []
         source_quality_scores = source_quality_scores or {}
+        default_min = 4 if top_n <= 16 else 8
+        default_max = min(top_n, 10 if top_n <= 16 else 24)
         for article in articles:
             assessment = (assessments or {}).get(article.id)
             source_quality = source_quality_scores.get(article.source_id)
@@ -121,7 +123,7 @@ class DigestSummarizer:
                 "核心目标是帮助公司、团队和个人在 AI 上持续进步，不做机械化“必须有代码”判断。"
                 "今日速览必须做主题级整合：每条覆盖多篇文章的共同趋势或结论，"
                 "禁止按“每篇文章一句话”逐条罗列；每条尽量 22-32 字，整体控制精炼。"
-                "highlights 是严格精选清单，不是文章全集；默认返回 4-10 条，"
+                f"highlights 是严格精选清单，不是文章全集；默认返回 {default_min}-{default_max} 条，"
                 "只有当高杠杆内容明显充足时才接近 top_n。"
                 "highlights 只保留值得投入阅读时间的文章，若质量不够可少于 top_n；"
                 "默认不应把 worth=跳过 的文章放进 highlights。"
@@ -139,7 +141,7 @@ class DigestSummarizer:
                 "排序必须优先实战价值：有代码/架构细节/部署经验/评测数据/成本与性能优化的内容优先；"
                 "纯市场宣传、融资新闻、泛产品公告降级。"
                 "今日速览必须是主题整合，禁止逐篇复述；每条尽量 22-32 字，整体简洁。"
-                "highlights 是严格精选清单，不是文章全集；默认返回 4-10 条，"
+                f"highlights 是严格精选清单，不是文章全集；默认返回 {default_min}-{default_max} 条，"
                 "只有当高杠杆内容明显充足时才接近 top_n。"
                 "daily_tags 中每个标签都要简短、准确、有聚类价值。"
                 "输出字段：top_summary:string[]，highlights:object[]，daily_tags:string[]。"

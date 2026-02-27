@@ -28,7 +28,7 @@ from src.models import (
 from src.output.flomo_formatter import build_flomo_payload
 from src.output.markdown_writer import render_digest_markdown, write_digest_markdown
 from src.process.dedupe import dedupe_articles
-from src.process.info_cluster import build_info_key
+from src.process.info_cluster import build_info_key, build_title_key
 from src.process.normalize import normalize_articles
 from src.process.source_quality import (
     build_budgeted_source_limits,
@@ -67,8 +67,10 @@ def _percentile(values: list[float], percentile: float) -> float:
 
 
 def _highlight_cap(total_assessed: int, top_n: int) -> int:
-    ratio = min(1.0, max(0.05, float(os.getenv("HIGHLIGHT_SELECTION_RATIO", "0.45"))))
-    minimum = max(1, int(os.getenv("HIGHLIGHT_MIN_COUNT", "4")))
+    default_ratio = "1.0" if _expanded_discovery_mode_enabled() else "0.45"
+    default_minimum = "8" if _expanded_discovery_mode_enabled() else "4"
+    ratio = min(1.0, max(0.05, float(os.getenv("HIGHLIGHT_SELECTION_RATIO", default_ratio))))
+    minimum = max(1, int(os.getenv("HIGHLIGHT_MIN_COUNT", default_minimum)))
     capped = max(minimum, int(round(total_assessed * ratio)))
     return max(1, min(top_n, capped))
 
@@ -362,12 +364,17 @@ def run() -> int:
     fallback_worth_reading: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]] = []
     max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
     info_key_counts: Counter[str] = Counter()
+    title_key_counts: Counter[str] = Counter()
 
     def _reserve_info_slot(article: ScoredArticle) -> bool:
         info_key = build_info_key(article)
+        title_key = build_title_key(article.title)
         if info_key_counts[info_key] >= max_info_dup:
             return False
+        if title_key_counts[title_key] >= max_info_dup:
+            return False
         info_key_counts[info_key] += 1
+        title_key_counts[title_key] += 1
         return True
 
     for index, highlight in enumerate(ai_highlights):

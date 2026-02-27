@@ -16,6 +16,14 @@ def test_percentile_interpolates_values() -> None:
 def test_highlight_cap_default_is_strict_for_small_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HIGHLIGHT_SELECTION_RATIO", raising=False)
     monkeypatch.delenv("HIGHLIGHT_MIN_COUNT", raising=False)
+    monkeypatch.delenv("EXPANDED_DISCOVERY_MODE", raising=False)
+    assert _highlight_cap(total_assessed=8, top_n=16) == 8
+
+
+def test_highlight_cap_default_in_normal_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HIGHLIGHT_SELECTION_RATIO", raising=False)
+    monkeypatch.delenv("HIGHLIGHT_MIN_COUNT", raising=False)
+    monkeypatch.setenv("EXPANDED_DISCOVERY_MODE", "false")
     assert _highlight_cap(total_assessed=8, top_n=16) == 4
 
 
@@ -23,4 +31,3 @@ def test_highlight_cap_honors_env_override(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("HIGHLIGHT_SELECTION_RATIO", "0.2")
     monkeypatch.setenv("HIGHLIGHT_MIN_COUNT", "2")
     assert _highlight_cap(total_assessed=10, top_n=16) == 2
-

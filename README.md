@@ -39,8 +39,8 @@ python -m src.main --tz Asia/Shanghai
 - `MIN_WORTH_READING_SCORE` (default: `58`, 可读文章进入重点清单的最低分)
 - `MIN_HIGHLIGHT_CONFIDENCE` (default: `0.55`, 低置信度评估不进入重点文章)
 - `HIGHLIGHT_DYNAMIC_PERCENTILE` (default: `70`, 按当日评分分布抬高重点门槛)
-- `HIGHLIGHT_SELECTION_RATIO` (default: `0.45`, 重点文章按评估池比例精选)
-- `HIGHLIGHT_MIN_COUNT` (default: `4`, 保底最少重点文章数)
+- `HIGHLIGHT_SELECTION_RATIO` (default: `1.0` when `EXPANDED_DISCOVERY_MODE=true`, else `0.45`)
+- `HIGHLIGHT_MIN_COUNT` (default: `8` when `EXPANDED_DISCOVERY_MODE=true`, else `4`)
 - `RSSHUB_BASE_URL` (optional, 例如: `https://rsshub.example.com`，用于启用 `sources.yaml` 中的 X/Twitter 源)
 - `MAX_INFO_DUP_PER_DIGEST` (default: `2`, 同一信息在重点文章中最多出现次数)
 
