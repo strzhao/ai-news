@@ -60,6 +60,19 @@ def test_rank_sources_by_priority_prefers_historical_quality() -> None:
     assert ranked[0].id == "high"
 
 
+def test_rank_sources_by_priority_applies_behavior_multiplier() -> None:
+    sources = [
+        SourceConfig(id="s1", name="S1", url="https://s1", source_weight=1.0),
+        SourceConfig(id="s2", name="S2", url="https://s2", source_weight=1.0),
+    ]
+    ranked = rank_sources_by_priority(
+        sources,
+        historical_scores={},
+        behavior_multipliers={"s1": 1.2, "s2": 0.85},
+    )
+    assert ranked[0].id == "s1"
+
+
 def test_compute_source_quality_scores() -> None:
     articles = [_article("a1", "s1"), _article("a2", "s1")]
     assessments = {
@@ -93,3 +106,23 @@ def test_build_budgeted_source_limits_guarantees_coverage() -> None:
     budgeted = build_budgeted_source_limits(sources, source_limits, total_budget=12, min_per_source=2)
     assert sum(budgeted.values()) == 12
     assert all(budgeted[source.id] >= 2 for source in sources)
+
+
+def test_build_budgeted_source_limits_honors_exploration_ratio() -> None:
+    sources = [
+        SourceConfig(id="s0", name="s0", url="https://x"),
+        SourceConfig(id="s1", name="s1", url="https://x"),
+        SourceConfig(id="s2", name="s2", url="https://x"),
+        SourceConfig(id="s3", name="s3", url="https://x"),
+    ]
+    source_limits = {"s0": 30, "s1": 20, "s2": 10, "s3": 10}
+    budgeted = build_budgeted_source_limits(
+        sources,
+        source_limits,
+        total_budget=20,
+        min_per_source=3,
+        preferred_source_ids={"s0", "s1"},
+        exploration_ratio=0.2,
+    )
+    exploratory_total = budgeted["s2"] + budgeted["s3"]
+    assert exploratory_total >= 4

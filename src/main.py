@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from collections import Counter
 from math import ceil, floor
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -18,6 +19,7 @@ from src.models import DailyDigest, ScoredArticle, TaggedArticle, WORTH_MUST_REA
 from src.output.flomo_formatter import build_flomo_payload
 from src.output.markdown_writer import render_digest_markdown, write_digest_markdown
 from src.process.dedupe import dedupe_articles
+from src.process.info_cluster import build_info_key
 from src.process.normalize import normalize_articles
 from src.process.source_quality import (
     build_budgeted_source_limits,
@@ -25,6 +27,9 @@ from src.process.source_quality import (
     compute_source_quality_scores,
     rank_sources_by_priority,
 )
+from src.personalization.behavior_weight import compute_behavior_multipliers, select_preferred_sources
+from src.personalization.consumption_client import ConsumptionClientError, load_source_daily_clicks
+from src.tracking.link_tracker import LinkTracker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -116,14 +121,53 @@ def run() -> int:
     report_date = _target_date(args.date, args.tz)
     sources = load_sources(args.sources_config)
     historical_source_scores = cache.load_source_scores()
-    prioritized_sources = rank_sources_by_priority(sources, historical_source_scores)
+    behavior_multipliers: dict[str, float] = {}
+    preferred_source_ids: set[str] = set()
+    personalization_enabled = os.getenv("PERSONALIZATION_ENABLED", "true").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+    lookback_days = max(1, int(os.getenv("PERSONALIZATION_LOOKBACK_DAYS", "90")))
+    half_life_days = max(1.0, float(os.getenv("PERSONALIZATION_HALF_LIFE_DAYS", "21")))
+    min_multiplier = float(os.getenv("PERSONALIZATION_MIN_MULTIPLIER", "0.85"))
+    max_multiplier = float(os.getenv("PERSONALIZATION_MAX_MULTIPLIER", "1.2"))
+    if personalization_enabled:
+        try:
+            source_daily_clicks = load_source_daily_clicks(days=lookback_days)
+            behavior_multipliers = compute_behavior_multipliers(
+                source_daily_clicks,
+                lookback_days=lookback_days,
+                half_life_days=half_life_days,
+                min_multiplier=min_multiplier,
+                max_multiplier=max_multiplier,
+            )
+            preferred_source_ids = select_preferred_sources(source_daily_clicks, min_clicks=2, top_quantile=0.3)
+            LOGGER.info(
+                "Personalization enabled: click_sources=%d behavior_weights=%d preferred_sources=%d",
+                len(source_daily_clicks),
+                len(behavior_multipliers),
+                len(preferred_source_ids),
+            )
+        except ConsumptionClientError as exc:
+            LOGGER.warning("Failed to load tracker stats, fallback to static source priority: %s", exc)
+
+    prioritized_sources = rank_sources_by_priority(
+        sources,
+        historical_source_scores,
+        behavior_multipliers=behavior_multipliers,
+    )
     per_source_limits = build_source_fetch_limits(prioritized_sources)
-    fetch_budget = max(0, int(os.getenv("SOURCE_FETCH_BUDGET", "90")))
+    fetch_budget = max(0, int(os.getenv("SOURCE_FETCH_BUDGET", "60")))
+    exploration_ratio = float(os.getenv("EXPLORATION_RATIO", "0.15"))
     per_source_limits = build_budgeted_source_limits(
         prioritized_sources,
         per_source_limits,
         total_budget=fetch_budget,
         min_per_source=max(1, int(os.getenv("MIN_FETCH_PER_SOURCE", "3"))),
+        preferred_source_ids=preferred_source_ids,
+        exploration_ratio=exploration_ratio,
     )
     max_eval_articles = max(1, int(os.getenv("MAX_EVAL_ARTICLES", "60")))
 
@@ -192,6 +236,16 @@ def run() -> int:
     )
 
     fallback_worth_reading: list[tuple] = []
+    max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
+    info_key_counts: Counter[str] = Counter()
+
+    def _reserve_info_slot(article: ScoredArticle) -> bool:
+        info_key = build_info_key(article)
+        if info_key_counts[info_key] >= max_info_dup:
+            return False
+        info_key_counts[info_key] += 1
+        return True
+
     for highlight in ai_highlights:
         if highlight.worth == WORTH_SKIP:
             continue
@@ -227,11 +281,14 @@ def run() -> int:
             summary_raw=article.summary_raw,
             lead_paragraph=highlight.one_line_summary or assessment.one_line_summary,
             content_text=article.content_text,
+            info_url=article.info_url,
             tags=[],
             score=float(assessment.quality_score),
             worth=assessment.worth,
             reason_short=highlight.reason_short or assessment.reason_short,
         )
+        if not _reserve_info_slot(scored_article):
+            continue
         target.append(TaggedArticle(article=scored_article, generated_tags=[]))
         if len(tagged_highlights) >= selection_cap:
             break
@@ -248,11 +305,14 @@ def run() -> int:
                 summary_raw=article.summary_raw,
                 lead_paragraph=highlight.one_line_summary or assessment.one_line_summary,
                 content_text=article.content_text,
+                info_url=article.info_url,
                 tags=[],
                 score=float(assessment.quality_score),
                 worth=assessment.worth,
                 reason_short=highlight.reason_short or assessment.reason_short,
             )
+            if not _reserve_info_slot(scored_article):
+                continue
             tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
             if len(tagged_highlights) >= selection_cap:
                 break
@@ -266,12 +326,27 @@ def run() -> int:
         extras=[],
     )
 
-    markdown = render_digest_markdown(digest)
+    tracker = LinkTracker.from_env()
+    markdown = render_digest_markdown(
+        digest,
+        link_resolver=lambda article: tracker.build_tracking_url(
+            article,
+            digest_date=report_date,
+            channel="markdown",
+        ),
+    )
     output_path = write_digest_markdown(markdown, report_date=report_date, output_dir=args.output_dir)
     LOGGER.info("Digest report generated: %s", output_path)
 
     if _should_sync_flomo(args):
-        payload = build_flomo_payload(digest)
+        payload = build_flomo_payload(
+            digest,
+            link_resolver=lambda article: tracker.build_tracking_url(
+                article,
+                digest_date=report_date,
+                channel="flomo",
+            ),
+        )
         try:
             flomo = FlomoClient()
             flomo.send(payload)

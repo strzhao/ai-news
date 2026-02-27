@@ -55,6 +55,7 @@ def test_fetch_articles_filters_external_links_for_twitter_sources(monkeypatch) 
     articles = fetch_articles([source])
     titles = [item.title for item in articles]
     assert titles == ["External link", "tco short link"]
+    assert articles[0].info_url == "https://example.com/post"
 
 
 def test_fetch_articles_keeps_all_when_filter_disabled(monkeypatch) -> None:
@@ -72,3 +73,4 @@ def test_fetch_articles_keeps_all_when_filter_disabled(monkeypatch) -> None:
     )
     articles = fetch_articles([source])
     assert len(articles) == 3
+    assert articles[1].info_url == "https://x.com/u/status/2"

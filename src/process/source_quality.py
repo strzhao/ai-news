@@ -12,20 +12,34 @@ from src.models import (
 )
 
 
+def _behavior_priority_score(multiplier: float) -> float:
+    clipped = max(0.85, min(1.2, float(multiplier)))
+    return ((clipped - 0.85) / (1.2 - 0.85)) * 100.0
+
+
 def rank_sources_by_priority(
     sources: list[SourceConfig],
     historical_scores: dict[str, SourceQualityScore],
+    behavior_multipliers: dict[str, float] | None = None,
 ) -> list[SourceConfig]:
+    behavior_multipliers = behavior_multipliers or {}
     total = max(1, len(sources))
     index_map = {source.id: idx for idx, source in enumerate(sources)}
 
     def priority(source: SourceConfig) -> float:
         historical = historical_scores.get(source.id)
         source_quality = historical.quality_score if historical else 50.0
+        behavior_multiplier = behavior_multipliers.get(source.id, 1.0)
+        behavior_priority = _behavior_priority_score(behavior_multiplier)
         # Respect manually curated source order first, then blend historical quality.
         index = index_map.get(source.id, total - 1)
         curated_priority = ((total - index) / total) * 100
-        return curated_priority * 0.5 + float(source.source_weight) * 100 * 0.3 + source_quality * 0.2
+        return (
+            curated_priority * 0.45
+            + float(source.source_weight) * 100 * 0.25
+            + source_quality * 0.15
+            + behavior_priority * 0.15
+        )
 
     return sorted(sources, key=priority, reverse=True)
 
@@ -56,7 +70,10 @@ def build_budgeted_source_limits(
     source_limits: dict[str, int],
     total_budget: int,
     min_per_source: int = 3,
+    preferred_source_ids: set[str] | None = None,
+    exploration_ratio: float = 0.0,
 ) -> dict[str, int]:
+    preferred_source_ids = preferred_source_ids or set()
     if total_budget <= 0 or not prioritized_sources:
         return source_limits
 
@@ -110,6 +127,47 @@ def build_budgeted_source_limits(
         add = min(room, remaining)
         allocated[source.id] += add
         remaining -= add
+
+    ratio = max(0.0, min(1.0, float(exploration_ratio)))
+    if ratio <= 0 or not preferred_source_ids:
+        return allocated
+
+    exploratory_ids = [source.id for source in prioritized_sources if source.id not in preferred_source_ids]
+    if not exploratory_ids:
+        return allocated
+
+    target_exploration = int(round(total_budget * ratio))
+    if target_exploration <= 0:
+        return allocated
+
+    current_exploration = sum(allocated.get(source_id, 0) for source_id in exploratory_ids)
+    needed = max(0, target_exploration - current_exploration)
+    if needed == 0:
+        return allocated
+
+    donors = [source.id for source in reversed(prioritized_sources) if source.id in preferred_source_ids]
+    recipients = [source.id for source in prioritized_sources if source.id in exploratory_ids]
+
+    while needed > 0:
+        recipient_id = next(
+            (
+                source_id
+                for source_id in recipients
+                if allocated.get(source_id, 0) < int(source_limits.get(source_id, 0))
+            ),
+            None,
+        )
+        if recipient_id is None:
+            break
+
+        donor_id = next((source_id for source_id in donors if allocated.get(source_id, 0) > 1), None)
+        if donor_id is None:
+            break
+
+        allocated[donor_id] -= 1
+        allocated[recipient_id] = allocated.get(recipient_id, 0) + 1
+        needed -= 1
+
     return allocated
 
 

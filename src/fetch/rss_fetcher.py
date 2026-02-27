@@ -116,6 +116,13 @@ def _entry_has_external_link(entry: feedparser.FeedParserDict) -> bool:
     return any(_is_external_link(link) for link in _collect_entry_candidate_links(entry))
 
 
+def _select_info_url(entry: feedparser.FeedParserDict, fallback_url: str) -> str:
+    for link in _collect_entry_candidate_links(entry):
+        if _is_external_link(link):
+            return link
+    return fallback_url
+
+
 def fetch_articles(
     sources: Iterable[SourceConfig],
     timeout_seconds: int = 20,
@@ -160,6 +167,7 @@ def fetch_articles(
                 summary_raw=summary,
                 lead_paragraph=lead,
                 content_text=content_text,
+                info_url=_select_info_url(entry, fallback_url=url),
             )
             articles.append(article)
     return articles

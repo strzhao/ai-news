@@ -31,6 +31,7 @@ class Article:
     summary_raw: str
     lead_paragraph: str
     content_text: str
+    info_url: str = ""
     tags: list[str] = field(default_factory=list)
 
 

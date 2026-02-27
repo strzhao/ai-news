@@ -41,9 +41,25 @@ python -m src.main --tz Asia/Shanghai
 - `HIGHLIGHT_SELECTION_RATIO` (default: `0.45`, 重点文章按评估池比例精选)
 - `HIGHLIGHT_MIN_COUNT` (default: `4`, 保底最少重点文章数)
 - `RSSHUB_BASE_URL` (optional, 例如: `https://rsshub.example.com`，用于启用 `sources.yaml` 中的 X/Twitter 源)
+- `MAX_INFO_DUP_PER_DIGEST` (default: `2`, 同一信息在重点文章中最多出现次数)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。
 重点文章是“最多 Top 16”，会按当日质量门槛动态收缩，宁缺毋滥。
+
+### 个性化点击反馈（302 Tracker）
+
+- `TRACKER_BASE_URL` (optional, 例如: `https://ai-news-tracker.vercel.app`)
+- `TRACKER_SIGNING_SECRET` (optional, 与 tracker 服务保持一致)
+- `TRACKER_API_TOKEN` (optional, 用于读取点击统计)
+- `PERSONALIZATION_ENABLED` (default: `true`)
+- `PERSONALIZATION_LOOKBACK_DAYS` (default: `90`)
+- `PERSONALIZATION_HALF_LIFE_DAYS` (default: `21`)
+- `PERSONALIZATION_MIN_MULTIPLIER` (default: `0.85`)
+- `PERSONALIZATION_MAX_MULTIPLIER` (default: `1.20`)
+- `EXPLORATION_RATIO` (default: `0.15`, 预留给非历史偏好源的抓取预算比例)
+
+当 `TRACKER_BASE_URL + TRACKER_SIGNING_SECRET` 可用时，Markdown/flomo 输出链接会替换为签名 302 跳转链接；
+点击数据会回流到 tracker，并在后续日报中温和影响抓取优先级和预算分配。若 tracker 配置缺失，自动回退直链，不影响日报产出。
 
 ### X/Twitter 源说明（RSSHub）
 
@@ -77,3 +93,13 @@ Workflow: `.github/workflows/daily_digest.yml`
 - restores `.cache/ai-news` to reduce repeated AI calls
 - 默认会使用 `https://rsshub-vercel-deploy-cyan.vercel.app` 作为 `RSSHUB_BASE_URL`（可通过仓库变量 `RSSHUB_BASE_URL` 覆盖）
 - optional auto-commit by repository variable `AUTO_COMMIT_REPORTS=true`
+
+## Tracker Service
+
+`tracker/` 目录是独立的 Vercel tracker 项目，可单独部署：
+
+```bash
+cd tracker
+npm install
+vercel --prod
+```

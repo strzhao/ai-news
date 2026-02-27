@@ -2,71 +2,39 @@ sources:
   - id: simon_willison
     name: Simon Willison
     url: https://simonwillison.net/atom/everything/
-    source_weight: 1.05
+    source_weight: 1.0
   - id: latent_space
     name: Latent.Space
     url: https://www.latent.space/feed
-    source_weight: 0.9
+    source_weight: 0.95
   - id: swyx_buttondown
     name: swyx Newsletter
     url: https://buttondown.com/swyx/rss
-    source_weight: 0.88
+    source_weight: 0.92
   - id: stable_diffusion_art
     name: Stable Diffusion Art
     url: https://stable-diffusion-art.com/feed/
-    source_weight: 0.82
+    source_weight: 0.9
   - id: bens_bites
     name: Ben's Bites
     url: https://www.bensbites.com/feed
-    source_weight: 0.84
+    source_weight: 0.88
   - id: sspai
     name: 少数派
     url: https://sspai.com/feed
-    source_weight: 0.85
+    source_weight: 0.88
   - id: huggingface_blog
     name: Hugging Face Blog
     url: https://huggingface.co/blog/feed.xml
-    source_weight: 0.95
+    source_weight: 0.9
   - id: langchain_blog
     name: LangChain Blog
     url: https://blog.langchain.dev/rss/
-    source_weight: 0.96
+    source_weight: 0.9
   - id: understanding_ai
     name: Understanding AI
     url: https://www.understandingai.org/feed
-    source_weight: 0.9
-  - id: daring_fireball
-    name: Daring Fireball
-    url: https://daringfireball.net/feeds/main
-    source_weight: 0.93
-  - id: krebsonsecurity
-    name: Krebs on Security
-    url: https://krebsonsecurity.com/feed/
-    source_weight: 0.95
-  - id: troy_hunt
-    name: Troy Hunt
-    url: https://www.troyhunt.com/rss/
-    source_weight: 0.93
-  - id: antirez
-    name: antirez
-    url: http://antirez.com/rss
-    source_weight: 0.9
-  - id: minimaxir
-    name: minimaxir
-    url: https://minimaxir.com/index.xml
-    source_weight: 0.89
-  - id: joan_westenberg
-    name: Joan Westenberg
-    url: https://joanwestenberg.com/rss
-    source_weight: 0.87
-  - id: gwern_substack
-    name: Gwern (Substack)
-    url: https://gwern.substack.com/feed
-    source_weight: 0.91
-  - id: wheresyoured
-    name: Where's Your Ed At
-    url: https://www.wheresyoured.at/rss/
-    source_weight: 0.9
+    source_weight: 0.85
 
   # X/Twitter sources via self-hosted RSSHub.
   # Set RSSHUB_BASE_URL first, e.g. https://rsshub.example.com
@@ -76,142 +44,82 @@ sources:
     rsshub_route: /twitter/user/Khazix0918
     source_type: twitter
     only_external_links: true
-    source_weight: 1.0
+    source_weight: 1.08
   - id: x_dotey
     name: 宝玉 AI（X）
     rsshub_route: /twitter/user/dotey
     source_type: twitter
     only_external_links: true
-    source_weight: 1.05
+    source_weight: 1.08
   - id: x_vista8
     name: 向阳乔木（X）
     rsshub_route: /twitter/user/vista8
     source_type: twitter
     only_external_links: true
-    source_weight: 0.99
+    source_weight: 1.08
   - id: x_op7418
     name: 歸藏（X）
     rsshub_route: /twitter/user/op7418
     source_type: twitter
     only_external_links: true
-    source_weight: 0.99
+    source_weight: 1.08
   - id: x_owenyoungzh
     name: OwenYoungZh（X）
     rsshub_route: /twitter/user/OwenYoungZh
     source_type: twitter
     only_external_links: true
-    source_weight: 1.0
+    source_weight: 1.08
   - id: x_yetone
     name: yetone（X）
     rsshub_route: /twitter/user/yetone
     source_type: twitter
     only_external_links: true
-    source_weight: 1.03
+    source_weight: 1.08
   - id: x_jefferytatsuya
     name: JefferyTatsuya（X）
     rsshub_route: /twitter/user/JefferyTatsuya
     source_type: twitter
     only_external_links: true
-    source_weight: 0.98
+    source_weight: 1.08
   - id: x_jimmy_jinglv
     name: Jimmy_JingLv（X）
     rsshub_route: /twitter/user/Jimmy_JingLv
     source_type: twitter
     only_external_links: true
-    source_weight: 0.98
+    source_weight: 1.08
   - id: x_cosmtrek
     name: cosmtrek（X）
     rsshub_route: /twitter/user/cosmtrek
     source_type: twitter
     only_external_links: true
-    source_weight: 1.01
+    source_weight: 1.08
   - id: x_lxfater
     name: lxfater（X）
     rsshub_route: /twitter/user/lxfater
     source_type: twitter
     only_external_links: true
-    source_weight: 1.0
+    source_weight: 1.08
   - id: x_flashsnail
     name: FlashSnail（X）
     rsshub_route: /twitter/user/FlashSnail
     source_type: twitter
     only_external_links: true
-    source_weight: 0.99
+    source_weight: 1.08
   - id: x_frostyevening
     name: frostyevening（X）
     rsshub_route: /twitter/user/frostyevening
     source_type: twitter
     only_external_links: true
-    source_weight: 0.98
+    source_weight: 1.08
   - id: x_benn_huang
     name: benn_huang（X）
     rsshub_route: /twitter/user/benn_huang
     source_type: twitter
     only_external_links: true
-    source_weight: 0.99
+    source_weight: 1.08
   - id: x_waylybaye
     name: waylybaye（X）
     rsshub_route: /twitter/user/waylybaye
     source_type: twitter
     only_external_links: true
-    source_weight: 1.03
-  - id: x_openai
-    name: OpenAI（X）
-    rsshub_route: /twitter/user/OpenAI
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.1
-  - id: x_anthropicai
-    name: Anthropic（X）
-    rsshub_route: /twitter/user/AnthropicAI
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.1
-  - id: x_deepseek_ai
-    name: DeepSeek（X）
-    rsshub_route: /twitter/user/deepseek_ai
-    source_type: twitter
-    only_external_links: true
     source_weight: 1.08
-  - id: x_langchain
-    name: LangChain（X）
-    rsshub_route: /twitter/user/LangChain
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.06
-  - id: x_steipete
-    name: steipete（X）
-    rsshub_route: /twitter/user/steipete
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.05
-  - id: x_gregisenberg
-    name: gregisenberg（X）
-    rsshub_route: /twitter/user/gregisenberg
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.02
-  - id: x_runes_leo
-    name: runes_leo（X）
-    rsshub_route: /twitter/user/runes_leo
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.06
-  - id: x_sodawhite_dev
-    name: sodawhite_dev（X）
-    rsshub_route: /twitter/user/sodawhite_dev
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.04
-  - id: x_abskoop
-    name: abskoop（X）
-    rsshub_route: /twitter/user/abskoop
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.04
-  - id: x_oran_ge
-    name: oran_ge（X）
-    rsshub_route: /twitter/user/oran_ge
-    source_type: twitter
-    only_external_links: true
-    source_weight: 1.02

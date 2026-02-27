@@ -165,6 +165,7 @@ def rank_articles(
                 summary_raw=article.summary_raw,
                 lead_paragraph=article.lead_paragraph,
                 content_text=article.content_text,
+                info_url=article.info_url,
                 tags=article.tags[:],
                 score=round(weighted_score, 2),
                 worth=worth,
