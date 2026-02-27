@@ -360,15 +360,28 @@ def run() -> int:
     must_read_candidates: list[tuple[int, ScoredArticle]] = []
     fallback_worth_reading: list[tuple[int, ScoredArticle]] = []
     max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
+    max_info_dup_lookback_days = int(os.getenv("MAX_INFO_DUP_LOOKBACK_DAYS", "365"))
+    historical_info_counts, historical_title_counts = cache.load_highlight_key_counts(
+        lookback_days=max_info_dup_lookback_days
+    )
     info_key_counts: Counter[str] = Counter()
     title_key_counts: Counter[str] = Counter()
+    if historical_info_counts or historical_title_counts:
+        LOGGER.info(
+            "Historical duplicate guard loaded: info_keys=%d title_keys=%d lookback_days=%d",
+            len(historical_info_counts),
+            len(historical_title_counts),
+            max_info_dup_lookback_days,
+        )
 
     def _reserve_info_slot(article: ScoredArticle) -> bool:
         info_key = build_info_key(article)
         title_key = build_title_key(article.title)
-        if info_key_counts[info_key] >= max_info_dup:
+        historical_info_hits = int(historical_info_counts.get(info_key, 0))
+        historical_title_hits = int(historical_title_counts.get(title_key, 0))
+        if historical_info_hits + int(info_key_counts[info_key]) >= max_info_dup:
             return False
-        if title_key_counts[title_key] >= max_info_dup:
+        if historical_title_hits + int(title_key_counts[title_key]) >= max_info_dup:
             return False
         info_key_counts[info_key] += 1
         title_key_counts[title_key] += 1
@@ -454,6 +467,17 @@ def run() -> int:
         highlights=tagged_highlights,
         daily_tags=daily_tags,
         extras=[],
+    )
+    cache.record_highlight_entries(
+        report_date,
+        [
+            (
+                item.article.id,
+                build_info_key(item.article),
+                build_title_key(item.article.title),
+            )
+            for item in tagged_highlights
+        ],
     )
 
     tracker = LinkTracker.from_env()

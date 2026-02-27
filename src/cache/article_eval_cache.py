@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.models import ArticleAssessment, SourceQualityScore
@@ -46,6 +46,36 @@ class ArticleEvalCache:
                     freshness REAL NOT NULL,
                     updated_at TEXT NOT NULL
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS highlight_entries (
+                    digest_date TEXT NOT NULL,
+                    article_id TEXT NOT NULL,
+                    info_key TEXT NOT NULL,
+                    title_key TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (digest_date, article_id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_highlight_entries_info_key
+                ON highlight_entries (info_key)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_highlight_entries_title_key
+                ON highlight_entries (title_key)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_highlight_entries_digest_date
+                ON highlight_entries (digest_date)
                 """
             )
 
@@ -210,6 +240,83 @@ class ArticleEvalCache:
                         score.must_read_rate,
                         score.avg_confidence,
                         score.freshness,
+                        now,
+                    ),
+                )
+
+    def load_highlight_key_counts(
+        self,
+        *,
+        lookback_days: int = 365,
+        now_utc: datetime | None = None,
+    ) -> tuple[dict[str, int], dict[str, int]]:
+        now_utc = now_utc or datetime.now(timezone.utc)
+        with self._connect() as conn:
+            if lookback_days > 0:
+                threshold_date = (now_utc.date() - timedelta(days=max(1, lookback_days) - 1)).isoformat()
+                info_rows = conn.execute(
+                    """
+                    SELECT info_key, COUNT(*)
+                    FROM highlight_entries
+                    WHERE digest_date >= ?
+                    GROUP BY info_key
+                    """,
+                    (threshold_date,),
+                ).fetchall()
+                title_rows = conn.execute(
+                    """
+                    SELECT title_key, COUNT(*)
+                    FROM highlight_entries
+                    WHERE digest_date >= ?
+                    GROUP BY title_key
+                    """,
+                    (threshold_date,),
+                ).fetchall()
+            else:
+                info_rows = conn.execute(
+                    """
+                    SELECT info_key, COUNT(*)
+                    FROM highlight_entries
+                    GROUP BY info_key
+                    """
+                ).fetchall()
+                title_rows = conn.execute(
+                    """
+                    SELECT title_key, COUNT(*)
+                    FROM highlight_entries
+                    GROUP BY title_key
+                    """
+                ).fetchall()
+
+        info_counts = {str(row[0]): int(row[1]) for row in info_rows if str(row[0]).strip()}
+        title_counts = {str(row[0]): int(row[1]) for row in title_rows if str(row[0]).strip()}
+        return info_counts, title_counts
+
+    def record_highlight_entries(
+        self,
+        digest_date: str,
+        rows: list[tuple[str, str, str]],
+    ) -> None:
+        if not rows:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            for article_id, info_key, title_key in rows:
+                conn.execute(
+                    """
+                    INSERT INTO highlight_entries (
+                        digest_date, article_id, info_key, title_key, created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(digest_date, article_id) DO UPDATE SET
+                        info_key = excluded.info_key,
+                        title_key = excluded.title_key,
+                        created_at = excluded.created_at
+                    """,
+                    (
+                        digest_date,
+                        article_id,
+                        info_key,
+                        title_key,
                         now,
                     ),
                 )
