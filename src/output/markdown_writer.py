@@ -15,7 +15,7 @@ def render_digest_markdown(
     lines.append("## 今日速览")
     lines.append(digest.top_summary.strip() or "- 今日暂无高质量 AI 更新。")
     lines.append("")
-    lines.append("## 重点文章（最多 16）")
+    lines.append("## 重点文章")
 
     if not digest.highlights:
         lines.append("- 今日暂无满足阈值的重点文章。")

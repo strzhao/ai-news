@@ -40,3 +40,25 @@ def test_consumption_client_validates_rows_shape() -> None:
     with pytest.raises(ConsumptionClientError):
         ConsumptionClient._parse_source_daily_payload({"rows": "invalid"})
 
+
+def test_consumption_client_parses_type_daily_clicks(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "rows": [
+            {"primary_type": "benchmark", "date": "2026-02-27", "clicks": 2},
+            {"primary_type": "benchmark", "date": "2026-02-27", "clicks": 1},
+            {"primary_type": "agent_workflow", "date": "2026-02-26", "clicks": 4},
+        ]
+    }
+    monkeypatch.setattr(
+        "src.personalization.consumption_client.requests.get",
+        lambda *args, **kwargs: _MockResponse(payload),
+    )
+    client = ConsumptionClient(base_url="https://tracker.example.com", api_token="token")
+    result = client.fetch_type_daily_clicks(days=90)
+    assert result["benchmark"]["2026-02-27"] == 3
+    assert result["agent_workflow"]["2026-02-26"] == 4
+
+
+def test_consumption_client_validates_type_rows_shape() -> None:
+    with pytest.raises(ConsumptionClientError):
+        ConsumptionClient._parse_type_daily_payload({"rows": "invalid"})

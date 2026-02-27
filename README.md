@@ -1,6 +1,6 @@
 # AI News Daily Digest
 
-每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（最多 Top 16 + 一句话总结 + 日报技术标签），并可同步到 flomo。
+每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（重点文章 + 一句话总结 + 日报技术标签），并可同步到 flomo。
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ python -m src.main --tz Asia/Shanghai
 - `DEEPSEEK_API_KEY` (required)
 - `DEEPSEEK_MODEL` (default: `deepseek-chat`)
 - `DEEPSEEK_BASE_URL` (default: `https://api.deepseek.com`)
-- `AI_EVAL_PROMPT_VERSION` (default: `v6`)
+- `AI_EVAL_PROMPT_VERSION` (default: `v7`)
 
 未配置 `DEEPSEEK_API_KEY` 时，程序会直接报错退出（不再提供规则摘要降级）。
 
@@ -33,7 +33,8 @@ python -m src.main --tz Asia/Shanghai
 - `AI_EVAL_MAX_RETRIES` (default: `2`)
 - `SOURCE_FETCH_BUDGET` (default: `60`, `0` 表示不限制)
 - `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
-- `MAX_EVAL_ARTICLES` (default: `60`)
+- `EXPANDED_DISCOVERY_MODE` (default: `true`，临时开关；`true` 时默认 `top_n=32` 且 `MAX_EVAL_ARTICLES=120`，`false` 时恢复 `top_n=16` 且 `MAX_EVAL_ARTICLES=60`)
+- `MAX_EVAL_ARTICLES` (default: `120` when `EXPANDED_DISCOVERY_MODE=true`, else `60`)
 - `MIN_HIGHLIGHT_SCORE` (default: `62`, 低于阈值不进入重点文章)
 - `MIN_WORTH_READING_SCORE` (default: `58`, 可读文章进入重点清单的最低分)
 - `MIN_HIGHLIGHT_CONFIDENCE` (default: `0.55`, 低置信度评估不进入重点文章)
@@ -44,7 +45,7 @@ python -m src.main --tz Asia/Shanghai
 - `MAX_INFO_DUP_PER_DIGEST` (default: `2`, 同一信息在重点文章中最多出现次数)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。
-重点文章是“最多 Top 16”，会按当日质量门槛动态收缩，宁缺毋滥。
+重点文章会按当日质量门槛动态收缩，宁缺毋滥。
 
 ### 个性化点击反馈（302 Tracker）
 
@@ -57,9 +58,17 @@ python -m src.main --tz Asia/Shanghai
 - `PERSONALIZATION_MIN_MULTIPLIER` (default: `0.85`)
 - `PERSONALIZATION_MAX_MULTIPLIER` (default: `1.20`)
 - `EXPLORATION_RATIO` (default: `0.15`, 预留给非历史偏好源的抓取预算比例)
+- `TYPE_PERSONALIZATION_ENABLED` (default: `true`)
+- `TYPE_PERSONALIZATION_LOOKBACK_DAYS` (default: `90`)
+- `TYPE_PERSONALIZATION_HALF_LIFE_DAYS` (default: `21`)
+- `TYPE_PERSONALIZATION_MIN_MULTIPLIER` (default: `0.90`)
+- `TYPE_PERSONALIZATION_MAX_MULTIPLIER` (default: `1.15`)
+- `TYPE_PERSONALIZATION_BLEND` (default: `0.20`, 类型偏好对文章排序的融合强度)
+- `TYPE_PERSONALIZATION_QUALITY_GAP_GUARD` (default: `8`, 超过分差不允许类型偏好反超)
+- `ARTICLE_TYPES_CONFIG` (optional, default: `src/config/article_types.yaml`)
 
 当 `TRACKER_BASE_URL + TRACKER_SIGNING_SECRET` 可用时，Markdown/flomo 输出链接会替换为签名 302 跳转链接；
-点击数据会回流到 tracker，并在后续日报中温和影响抓取优先级和预算分配。若 tracker 配置缺失，自动回退直链，不影响日报产出。
+点击数据会回流到 tracker，并在后续日报中温和影响抓取优先级、预算分配和文章类型排序。若 tracker 配置缺失，自动回退直链，不影响日报产出。
 
 ### X/Twitter 源说明（RSSHub）
 

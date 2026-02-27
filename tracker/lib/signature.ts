@@ -6,6 +6,7 @@ export type SignedParams = {
   aid: string;
   d: string;
   ch: string;
+  pt?: string;
 };
 
 function quotePlus(value: string): string {
@@ -13,7 +14,9 @@ function quotePlus(value: string): string {
 }
 
 export function canonicalQuery(params: SignedParams): string {
-  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  const entries = Object.entries(params)
+    .filter(([, value]) => String(value || "").trim())
+    .sort(([a], [b]) => a.localeCompare(b));
   return entries
     .map(([key, value]) => `${quotePlus(key)}=${quotePlus(value)}`)
     .join("&");

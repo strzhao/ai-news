@@ -65,3 +65,28 @@ def test_cache_key_changes_when_content_changes() -> None:
     key_b = build_article_cache_key(article_b, model_name="deepseek-chat", prompt_version="v2")
     assert key_a != key_b
 
+
+def test_evaluator_normalizes_article_types(tmp_path) -> None:  # noqa: ANN001
+    payload = {
+        "article_id": "a1",
+        "worth": "可读",
+        "quality_score": 70,
+        "one_line_summary": "聚焦推理优化与压测数据的工程复盘文章",
+        "reason_short": "含真实延迟数据，可借鉴",
+        "evidence_signals": ["benchmark"],
+        "confidence": 0.8,
+        "primary_type": "unknown_type",
+        "secondary_types": ["benchmark", "unknown_type"],
+    }
+    client = _FakeClient(payload)
+    evaluator = ArticleEvaluator(
+        client=client,
+        cache=ArticleEvalCache(str(tmp_path / "cache.sqlite3")),
+        article_types=["benchmark", "engineering_practice", "other"],
+    )
+    article = _article()
+
+    result = evaluator.evaluate_articles([article])["a1"]
+
+    assert result.primary_type == "other"
+    assert result.secondary_types == ["benchmark"]

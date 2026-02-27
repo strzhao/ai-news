@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.config_loader import load_sources
+from src.config_loader import load_article_types, load_sources
 
 
 def _write_sources(path: Path, body: str) -> None:
@@ -88,3 +88,32 @@ sources:
     sources = load_sources(cfg)
 
     assert [source.id for source in sources] == ["rss_a", "x_a", "unique"]
+
+
+def test_load_article_types_deduplicates_and_keeps_other(tmp_path: Path) -> None:
+    cfg = tmp_path / "types.yaml"
+    cfg.write_text(
+        """
+types:
+  - benchmark
+  - engineering_practice
+  - benchmark
+""".strip(),
+        encoding="utf-8",
+    )
+
+    types = load_article_types(cfg)
+
+    assert types == ["benchmark", "engineering_practice", "other"]
+
+
+def test_load_article_types_rejects_empty_types(tmp_path: Path) -> None:
+    cfg = tmp_path / "types.yaml"
+    cfg.write_text("types: []", encoding="utf-8")
+
+    try:
+        load_article_types(cfg)
+    except ValueError as exc:
+        assert "types cannot be empty" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")

@@ -9,13 +9,22 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from src.cache.article_eval_cache import ArticleEvalCache
-from src.config_loader import load_sources
+from src.config_loader import load_article_types, load_sources
 from src.fetch.rss_fetcher import fetch_articles
 from src.integrations.flomo_client import FlomoClient, FlomoSyncError
 from src.llm.article_evaluator import ArticleEvaluator
 from src.llm.deepseek_client import DeepSeekClient, DeepSeekError
 from src.llm.summarizer import DigestSummarizer
-from src.models import DailyDigest, ScoredArticle, TaggedArticle, WORTH_MUST_READ, WORTH_SKIP, WORTH_WORTH_READING
+from src.models import (
+    AIHighlight,
+    ArticleAssessment,
+    DailyDigest,
+    ScoredArticle,
+    TaggedArticle,
+    WORTH_MUST_READ,
+    WORTH_SKIP,
+    WORTH_WORTH_READING,
+)
 from src.output.flomo_formatter import build_flomo_payload
 from src.output.markdown_writer import render_digest_markdown, write_digest_markdown
 from src.process.dedupe import dedupe_articles
@@ -28,7 +37,12 @@ from src.process.source_quality import (
     rank_sources_by_priority,
 )
 from src.personalization.behavior_weight import compute_behavior_multipliers, select_preferred_sources
-from src.personalization.consumption_client import ConsumptionClientError, load_source_daily_clicks
+from src.personalization.consumption_client import (
+    ConsumptionClientError,
+    load_source_daily_clicks,
+    load_type_daily_clicks,
+)
+from src.personalization.type_weight import compute_type_multipliers
 from src.tracking.link_tracker import LinkTracker
 
 LOGGER = logging.getLogger(__name__)
@@ -59,11 +73,22 @@ def _highlight_cap(total_assessed: int, top_n: int) -> int:
     return max(1, min(top_n, capped))
 
 
+def _expanded_discovery_mode_enabled() -> bool:
+    return os.getenv("EXPANDED_DISCOVERY_MODE", "true").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
 def parse_args() -> argparse.Namespace:
+    expanded_mode = _expanded_discovery_mode_enabled()
+    default_top_n = 32 if expanded_mode else 16
     parser = argparse.ArgumentParser(description="Generate daily AI RSS digest")
     parser.add_argument("--date", help="Target date in YYYY-MM-DD, defaults to today in --tz")
     parser.add_argument("--tz", default="Asia/Shanghai", help="Timezone name, default Asia/Shanghai")
-    parser.add_argument("--top-n", type=int, default=16, help="Max number of highlight articles")
+    parser.add_argument("--top-n", type=int, default=default_top_n, help="Max number of highlight articles")
     parser.add_argument("--output-dir", default="reports", help="Directory for markdown reports")
     parser.add_argument("--sources-config", default="src/config/sources.yaml")
     parser.add_argument("--sync-flomo", action="store_true", help="Force sync to flomo")
@@ -89,9 +114,17 @@ def _build_summarizer(client: DeepSeekClient | None = None) -> DigestSummarizer:
     return DigestSummarizer(client=client or _build_client())
 
 
-def _build_evaluator(client: DeepSeekClient | None = None) -> ArticleEvaluator:
+def _build_evaluator(
+    client: DeepSeekClient | None = None,
+    *,
+    article_types: list[str] | None = None,
+) -> ArticleEvaluator:
     cache = ArticleEvalCache(os.getenv("AI_EVAL_CACHE_DB"))
-    return ArticleEvaluator(client=client or _build_client(), cache=cache)
+    return ArticleEvaluator(
+        client=client or _build_client(),
+        cache=cache,
+        article_types=article_types,
+    )
 
 
 def _should_sync_flomo(args: argparse.Namespace) -> bool:
@@ -100,6 +133,67 @@ def _should_sync_flomo(args: argparse.Namespace) -> bool:
     if args.sync_flomo:
         return True
     return bool(os.getenv("FLOMO_API_URL"))
+
+
+def _is_enabled(env_name: str, default: str = "true") -> bool:
+    return os.getenv(env_name, default).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _personalized_quality_score(
+    base_quality: float,
+    primary_type: str,
+    type_multipliers: dict[str, float],
+    blend: float,
+) -> float:
+    if blend <= 0:
+        return base_quality
+    multiplier = float(type_multipliers.get(primary_type, 1.0))
+    return base_quality * (1.0 + (multiplier - 1.0) * blend)
+
+
+def _reorder_candidates_by_type_preference(
+    candidates: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]],
+    *,
+    type_multipliers: dict[str, float],
+    blend: float,
+    quality_gap_guard: float,
+) -> tuple[list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]], int]:
+    if not candidates or not type_multipliers or blend <= 0:
+        return candidates, 0
+
+    enriched: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment, float]] = []
+    for index, highlight, scored_article, assessment in candidates:
+        personalized_score = _personalized_quality_score(
+            float(scored_article.score),
+            scored_article.primary_type,
+            type_multipliers,
+            blend,
+        )
+        enriched.append((index, highlight, scored_article, assessment, personalized_score))
+
+    ordered = sorted(
+        enriched,
+        key=lambda item: (item[4], item[2].score, -item[0]),
+        reverse=True,
+    )
+
+    gap = max(0.0, float(quality_gap_guard))
+    if gap > 0:
+        changed = True
+        while changed:
+            changed = False
+            for idx in range(1, len(ordered)):
+                prev = ordered[idx - 1]
+                cur = ordered[idx]
+                if cur[2].score - prev[2].score > gap:
+                    ordered[idx - 1], ordered[idx] = cur, prev
+                    changed = True
+
+    before = [item[2].id for item in candidates]
+    after = [item[2].id for item in ordered]
+    reordered_count = sum(1 for idx, article_id in enumerate(before) if after[idx] != article_id)
+
+    return [(index, highlight, scored_article, assessment) for index, highlight, scored_article, assessment, _ in ordered], reordered_count
 
 
 def run() -> int:
@@ -114,21 +208,25 @@ def run() -> int:
     except RuntimeError as exc:
         LOGGER.error("%s", exc)
         return 2
+
+    try:
+        article_types = load_article_types(os.getenv("ARTICLE_TYPES_CONFIG") or None)
+    except (OSError, ValueError) as exc:
+        LOGGER.error("Failed to load article types config: %s", exc)
+        return 2
+
     summarizer = _build_summarizer(client=client)
-    evaluator = _build_evaluator(client=client)
+    evaluator = _build_evaluator(client=client, article_types=article_types)
     cache = evaluator.cache
 
     report_date = _target_date(args.date, args.tz)
     sources = load_sources(args.sources_config)
     historical_source_scores = cache.load_source_scores()
     behavior_multipliers: dict[str, float] = {}
+    type_multipliers: dict[str, float] = {}
     preferred_source_ids: set[str] = set()
-    personalization_enabled = os.getenv("PERSONALIZATION_ENABLED", "true").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
+    personalization_enabled = _is_enabled("PERSONALIZATION_ENABLED", "true")
+    type_personalization_enabled = _is_enabled("TYPE_PERSONALIZATION_ENABLED", "true")
     lookback_days = max(1, int(os.getenv("PERSONALIZATION_LOOKBACK_DAYS", "90")))
     half_life_days = max(1.0, float(os.getenv("PERSONALIZATION_HALF_LIFE_DAYS", "21")))
     min_multiplier = float(os.getenv("PERSONALIZATION_MIN_MULTIPLIER", "0.85"))
@@ -153,6 +251,30 @@ def run() -> int:
         except ConsumptionClientError as exc:
             LOGGER.warning("Failed to load tracker stats, fallback to static source priority: %s", exc)
 
+    type_lookback_days = max(1, int(os.getenv("TYPE_PERSONALIZATION_LOOKBACK_DAYS", "90")))
+    type_half_life_days = max(1.0, float(os.getenv("TYPE_PERSONALIZATION_HALF_LIFE_DAYS", "21")))
+    type_min_multiplier = float(os.getenv("TYPE_PERSONALIZATION_MIN_MULTIPLIER", "0.9"))
+    type_max_multiplier = float(os.getenv("TYPE_PERSONALIZATION_MAX_MULTIPLIER", "1.15"))
+    type_blend = max(0.0, min(1.0, float(os.getenv("TYPE_PERSONALIZATION_BLEND", "0.2"))))
+    type_quality_gap_guard = max(0.0, float(os.getenv("TYPE_PERSONALIZATION_QUALITY_GAP_GUARD", "8")))
+    if type_personalization_enabled:
+        try:
+            type_daily_clicks = load_type_daily_clicks(days=type_lookback_days)
+            type_multipliers = compute_type_multipliers(
+                type_daily_clicks,
+                lookback_days=type_lookback_days,
+                half_life_days=type_half_life_days,
+                min_multiplier=type_min_multiplier,
+                max_multiplier=type_max_multiplier,
+            )
+            LOGGER.info(
+                "Type personalization enabled: click_types=%d type_weights=%d",
+                len(type_daily_clicks),
+                len(type_multipliers),
+            )
+        except ConsumptionClientError as exc:
+            LOGGER.warning("Failed to load type stats, fallback to baseline article ranking: %s", exc)
+
     prioritized_sources = rank_sources_by_priority(
         sources,
         historical_source_scores,
@@ -169,7 +291,8 @@ def run() -> int:
         preferred_source_ids=preferred_source_ids,
         exploration_ratio=exploration_ratio,
     )
-    max_eval_articles = max(1, int(os.getenv("MAX_EVAL_ARTICLES", "60")))
+    default_max_eval = 120 if _expanded_discovery_mode_enabled() else 60
+    max_eval_articles = max(1, int(os.getenv("MAX_EVAL_ARTICLES", str(default_max_eval))))
 
     fetched = fetch_articles(
         prioritized_sources,
@@ -235,7 +358,8 @@ def run() -> int:
         selection_cap,
     )
 
-    fallback_worth_reading: list[tuple] = []
+    must_read_candidates: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]] = []
+    fallback_worth_reading: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]] = []
     max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
     info_key_counts: Counter[str] = Counter()
 
@@ -246,7 +370,7 @@ def run() -> int:
         info_key_counts[info_key] += 1
         return True
 
-    for highlight in ai_highlights:
+    for index, highlight in enumerate(ai_highlights):
         if highlight.worth == WORTH_SKIP:
             continue
         article = article_map.get(highlight.article_id)
@@ -264,13 +388,6 @@ def run() -> int:
         if assessment.worth == WORTH_WORTH_READING and assessment.quality_score < min_worth_reading_score:
             continue
 
-        tuple_item = (highlight, article, assessment)
-        if assessment.worth == WORTH_MUST_READ:
-            target = tagged_highlights
-        else:
-            fallback_worth_reading.append(tuple_item)
-            continue
-
         scored_article = ScoredArticle(
             id=article.id,
             title=article.title,
@@ -283,34 +400,48 @@ def run() -> int:
             content_text=article.content_text,
             info_url=article.info_url,
             tags=[],
+            primary_type=assessment.primary_type,
+            secondary_types=assessment.secondary_types[:],
             score=float(assessment.quality_score),
             worth=assessment.worth,
             reason_short=highlight.reason_short or assessment.reason_short,
         )
+        tuple_item = (index, highlight, scored_article, assessment)
+        if assessment.worth == WORTH_MUST_READ:
+            must_read_candidates.append(tuple_item)
+        else:
+            fallback_worth_reading.append(tuple_item)
+
+    must_read_candidates, must_read_reordered = _reorder_candidates_by_type_preference(
+        must_read_candidates,
+        type_multipliers=type_multipliers,
+        blend=type_blend,
+        quality_gap_guard=type_quality_gap_guard,
+    )
+    fallback_worth_reading, worth_reading_reordered = _reorder_candidates_by_type_preference(
+        fallback_worth_reading,
+        type_multipliers=type_multipliers,
+        blend=type_blend,
+        quality_gap_guard=type_quality_gap_guard,
+    )
+    if type_multipliers:
+        LOGGER.info(
+            "Type personalization reorder: must_read=%d worth_reading=%d blend=%.2f gap_guard=%.1f",
+            must_read_reordered,
+            worth_reading_reordered,
+            type_blend,
+            type_quality_gap_guard,
+        )
+
+    for _, _, scored_article, _ in must_read_candidates:
         if not _reserve_info_slot(scored_article):
             continue
-        target.append(TaggedArticle(article=scored_article, generated_tags=[]))
+        tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
         if len(tagged_highlights) >= selection_cap:
             break
 
     if len(tagged_highlights) < selection_cap:
-        for highlight, article, assessment in fallback_worth_reading:
-            scored_article = ScoredArticle(
-                id=article.id,
-                title=article.title,
-                url=article.url,
-                source_id=article.source_id,
-                source_name=article.source_name,
-                published_at=article.published_at,
-                summary_raw=article.summary_raw,
-                lead_paragraph=highlight.one_line_summary or assessment.one_line_summary,
-                content_text=article.content_text,
-                info_url=article.info_url,
-                tags=[],
-                score=float(assessment.quality_score),
-                worth=assessment.worth,
-                reason_short=highlight.reason_short or assessment.reason_short,
-            )
+        for _, _, scored_article, _ in fallback_worth_reading:
             if not _reserve_info_slot(scored_article):
                 continue
             tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))

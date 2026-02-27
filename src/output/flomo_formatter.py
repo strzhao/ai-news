@@ -18,7 +18,7 @@ def render_flomo_content(
     else:
         lines.append("- 今日暂无高质量 AI 更新。")
     lines.append("")
-    lines.append("【重点文章（最多16）】")
+    lines.append("【重点文章】")
 
     for idx, tagged_article in enumerate(digest.highlights, start=1):
         article = tagged_article.article

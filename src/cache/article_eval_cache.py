@@ -76,6 +76,8 @@ class ArticleEvalCache:
             best_for_roles=[str(item) for item in payload.get("best_for_roles", []) if str(item).strip()],
             evidence_signals=[str(item) for item in payload.get("evidence_signals", []) if str(item).strip()],
             confidence=float(payload.get("confidence", 0.0)),
+            primary_type=str(payload.get("primary_type", "other") or "other"),
+            secondary_types=[str(item) for item in payload.get("secondary_types", []) if str(item).strip()],
             cache_key=cache_key,
         )
 
@@ -109,6 +111,8 @@ class ArticleEvalCache:
             "best_for_roles": assessment.best_for_roles,
             "evidence_signals": assessment.evidence_signals,
             "confidence": assessment.confidence,
+            "primary_type": assessment.primary_type,
+            "secondary_types": assessment.secondary_types,
         }
         with self._connect() as conn:
             conn.execute(

@@ -167,6 +167,8 @@ def rank_articles(
                 content_text=article.content_text,
                 info_url=article.info_url,
                 tags=article.tags[:],
+                primary_type=article.primary_type,
+                secondary_types=article.secondary_types[:],
                 score=round(weighted_score, 2),
                 worth=worth,
                 reason_short=_reason_short(article, components, worth),

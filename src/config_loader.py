@@ -110,3 +110,18 @@ def load_scoring(path: str | Path | None = None) -> dict[str, Any]:
 def load_tagging(path: str | Path | None = None) -> dict[str, Any]:
     config_path = Path(path) if path else DEFAULT_CONFIG_DIR / "tagging.yaml"
     return load_yaml(config_path)
+
+
+def load_article_types(path: str | Path | None = None) -> list[str]:
+    config_path = Path(path) if path else DEFAULT_CONFIG_DIR / "article_types.yaml"
+    raw = load_yaml(config_path)
+    type_rows = raw.get("types", [])
+    if not isinstance(type_rows, list):
+        raise ValueError(f"types must be a list: {config_path}")
+    cleaned = [str(item).strip() for item in type_rows if str(item).strip()]
+    if not cleaned:
+        raise ValueError(f"types cannot be empty: {config_path}")
+    deduped = list(dict.fromkeys(cleaned))
+    if "other" not in deduped:
+        deduped.append("other")
+    return deduped

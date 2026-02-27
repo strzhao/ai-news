@@ -33,6 +33,8 @@ class Article:
     content_text: str
     info_url: str = ""
     tags: list[str] = field(default_factory=list)
+    primary_type: str = ""
+    secondary_types: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -77,6 +79,8 @@ class ArticleAssessment:
     best_for_roles: list[str] = field(default_factory=list)
     evidence_signals: list[str] = field(default_factory=list)
     confidence: float = 0.0
+    primary_type: str = "other"
+    secondary_types: list[str] = field(default_factory=list)
     cache_key: str = ""
 
 

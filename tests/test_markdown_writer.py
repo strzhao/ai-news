@@ -33,7 +33,7 @@ def test_markdown_title_and_tag_placement() -> None:
     output = render_digest_markdown(digest)
     assert "# AI 每日摘要" not in output
     assert output.startswith("## 今日速览")
-    assert "## 重点文章（最多 16）" in output
+    assert "## 重点文章" in output
     assert "阅读建议" not in output
     assert "## 本期技术标签" not in output
     assert output.rstrip().endswith("#RAG #MoE")

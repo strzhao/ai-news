@@ -17,6 +17,8 @@ def _assessment(article_id: str = "a1") -> ArticleAssessment:
         reason_short="实战细节充分，投入回报高",
         evidence_signals=["code", "benchmark"],
         confidence=0.9,
+        primary_type="benchmark",
+        secondary_types=["engineering_practice"],
     )
 
 
@@ -37,6 +39,8 @@ def test_cache_set_and_get(tmp_path) -> None:  # noqa: ANN001
     assert cached.article_id == "a1"
     assert cached.worth == "必读"
     assert cached.evidence_signals == ["code", "benchmark"]
+    assert cached.primary_type == "benchmark"
+    assert cached.secondary_types == ["engineering_practice"]
 
 
 def test_cache_prune(tmp_path) -> None:  # noqa: ANN001

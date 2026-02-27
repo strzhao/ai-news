@@ -100,6 +100,8 @@ class DigestSummarizer:
                     "best_for_roles": assessment.best_for_roles,
                     "evidence_signals": assessment.evidence_signals,
                     "confidence": assessment.confidence,
+                    "primary_type": assessment.primary_type,
+                    "secondary_types": assessment.secondary_types,
                 }
             if source_quality:
                 row["source_quality_score"] = source_quality.quality_score

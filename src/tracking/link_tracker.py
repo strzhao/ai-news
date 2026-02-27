@@ -11,7 +11,10 @@ from src.models import ScoredArticle
 
 
 def _canonical_query(params: Mapping[str, str]) -> str:
-    return urlencode(sorted((key, value) for key, value in params.items()), doseq=False)
+    return urlencode(
+        sorted((key, value) for key, value in params.items() if str(value).strip()),
+        doseq=False,
+    )
 
 
 def _sign(params: Mapping[str, str], secret: str) -> str:
@@ -46,6 +49,9 @@ class LinkTracker:
             "d": digest_date,
             "ch": channel,
         }
+        primary_type = article.primary_type.strip()
+        if primary_type:
+            params["pt"] = primary_type
         sig = _sign(params, self.signing_secret)
         query = f"{_canonical_query(params)}&sig={sig}"
         return f"{self.base_url}/api/r?{query}"

@@ -74,11 +74,23 @@ def build_article_cache_key(
 
 
 class ArticleEvaluator:
-    def __init__(self, client: DeepSeekClient, cache: ArticleEvalCache) -> None:
+    def __init__(
+        self,
+        client: DeepSeekClient,
+        cache: ArticleEvalCache,
+        article_types: list[str] | None = None,
+    ) -> None:
         self.client = client
         self.cache = cache
-        self.prompt_version = os.getenv("AI_EVAL_PROMPT_VERSION", "v6")
+        self.prompt_version = os.getenv("AI_EVAL_PROMPT_VERSION", "v7")
         self.max_retries = max(0, int(os.getenv("AI_EVAL_MAX_RETRIES", "2")))
+        configured_types = [str(item).strip() for item in (article_types or []) if str(item).strip()]
+        deduped = list(dict.fromkeys(configured_types))
+        if not deduped:
+            deduped = ["other"]
+        if "other" not in deduped:
+            deduped.append("other")
+        self.article_types = deduped
 
     def evaluate_articles(self, articles: list[Article]) -> dict[str, ArticleAssessment]:
         assessments: dict[str, ArticleAssessment] = {}
@@ -124,6 +136,7 @@ class ArticleEvaluator:
         return assessments
 
     def evaluate_article(self, article: Article) -> ArticleAssessment:
+        allowed_types = ", ".join(self.article_types)
         system_prompt = (
             "你是互联网公司 AI 主编，目标是判断文章是否对公司、团队和个人在 AI 发展上有实质帮助。"
             "核心是阅读 ROI：未来 7-30 天是否能带来更好的决策、执行或能力升级。"
@@ -140,10 +153,12 @@ class ArticleEvaluator:
             "你必须只输出 JSON，不能输出解释文本。"
             "输出字段：article_id, worth, reading_roi_score, company_impact, team_impact, personal_impact, "
             "execution_clarity, novelty, clarity_score, one_line_summary, reason_short, action_hint, "
-            "best_for_roles, evidence_signals, confidence。"
+            "best_for_roles, evidence_signals, confidence, primary_type, secondary_types。"
             "worth 仅允许：必读/可读/跳过。"
             "best_for_roles 是字符串数组（如 管理者/Tech Lead/工程师/产品）。"
             "evidence_signals 是字符串数组（如 code, benchmark, deployment, cost, architecture, case_study, none）。"
+            f"primary_type 必须从以下枚举中选择：{allowed_types}。"
+            "secondary_types 是字符串数组，最多 2 个，且每项必须来自同一枚举；与 primary_type 重复时去重。"
             "one_line_summary 控制在 20-35 字，reason_short 控制在 12-28 字。"
         )
         payload = {
@@ -188,6 +203,20 @@ class ArticleEvaluator:
             roles = []
         best_for_roles = list(dict.fromkeys(str(item).strip() for item in roles if str(item).strip()))
 
+        allowed_types = set(self.article_types)
+        raw_primary_type = str(row.get("primary_type", "")).strip() or "other"
+        primary_type = raw_primary_type if raw_primary_type in allowed_types else "other"
+        raw_secondary_types = row.get("secondary_types", [])
+        if not isinstance(raw_secondary_types, list):
+            raw_secondary_types = []
+        secondary_types: list[str] = []
+        for item in raw_secondary_types:
+            value = str(item).strip()
+            if not value or value == primary_type or value not in allowed_types:
+                continue
+            secondary_types.append(value)
+        secondary_types = list(dict.fromkeys(secondary_types))[:2]
+
         quality_score = _pick_score(row, ["reading_roi_score", "quality_score"], default=0)
         company_impact = _pick_score(row, ["company_impact"], default=quality_score)
         team_impact = _pick_score(row, ["team_impact"], default=quality_score)
@@ -214,4 +243,6 @@ class ArticleEvaluator:
             best_for_roles=best_for_roles,
             evidence_signals=evidence_signals,
             confidence=_coerce_confidence(row.get("confidence", 0)),
+            primary_type=primary_type,
+            secondary_types=secondary_types,
         )

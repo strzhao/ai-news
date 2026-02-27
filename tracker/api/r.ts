@@ -22,6 +22,7 @@ function parseSignedParams(req: VercelRequest): SignedParams {
     aid: queryValue(req, "aid"),
     d: queryValue(req, "d"),
     ch: queryValue(req, "ch"),
+    pt: queryValue(req, "pt"),
   };
 }
 
@@ -64,6 +65,14 @@ async function trackClick(params: SignedParams, userAgent: string | undefined): 
     upstash.hincrby(metaKey, "total", 1),
     upstash.expire(metaKey),
   ]);
+  const primaryType = String(params.pt || "").trim();
+  if (primaryType) {
+    const typeKey = `clicks:type:${dateKey}`;
+    await Promise.all([
+      upstash.hincrby(typeKey, primaryType, 1),
+      upstash.expire(typeKey),
+    ]);
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -89,7 +98,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   const userAgent = userAgentFromHeader(req.headers["user-agent"]);
-  if (!verifySignature(params, signature, secret)) {
+  const legacyParams: SignedParams = {
+    u: params.u,
+    sid: params.sid,
+    aid: params.aid,
+    d: params.d,
+    ch: params.ch,
+  };
+  if (!verifySignature(params, signature, secret) && !verifySignature(legacyParams, signature, secret)) {
     const upstash = resolveUpstashClient();
     if (upstash) {
       try {

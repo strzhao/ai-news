@@ -18,6 +18,7 @@ def _article() -> ScoredArticle:
         summary_raw="",
         lead_paragraph="lead",
         content_text="text",
+        primary_type="benchmark",
     )
 
 
@@ -39,4 +40,5 @@ def test_tracker_builds_signed_redirect_url() -> None:
     assert query["aid"] == ["a-1"]
     assert query["d"] == ["2026-02-27"]
     assert query["ch"] == ["flomo"]
+    assert query["pt"] == ["benchmark"]
     assert "sig" in query and len(query["sig"][0]) == 64

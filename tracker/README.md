@@ -6,6 +6,7 @@ Lightweight Vercel redirect tracker for `ai-news`.
 
 - `GET /api/r`: signed 302 redirect + click aggregation
 - `GET /api/stats/sources?days=90`: source-level click timeseries for personalization
+- `GET /api/stats/types?days=90`: article-type click timeseries for personalization
 - `GET /api/healthz`: health check
 
 ## Required Environment Variables
