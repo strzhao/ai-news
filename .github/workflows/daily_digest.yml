@@ -50,12 +50,14 @@ jobs:
           python-version: "3.11"
 
       - name: Restore AI eval cache
-        uses: actions/cache@v4
+        id: restore-ai-cache
+        uses: actions/cache/restore@v4
         with:
           path: .cache/ai-news
-          key: ai-news-eval-v6-${{ runner.os }}-${{ hashFiles('src/llm/article_evaluator.py', 'src/llm/summarizer.py', 'src/process/source_quality.py') }}
+          key: ai-news-eval-v7-${{ runner.os }}-${{ hashFiles('src/llm/article_evaluator.py', 'src/llm/summarizer.py', 'src/process/source_quality.py', 'src/main.py', 'src/cache/article_eval_cache.py') }}
           restore-keys: |
-            ai-news-eval-v6-${{ runner.os }}-
+            ai-news-eval-v7-${{ runner.os }}-${{ hashFiles('src/llm/article_evaluator.py', 'src/llm/summarizer.py', 'src/process/source_quality.py', 'src/main.py', 'src/cache/article_eval_cache.py') }}-
+            ai-news-eval-v7-${{ runner.os }}-
 
       - name: Install dependencies
         run: |
@@ -64,6 +66,13 @@ jobs:
 
       - name: Generate daily digest
         run: python -m src.main --tz Asia/Shanghai
+
+      - name: Save AI eval cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/ai-news
+          key: ai-news-eval-v7-${{ runner.os }}-${{ hashFiles('src/llm/article_evaluator.py', 'src/llm/summarizer.py', 'src/process/source_quality.py', 'src/main.py', 'src/cache/article_eval_cache.py') }}-${{ github.run_id }}
 
       - name: Commit report
         if: env.AUTO_COMMIT_REPORTS == 'true'
