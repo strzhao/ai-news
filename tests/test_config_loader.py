@@ -53,3 +53,38 @@ sources:
 
     assert len(sources) == 1
     assert sources[0].id == "normal"
+
+
+def test_load_sources_deduplicates_rss_and_twitter_sources(tmp_path: Path, monkeypatch) -> None:
+    cfg = tmp_path / "sources.yaml"
+    _write_sources(
+        cfg,
+        """
+sources:
+  - id: rss_a
+    name: RSS A
+    url: https://example.com/feed
+  - id: rss_dup
+    name: RSS Duplicate
+    url: https://example.com/feed/
+  - id: x_a
+    name: X A
+    rsshub_route: /twitter/user/Dotey
+    source_type: twitter
+  - id: x_dup
+    name: X Duplicate
+    rsshub_route: twitter/user/dotey/
+    source_type: twitter
+  - id: unique
+    name: Unique
+    url: https://another.com/feed.xml
+  - id: unique
+    name: Duplicate ID
+    url: https://another-2.com/feed.xml
+""".strip(),
+    )
+    monkeypatch.setenv("RSSHUB_BASE_URL", "https://rsshub.example.com/")
+
+    sources = load_sources(cfg)
+
+    assert [source.id for source in sources] == ["rss_a", "x_a", "unique"]
