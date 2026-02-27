@@ -8,7 +8,6 @@ worth_thresholds:
   must_read: 75
   worth_reading: 55
 source_authority_defaults:
-  simon_willison: 96
   latent_space: 93
   swyx_buttondown: 92
   stable_diffusion_art: 88

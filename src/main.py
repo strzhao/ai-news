@@ -458,8 +458,14 @@ def run() -> int:
         daily_tags=daily_tags,
         extras=[],
     )
-    report_article_keys = [build_info_key(item.article) for item in digest.highlights]
-    report_article_keys.extend(build_info_key(item.article) for item in digest.extras)
+    report_article_key_set: set[str] = set()
+    for article in deduped:
+        if article.id not in assessments:
+            continue
+        article_key = build_info_key(article)
+        if article_key:
+            report_article_key_set.add(article_key)
+    report_article_keys = sorted(report_article_key_set)
     cache.record_report_article_keys(report_article_keys)
 
     tracker = LinkTracker.from_env()

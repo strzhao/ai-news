@@ -1,8 +1,4 @@
 sources:
-  - id: simon_willison
-    name: Simon Willison
-    url: https://simonwillison.net/atom/everything/
-    source_weight: 1.0
   - id: latent_space
     name: Latent.Space
     url: https://www.latent.space/feed
