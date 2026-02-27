@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+
 from src.cache.article_eval_cache import ArticleEvalCache
 from src.models import ArticleAssessment
 
@@ -61,33 +63,64 @@ def test_cache_prune(tmp_path) -> None:  # noqa: ANN001
     assert kept == 2
 
 
-def test_highlight_history_counts_are_global(tmp_path) -> None:  # noqa: ANN001
+def test_report_article_counts_are_global(tmp_path) -> None:  # noqa: ANN001
     db_path = tmp_path / "cache.sqlite3"
     cache = ArticleEvalCache(str(db_path))
-    cache.record_highlight_keys(
+    cache.record_report_article_keys(
         [
-            ("info:k1", "title:t1"),
-            ("info:k1", "title:t2"),
-            ("info:k2", "title:t1"),
-            ("info:k1", "title:t1"),
+            "info:k1",
+            "info:k1",
+            "info:k2",
+            "info:k1",
         ],
     )
 
-    info_counts, title_counts = cache.load_highlight_key_counts()
+    counts = cache.load_report_article_counts()
 
-    assert info_counts["info:k1"] == 3
-    assert info_counts["info:k2"] == 1
-    assert title_counts["title:t1"] == 3
-    assert title_counts["title:t2"] == 1
+    assert counts["info:k1"] == 3
+    assert counts["info:k2"] == 1
 
 
-def test_highlight_history_counts_duplicate_entries(tmp_path) -> None:  # noqa: ANN001
+def test_report_article_counts_duplicate_entries(tmp_path) -> None:  # noqa: ANN001
     db_path = tmp_path / "cache.sqlite3"
     cache = ArticleEvalCache(str(db_path))
-    cache.record_highlight_keys([("info:k1", "title:t1")])
-    cache.record_highlight_keys([("info:k1", "title:t1")])
+    cache.record_report_article_keys(["info:k1"])
+    cache.record_report_article_keys(["info:k1"])
 
-    info_counts, title_counts = cache.load_highlight_key_counts()
+    counts = cache.load_report_article_counts()
 
-    assert info_counts["info:k1"] == 2
-    assert title_counts["title:t1"] == 2
+    assert counts["info:k1"] == 2
+
+
+def test_migrate_from_legacy_highlight_key_counts(tmp_path) -> None:  # noqa: ANN001
+    db_path = tmp_path / "cache.sqlite3"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE highlight_key_counts (
+                key_kind TEXT NOT NULL,
+                key_value TEXT NOT NULL,
+                hit_count INTEGER NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (key_kind, key_value)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO highlight_key_counts (key_kind, key_value, hit_count, updated_at)
+            VALUES ('info', 'info:k1', 2, '2026-02-01T00:00:00+00:00')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO highlight_key_counts (key_kind, key_value, hit_count, updated_at)
+            VALUES ('title', 'title:ignored', 9, '2026-02-01T00:00:00+00:00')
+            """
+        )
+
+    cache = ArticleEvalCache(str(db_path))
+    counts = cache.load_report_article_counts()
+
+    assert counts["info:k1"] == 2
+    assert "title:ignored" not in counts

@@ -50,39 +50,66 @@ class ArticleEvalCache:
             )
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS highlight_key_counts (
-                    key_kind TEXT NOT NULL,
-                    key_value TEXT NOT NULL,
+                CREATE TABLE IF NOT EXISTS report_article_counts (
+                    article_key TEXT PRIMARY KEY,
                     hit_count INTEGER NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (key_kind, key_value)
+                    updated_at TEXT NOT NULL
                 )
                 """
             )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_highlight_key_counts_key_value
-                ON highlight_key_counts (key_value)
-                """
-            )
-            self._migrate_legacy_highlight_entries(conn)
+            self._migrate_legacy_article_counts(conn)
 
-    def _migrate_legacy_highlight_entries(self, conn: sqlite3.Connection) -> None:
-        has_legacy_table = conn.execute(
+    def _table_exists(self, conn: sqlite3.Connection, table_name: str) -> bool:
+        row = conn.execute(
             """
             SELECT 1
             FROM sqlite_master
-            WHERE type = 'table' AND name = 'highlight_entries'
-            """
+            WHERE type = 'table' AND name = ?
+            """,
+            (table_name,),
         ).fetchone()
-        if not has_legacy_table:
-            return
+        return bool(row)
 
-        existing_rows = conn.execute("SELECT COUNT(*) FROM highlight_key_counts").fetchone()
+    def _upsert_report_article_counts(self, conn: sqlite3.Connection, rows: list[tuple[str, int]], now: str) -> None:
+        for article_key, hit_count in rows:
+            normalized_key = str(article_key).strip()
+            normalized_hit_count = int(hit_count)
+            if not normalized_key or normalized_hit_count <= 0:
+                continue
+            conn.execute(
+                """
+                INSERT INTO report_article_counts (
+                    article_key, hit_count, updated_at
+                ) VALUES (?, ?, ?)
+                ON CONFLICT(article_key) DO UPDATE SET
+                    hit_count = excluded.hit_count,
+                    updated_at = excluded.updated_at
+                """,
+                (normalized_key, normalized_hit_count, now),
+            )
+
+    def _migrate_legacy_article_counts(self, conn: sqlite3.Connection) -> None:
+        existing_rows = conn.execute("SELECT COUNT(*) FROM report_article_counts").fetchone()
         if existing_rows and int(existing_rows[0]) > 0:
             return
 
         now = datetime.now(timezone.utc).isoformat()
+
+        if self._table_exists(conn, "highlight_key_counts"):
+            info_rows = conn.execute(
+                """
+                SELECT key_value, hit_count
+                FROM highlight_key_counts
+                WHERE key_kind = 'info' AND TRIM(key_value) != ''
+                """
+            ).fetchall()
+            self._upsert_report_article_counts(conn, info_rows, now)
+            if info_rows:
+                return
+
+        if not self._table_exists(conn, "highlight_entries"):
+            return
+
         info_rows = conn.execute(
             """
             SELECT info_key, COUNT(*)
@@ -91,39 +118,7 @@ class ArticleEvalCache:
             GROUP BY info_key
             """
         ).fetchall()
-        title_rows = conn.execute(
-            """
-            SELECT title_key, COUNT(*)
-            FROM highlight_entries
-            WHERE TRIM(title_key) != ''
-            GROUP BY title_key
-            """
-        ).fetchall()
-
-        for key_value, hit_count in info_rows:
-            conn.execute(
-                """
-                INSERT INTO highlight_key_counts (
-                    key_kind, key_value, hit_count, updated_at
-                ) VALUES (?, ?, ?, ?)
-                ON CONFLICT(key_kind, key_value) DO UPDATE SET
-                    hit_count = excluded.hit_count,
-                    updated_at = excluded.updated_at
-                """,
-                ("info", str(key_value), int(hit_count), now),
-            )
-        for key_value, hit_count in title_rows:
-            conn.execute(
-                """
-                INSERT INTO highlight_key_counts (
-                    key_kind, key_value, hit_count, updated_at
-                ) VALUES (?, ?, ?, ?)
-                ON CONFLICT(key_kind, key_value) DO UPDATE SET
-                    hit_count = excluded.hit_count,
-                    updated_at = excluded.updated_at
-                """,
-                ("title", str(key_value), int(hit_count), now),
-            )
+        self._upsert_report_article_counts(conn, info_rows, now)
 
     def get_assessment(self, cache_key: str) -> ArticleAssessment | None:
         with self._connect() as conn:
@@ -290,78 +285,49 @@ class ArticleEvalCache:
                     ),
                 )
 
-    def load_highlight_key_counts(
-        self,
-    ) -> tuple[dict[str, int], dict[str, int]]:
+    def load_report_article_counts(self) -> dict[str, int]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT key_kind, key_value, hit_count
-                FROM highlight_key_counts
+                SELECT article_key, hit_count
+                FROM report_article_counts
                 """
             ).fetchall()
 
-        info_counts: dict[str, int] = {}
-        title_counts: dict[str, int] = {}
-        for key_kind, key_value, hit_count in rows:
-            kind = str(key_kind).strip().lower()
-            key = str(key_value).strip()
-            if not kind or not key:
+        counts: dict[str, int] = {}
+        for article_key, hit_count in rows:
+            key = str(article_key).strip()
+            if not key:
                 continue
-            if kind == "info":
-                info_counts[key] = int(hit_count)
-            elif kind == "title":
-                title_counts[key] = int(hit_count)
-        return info_counts, title_counts
+            counts[key] = int(hit_count)
+        return counts
 
-    def record_highlight_keys(
+    def record_report_article_keys(
         self,
-        rows: list[tuple[str, str]],
+        article_keys: list[str],
     ) -> None:
-        if not rows:
+        if not article_keys:
             return
-        info_increments: dict[str, int] = {}
-        title_increments: dict[str, int] = {}
-        for info_key, title_key in rows:
-            normalized_info = str(info_key).strip()
-            normalized_title = str(title_key).strip()
-            if normalized_info:
-                info_increments[normalized_info] = info_increments.get(normalized_info, 0) + 1
-            if normalized_title:
-                title_increments[normalized_title] = title_increments.get(normalized_title, 0) + 1
+        increments: dict[str, int] = {}
+        for article_key in article_keys:
+            normalized_key = str(article_key).strip()
+            if normalized_key:
+                increments[normalized_key] = increments.get(normalized_key, 0) + 1
 
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
-            for key_value, increment in info_increments.items():
+            for article_key, increment in increments.items():
                 conn.execute(
                     """
-                    INSERT INTO highlight_key_counts (
-                        key_kind, key_value, hit_count, updated_at
-                    ) VALUES (?, ?, ?, ?)
-                    ON CONFLICT(key_kind, key_value) DO UPDATE SET
-                        hit_count = highlight_key_counts.hit_count + excluded.hit_count,
+                    INSERT INTO report_article_counts (
+                        article_key, hit_count, updated_at
+                    ) VALUES (?, ?, ?)
+                    ON CONFLICT(article_key) DO UPDATE SET
+                        hit_count = report_article_counts.hit_count + excluded.hit_count,
                         updated_at = excluded.updated_at
                     """,
                     (
-                        "info",
-                        key_value,
-                        increment,
-                        now,
-                    ),
-                )
-            for key_value, increment in title_increments.items():
-                conn.execute(
-                    """
-                    INSERT INTO highlight_key_counts (
-                        key_kind, key_value, hit_count, updated_at
-                    ) VALUES (?, ?, ?, ?)
-                    ON CONFLICT(key_kind, key_value) DO UPDATE SET
-                        hit_count = highlight_key_counts.hit_count + excluded.hit_count,
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        "title",
-                        key_value,
+                        article_key,
                         increment,
                         now,
                     ),

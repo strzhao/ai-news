@@ -26,7 +26,7 @@ from src.models import (
 from src.output.flomo_formatter import build_flomo_payload
 from src.output.markdown_writer import render_digest_markdown, write_digest_markdown
 from src.process.dedupe import dedupe_articles
-from src.process.info_cluster import build_info_key, build_title_key
+from src.process.info_cluster import build_info_key
 from src.process.normalize import normalize_articles
 from src.process.source_quality import (
     build_budgeted_source_limits,
@@ -360,28 +360,21 @@ def run() -> int:
     must_read_candidates: list[tuple[int, ScoredArticle]] = []
     fallback_worth_reading: list[tuple[int, ScoredArticle]] = []
     max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
-    historical_info_counts, historical_title_counts = cache.load_highlight_key_counts()
-    info_key_counts: Counter[str] = Counter()
-    title_key_counts: Counter[str] = Counter()
-    if historical_info_counts or historical_title_counts:
+    historical_article_counts = cache.load_report_article_counts()
+    article_key_counts: Counter[str] = Counter()
+    if historical_article_counts:
         LOGGER.info(
-            "Historical duplicate guard loaded: info_keys=%d title_keys=%d max_per_article=%d",
-            len(historical_info_counts),
-            len(historical_title_counts),
+            "Historical article guard loaded: article_keys=%d max_per_article=%d",
+            len(historical_article_counts),
             max_info_dup,
         )
 
-    def _reserve_info_slot(article: ScoredArticle) -> bool:
-        info_key = build_info_key(article)
-        title_key = build_title_key(article.title)
-        historical_info_hits = int(historical_info_counts.get(info_key, 0))
-        historical_title_hits = int(historical_title_counts.get(title_key, 0))
-        if historical_info_hits + int(info_key_counts[info_key]) >= max_info_dup:
+    def _reserve_report_slot(article: ScoredArticle) -> bool:
+        article_key = build_info_key(article)
+        historical_hits = int(historical_article_counts.get(article_key, 0))
+        if historical_hits + int(article_key_counts[article_key]) >= max_info_dup:
             return False
-        if historical_title_hits + int(title_key_counts[title_key]) >= max_info_dup:
-            return False
-        info_key_counts[info_key] += 1
-        title_key_counts[title_key] += 1
+        article_key_counts[article_key] += 1
         return True
 
     for index, article in enumerate(deduped):
@@ -443,7 +436,7 @@ def run() -> int:
         )
 
     for _, scored_article in must_read_candidates:
-        if not _reserve_info_slot(scored_article):
+        if not _reserve_report_slot(scored_article):
             continue
         tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
         if len(tagged_highlights) >= selection_cap:
@@ -451,7 +444,7 @@ def run() -> int:
 
     if len(tagged_highlights) < selection_cap:
         for _, scored_article in fallback_worth_reading:
-            if not _reserve_info_slot(scored_article):
+            if not _reserve_report_slot(scored_article):
                 continue
             tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
             if len(tagged_highlights) >= selection_cap:
@@ -465,15 +458,9 @@ def run() -> int:
         daily_tags=daily_tags,
         extras=[],
     )
-    cache.record_highlight_keys(
-        [
-            (
-                build_info_key(item.article),
-                build_title_key(item.article.title),
-            )
-            for item in tagged_highlights
-        ],
-    )
+    report_article_keys = [build_info_key(item.article) for item in digest.highlights]
+    report_article_keys.extend(build_info_key(item.article) for item in digest.extras)
+    cache.record_report_article_keys(report_article_keys)
 
     tracker = LinkTracker.from_env()
     markdown = render_digest_markdown(
