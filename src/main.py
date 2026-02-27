@@ -16,8 +16,6 @@ from src.llm.article_evaluator import ArticleEvaluator
 from src.llm.deepseek_client import DeepSeekClient, DeepSeekError
 from src.llm.summarizer import DigestSummarizer
 from src.models import (
-    AIHighlight,
-    ArticleAssessment,
     DailyDigest,
     ScoredArticle,
     TaggedArticle,
@@ -154,28 +152,28 @@ def _personalized_quality_score(
 
 
 def _reorder_candidates_by_type_preference(
-    candidates: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]],
+    candidates: list[tuple[int, ScoredArticle]],
     *,
     type_multipliers: dict[str, float],
     blend: float,
     quality_gap_guard: float,
-) -> tuple[list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]], int]:
+) -> tuple[list[tuple[int, ScoredArticle]], int]:
     if not candidates or not type_multipliers or blend <= 0:
         return candidates, 0
 
-    enriched: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment, float]] = []
-    for index, highlight, scored_article, assessment in candidates:
+    enriched: list[tuple[int, ScoredArticle, float]] = []
+    for index, scored_article in candidates:
         personalized_score = _personalized_quality_score(
             float(scored_article.score),
             scored_article.primary_type,
             type_multipliers,
             blend,
         )
-        enriched.append((index, highlight, scored_article, assessment, personalized_score))
+        enriched.append((index, scored_article, personalized_score))
 
     ordered = sorted(
         enriched,
-        key=lambda item: (item[4], item[2].score, -item[0]),
+        key=lambda item: (item[2], item[1].score, -item[0]),
         reverse=True,
     )
 
@@ -187,15 +185,15 @@ def _reorder_candidates_by_type_preference(
             for idx in range(1, len(ordered)):
                 prev = ordered[idx - 1]
                 cur = ordered[idx]
-                if cur[2].score - prev[2].score > gap:
+                if cur[1].score - prev[1].score > gap:
                     ordered[idx - 1], ordered[idx] = cur, prev
                     changed = True
 
-    before = [item[2].id for item in candidates]
-    after = [item[2].id for item in ordered]
+    before = [item[1].id for item in candidates]
+    after = [item[1].id for item in ordered]
     reordered_count = sum(1 for idx, article_id in enumerate(before) if after[idx] != article_id)
 
-    return [(index, highlight, scored_article, assessment) for index, highlight, scored_article, assessment, _ in ordered], reordered_count
+    return [(index, scored_article) for index, scored_article, _ in ordered], reordered_count
 
 
 def run() -> int:
@@ -327,7 +325,7 @@ def run() -> int:
     source_quality_map = {item.source_id: item for item in source_quality_list}
 
     try:
-        top_summary, ai_highlights, daily_tags = summarizer.build_digest_content(
+        top_summary, daily_tags = summarizer.build_overview_content(
             deduped,
             date=report_date,
             timezone_name=args.tz,
@@ -339,7 +337,6 @@ def run() -> int:
         LOGGER.error("AI 生成失败：%s", exc)
         return 5
 
-    article_map = {article.id: article for article in deduped}
     tagged_highlights: list[TaggedArticle] = []
     min_highlight_score = float(os.getenv("MIN_HIGHLIGHT_SCORE", "62"))
     min_worth_reading_score = float(os.getenv("MIN_WORTH_READING_SCORE", "58"))
@@ -360,8 +357,8 @@ def run() -> int:
         selection_cap,
     )
 
-    must_read_candidates: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]] = []
-    fallback_worth_reading: list[tuple[int, AIHighlight, ScoredArticle, ArticleAssessment]] = []
+    must_read_candidates: list[tuple[int, ScoredArticle]] = []
+    fallback_worth_reading: list[tuple[int, ScoredArticle]] = []
     max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
     info_key_counts: Counter[str] = Counter()
     title_key_counts: Counter[str] = Counter()
@@ -377,12 +374,7 @@ def run() -> int:
         title_key_counts[title_key] += 1
         return True
 
-    for index, highlight in enumerate(ai_highlights):
-        if highlight.worth == WORTH_SKIP:
-            continue
-        article = article_map.get(highlight.article_id)
-        if not article:
-            continue
+    for index, article in enumerate(deduped):
         assessment = assessments.get(article.id)
         if not assessment:
             continue
@@ -403,7 +395,7 @@ def run() -> int:
             source_name=article.source_name,
             published_at=article.published_at,
             summary_raw=article.summary_raw,
-            lead_paragraph=highlight.one_line_summary or assessment.one_line_summary,
+            lead_paragraph=assessment.one_line_summary,
             content_text=article.content_text,
             info_url=article.info_url,
             tags=[],
@@ -411,9 +403,9 @@ def run() -> int:
             secondary_types=assessment.secondary_types[:],
             score=float(assessment.quality_score),
             worth=assessment.worth,
-            reason_short=highlight.reason_short or assessment.reason_short,
+            reason_short=assessment.reason_short,
         )
-        tuple_item = (index, highlight, scored_article, assessment)
+        tuple_item = (index, scored_article)
         if assessment.worth == WORTH_MUST_READ:
             must_read_candidates.append(tuple_item)
         else:
@@ -440,7 +432,7 @@ def run() -> int:
             type_quality_gap_guard,
         )
 
-    for _, _, scored_article, _ in must_read_candidates:
+    for _, scored_article in must_read_candidates:
         if not _reserve_info_slot(scored_article):
             continue
         tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
@@ -448,7 +440,7 @@ def run() -> int:
             break
 
     if len(tagged_highlights) < selection_cap:
-        for _, _, scored_article, _ in fallback_worth_reading:
+        for _, scored_article in fallback_worth_reading:
             if not _reserve_info_slot(scored_article):
                 continue
             tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))

@@ -25,8 +25,8 @@ def _article(article_id: str, score: float, primary_type: str) -> ScoredArticle:
 
 def test_reorder_candidates_by_type_preference_reorders_when_gap_is_small() -> None:
     candidates = [
-        (0, object(), _article("a1", 80, "research_progress"), object()),
-        (1, object(), _article("a2", 76, "benchmark"), object()),
+        (0, _article("a1", 80, "research_progress")),
+        (1, _article("a2", 76, "benchmark")),
     ]
 
     reordered, changed = _reorder_candidates_by_type_preference(
@@ -37,13 +37,13 @@ def test_reorder_candidates_by_type_preference_reorders_when_gap_is_small() -> N
     )
 
     assert changed > 0
-    assert [item[2].id for item in reordered] == ["a2", "a1"]
+    assert [item[1].id for item in reordered] == ["a2", "a1"]
 
 
 def test_reorder_candidates_by_type_preference_respects_quality_gap_guard() -> None:
     candidates = [
-        (0, object(), _article("a1", 80, "research_progress"), object()),
-        (1, object(), _article("a2", 76, "benchmark"), object()),
+        (0, _article("a1", 80, "research_progress")),
+        (1, _article("a2", 76, "benchmark")),
     ]
 
     reordered, changed = _reorder_candidates_by_type_preference(
@@ -54,4 +54,4 @@ def test_reorder_candidates_by_type_preference_respects_quality_gap_guard() -> N
     )
 
     assert changed == 0
-    assert [item[2].id for item in reordered] == ["a1", "a2"]
+    assert [item[1].id for item in reordered] == ["a1", "a2"]

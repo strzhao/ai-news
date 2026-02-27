@@ -23,6 +23,36 @@ class DigestSummarizer:
     def __init__(self, client: DeepSeekClient) -> None:
         self.client = client
 
+    def build_overview_content(
+        self,
+        articles: Iterable[Article],
+        date: str,
+        timezone_name: str,
+        top_n: int = 8,
+        language: str = "zh-CN",
+        assessments: dict[str, ArticleAssessment] | None = None,
+        source_quality_scores: dict[str, SourceQualityScore] | None = None,
+    ) -> tuple[str, list[str]]:
+        article_list = list(articles)
+        if not article_list:
+            return "今日暂无高质量 AI 更新。", []
+
+        llm_result = self._summarize_overview_with_llm(
+            article_list,
+            date=date,
+            timezone_name=timezone_name,
+            language=language,
+            top_n=top_n,
+            assessments=assessments,
+            source_quality_scores=source_quality_scores,
+        )
+        summary_lines = llm_result.get("top_summary", [])
+        top_summary = "\n".join(f"- {line}" for line in summary_lines if str(line).strip())
+        if not top_summary:
+            raise DeepSeekError("DeepSeek returned empty top_summary")
+        daily_tags = self._parse_daily_tags(llm_result)
+        return top_summary, daily_tags
+
     def build_digest_content(
         self,
         articles: Iterable[Article],
@@ -58,20 +88,14 @@ class DigestSummarizer:
         daily_tags = self._parse_daily_tags(llm_result)
         return top_summary, highlights, daily_tags
 
-    def _summarize_with_llm(
+    def _build_inputs(
         self,
         articles: list[Article],
-        date: str,
-        timezone_name: str,
-        language: str,
-        top_n: int,
-        assessments: dict[str, ArticleAssessment] | None = None,
-        source_quality_scores: dict[str, SourceQualityScore] | None = None,
-    ) -> dict[str, Any]:
+        assessments: dict[str, ArticleAssessment] | None,
+        source_quality_scores: dict[str, SourceQualityScore] | None,
+    ) -> list[dict[str, Any]]:
         inputs = []
         source_quality_scores = source_quality_scores or {}
-        default_min = 4 if top_n <= 16 else 8
-        default_max = min(top_n, 10 if top_n <= 16 else 24)
         for article in articles:
             assessment = (assessments or {}).get(article.id)
             source_quality = source_quality_scores.get(article.source_id)
@@ -108,6 +132,59 @@ class DigestSummarizer:
             if source_quality:
                 row["source_quality_score"] = source_quality.quality_score
             inputs.append(row)
+        return inputs
+
+    def _summarize_overview_with_llm(
+        self,
+        articles: list[Article],
+        date: str,
+        timezone_name: str,
+        language: str,
+        top_n: int,
+        assessments: dict[str, ArticleAssessment] | None = None,
+        source_quality_scores: dict[str, SourceQualityScore] | None = None,
+    ) -> dict[str, Any]:
+        inputs = self._build_inputs(articles, assessments, source_quality_scores)
+        system_prompt = (
+            "你是顶级 AI 资讯主编，偏产业实战。"
+            "你将收到文章基础信息和单篇评估结果。"
+            "你的任务仅有两项：1) 输出今日速览 top_summary（2-3条主题整合）；2) 输出日报标签 daily_tags（3-10个）。"
+            "必须严格输出 JSON，不允许输出 Markdown 或解释。"
+            "top_summary 要求主题整合，不可逐篇复述；每条尽量 22-32 字。"
+            "daily_tags 只保留技术维度标签。"
+            "输出字段：top_summary:string[]，daily_tags:string[]。"
+        )
+        user_prompt = {
+            "date": date,
+            "timezone": timezone_name,
+            "language": language,
+            "top_n": top_n,
+            "articles": inputs,
+        }
+        result = self.client.chat_json(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(user_prompt, ensure_ascii=False)},
+            ],
+            temperature=0.1,
+        )
+        if not isinstance(result, dict):
+            raise DeepSeekError(f"Unexpected summarize result: {result}")
+        return result
+
+    def _summarize_with_llm(
+        self,
+        articles: list[Article],
+        date: str,
+        timezone_name: str,
+        language: str,
+        top_n: int,
+        assessments: dict[str, ArticleAssessment] | None = None,
+        source_quality_scores: dict[str, SourceQualityScore] | None = None,
+    ) -> dict[str, Any]:
+        inputs = self._build_inputs(articles, assessments, source_quality_scores)
+        default_min = 4 if top_n <= 16 else 8
+        default_max = min(top_n, 10 if top_n <= 16 else 24)
 
         if assessments:
             system_prompt = (

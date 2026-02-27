@@ -54,6 +54,19 @@ def test_build_digest_content_success() -> None:
     assert daily_tags == ["#RAG", "#MoE"]
 
 
+def test_build_overview_content_success() -> None:
+    payload = {
+        "top_summary": ["要点1", "要点2"],
+        "daily_tags": ["Agent", "Safety"],
+    }
+    summarizer = DigestSummarizer(client=_FakeClient(payload))
+    summary, daily_tags = summarizer.build_overview_content(
+        [_article("a1")], "2026-02-26", "Asia/Shanghai", top_n=16
+    )
+    assert summary.startswith("- 要点1")
+    assert daily_tags == ["#Agent", "#Safety"]
+
+
 def test_build_digest_content_requires_highlights() -> None:
     payload = {
         "top_summary": ["要点1"],
