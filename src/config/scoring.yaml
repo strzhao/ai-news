@@ -8,7 +8,6 @@ worth_thresholds:
   must_read: 75
   worth_reading: 55
 source_authority_defaults:
-  baoyu_ai: 94
   simon_willison: 96
   latent_space: 93
   swyx_buttondown: 92

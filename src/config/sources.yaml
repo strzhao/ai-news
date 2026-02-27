@@ -1,8 +1,4 @@
 sources:
-  - id: baoyu_ai
-    name: 宝玉 AI
-    url: https://baoyu.ai/feed.xml
-    source_weight: 1.0
   - id: simon_willison
     name: Simon Willison
     url: https://simonwillison.net/atom/everything/
@@ -40,12 +36,90 @@ sources:
     url: https://www.understandingai.org/feed
     source_weight: 0.85
 
-# Optional (requires your own RSSHub instance to avoid public instance restrictions):
-# - id: khazix_x
-#   name: 数字生命卡兹克（X）
-#   url: https://<your-rsshub-domain>/x/user/Khazix0918
-#   source_weight: 0.95
-# - id: khazix_wechat
-#   name: 数字生命卡兹克（公众号）
-#   url: https://<your-rsshub-domain>/wechat/mp/Rockhazix
-#   source_weight: 0.95
+  # X/Twitter sources via self-hosted RSSHub.
+  # Set RSSHUB_BASE_URL first, e.g. https://rsshub.example.com
+  # These entries are auto-skipped when RSSHUB_BASE_URL is missing.
+  - id: x_khazix0918
+    name: 数字生命卡兹克（X）
+    rsshub_route: /twitter/user/Khazix0918
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_dotey
+    name: 宝玉 AI（X）
+    rsshub_route: /twitter/user/dotey
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_vista8
+    name: 向阳乔木（X）
+    rsshub_route: /twitter/user/vista8
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_op7418
+    name: 歸藏（X）
+    rsshub_route: /twitter/user/op7418
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_owenyoungzh
+    name: OwenYoungZh（X）
+    rsshub_route: /twitter/user/OwenYoungZh
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_yetone
+    name: yetone（X）
+    rsshub_route: /twitter/user/yetone
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_jefferytatsuya
+    name: JefferyTatsuya（X）
+    rsshub_route: /twitter/user/JefferyTatsuya
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_jimmy_jinglv
+    name: Jimmy_JingLv（X）
+    rsshub_route: /twitter/user/Jimmy_JingLv
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_cosmtrek
+    name: cosmtrek（X）
+    rsshub_route: /twitter/user/cosmtrek
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_lxfater
+    name: lxfater（X）
+    rsshub_route: /twitter/user/lxfater
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_flashsnail
+    name: FlashSnail（X）
+    rsshub_route: /twitter/user/FlashSnail
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_frostyevening
+    name: frostyevening（X）
+    rsshub_route: /twitter/user/frostyevening
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_benn_huang
+    name: benn_huang（X）
+    rsshub_route: /twitter/user/benn_huang
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_waylybaye
+    name: waylybaye（X）
+    rsshub_route: /twitter/user/waylybaye
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08

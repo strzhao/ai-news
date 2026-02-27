@@ -16,6 +16,8 @@ class SourceConfig:
     name: str
     url: str
     source_weight: float = 1.0
+    source_type: str | None = None
+    only_external_links: bool = False
 
 
 @dataclass(slots=True)

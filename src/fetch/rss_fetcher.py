@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from html import unescape
 from typing import Iterable
+from urllib.parse import urlparse
 
 import feedparser
 import requests
@@ -16,6 +17,16 @@ from src.models import Article, SourceConfig
 LOGGER = logging.getLogger(__name__)
 TAG_RE = re.compile(r"<[^>]+>")
 MULTISPACE_RE = re.compile(r"\s+")
+HREF_RE = re.compile(r"""href=["']([^"']+)["']""", re.IGNORECASE)
+URL_RE = re.compile(r"""https?://[^\s<>"']+""", re.IGNORECASE)
+X_INTERNAL_HOSTS = {
+    "twitter.com",
+    "www.twitter.com",
+    "x.com",
+    "www.x.com",
+    "mobile.twitter.com",
+    "mobile.x.com",
+}
 
 
 def _clean_html_text(value: str) -> str:
@@ -61,6 +72,50 @@ def _make_article_id(source_id: str, url: str, title: str) -> str:
     return f"{source_id}-{digest}"
 
 
+def _collect_entry_candidate_links(entry: feedparser.FeedParserDict) -> list[str]:
+    blocks: list[str] = []
+    for key in ("summary", "description"):
+        value = entry.get(key, "")
+        if isinstance(value, str) and value.strip():
+            blocks.append(value)
+
+    content_blocks = entry.get("content", [])
+    if isinstance(content_blocks, list):
+        for block in content_blocks:
+            if not isinstance(block, dict):
+                continue
+            value = block.get("value", "")
+            if isinstance(value, str) and value.strip():
+                blocks.append(value)
+
+    links: list[str] = []
+    for block in blocks:
+        raw = unescape(block)
+        links.extend(HREF_RE.findall(raw))
+        links.extend(URL_RE.findall(raw))
+
+    return links
+
+
+def _is_external_link(value: str) -> bool:
+    parsed = urlparse(value.strip())
+    host = parsed.netloc.lower().split(":")[0]
+    if not host:
+        return False
+    if host == "t.co":
+        # t.co almost always redirects out of X and should be treated as external.
+        return True
+    if host in X_INTERNAL_HOSTS:
+        return False
+    if host.endswith(".twitter.com") or host.endswith(".x.com") or host.endswith(".twimg.com"):
+        return False
+    return True
+
+
+def _entry_has_external_link(entry: feedparser.FeedParserDict) -> bool:
+    return any(_is_external_link(link) for link in _collect_entry_candidate_links(entry))
+
+
 def fetch_articles(
     sources: Iterable[SourceConfig],
     timeout_seconds: int = 20,
@@ -86,6 +141,8 @@ def fetch_articles(
         for entry in entries:
             if total_budget > 0 and len(articles) >= total_budget:
                 break
+            if source.only_external_links and not _entry_has_external_link(entry):
+                continue
             title = _clean_html_text(entry.get("title", ""))
             url = entry.get("link", "").strip()
             if not title or not url:

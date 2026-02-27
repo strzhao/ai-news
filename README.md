@@ -8,6 +8,9 @@
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+ln -sf ../ai-news/.env .env
+# share env from ../ai-news/.env to avoid duplicate maintenance
+set -a; source .env; set +a
 python -m src.main --tz Asia/Shanghai
 ```
 
@@ -28,7 +31,7 @@ python -m src.main --tz Asia/Shanghai
 
 - `AI_EVAL_CACHE_DB` (default: `.cache/ai-news/article_eval.sqlite3`)
 - `AI_EVAL_MAX_RETRIES` (default: `2`)
-- `SOURCE_FETCH_BUDGET` (default: `90`, `0` 表示不限制)
+- `SOURCE_FETCH_BUDGET` (default: `60`, `0` 表示不限制)
 - `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
 - `MAX_EVAL_ARTICLES` (default: `60`)
 - `MIN_HIGHLIGHT_SCORE` (default: `62`, 低于阈值不进入重点文章)
@@ -37,9 +40,18 @@ python -m src.main --tz Asia/Shanghai
 - `HIGHLIGHT_DYNAMIC_PERCENTILE` (default: `70`, 按当日评分分布抬高重点门槛)
 - `HIGHLIGHT_SELECTION_RATIO` (default: `0.45`, 重点文章按评估池比例精选)
 - `HIGHLIGHT_MIN_COUNT` (default: `4`, 保底最少重点文章数)
+- `RSSHUB_BASE_URL` (optional, 例如: `https://rsshub.example.com`，用于启用 `sources.yaml` 中的 X/Twitter 源)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。
 重点文章是“最多 Top 16”，会按当日质量门槛动态收缩，宁缺毋滥。
+
+### X/Twitter 源说明（RSSHub）
+
+`src/config/sources.yaml` 已内置一批 X/Twitter 作者源，默认通过 `rsshub_route` + `RSSHUB_BASE_URL` 自动拼接 URL。
+
+- 未设置 `RSSHUB_BASE_URL` 时，这些 X 源会被自动跳过，不影响原有 RSS。
+- 已设置 `RSSHUB_BASE_URL` 时，会自动启用这些 X 源。
+- X 源默认启用 `only_external_links: true`，仅保留包含外链的推文，降低噪声。
 
 ### flomo Sync (optional)
 
@@ -63,4 +75,5 @@ Workflow: `.github/workflows/daily_digest.yml`
 - cron: `0 23 * * *` (UTC) = `07:00 Asia/Shanghai`
 - supports manual `workflow_dispatch`
 - restores `.cache/ai-news` to reduce repeated AI calls
+- 默认会使用 `https://rsshub-vercel-deploy-cyan.vercel.app` 作为 `RSSHUB_BASE_URL`（可通过仓库变量 `RSSHUB_BASE_URL` 覆盖）
 - optional auto-commit by repository variable `AUTO_COMMIT_REPORTS=true`

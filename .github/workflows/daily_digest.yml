@@ -19,7 +19,7 @@ jobs:
       FLOMO_API_URL: ${{ secrets.FLOMO_API_URL }}
       AUTO_COMMIT_REPORTS: ${{ vars.AUTO_COMMIT_REPORTS || 'false' }}
       AI_EVAL_PROMPT_VERSION: v6
-      SOURCE_FETCH_BUDGET: "90"
+      SOURCE_FETCH_BUDGET: "60"
       MAX_EVAL_ARTICLES: "60"
       MIN_FETCH_PER_SOURCE: "3"
       MIN_HIGHLIGHT_SCORE: "62"
@@ -28,6 +28,7 @@ jobs:
       HIGHLIGHT_DYNAMIC_PERCENTILE: "70"
       HIGHLIGHT_SELECTION_RATIO: "0.45"
       HIGHLIGHT_MIN_COUNT: "4"
+      RSSHUB_BASE_URL: ${{ vars.RSSHUB_BASE_URL || 'https://rsshub-vercel-deploy-cyan.vercel.app' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
