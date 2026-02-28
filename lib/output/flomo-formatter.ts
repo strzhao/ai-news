@@ -5,10 +5,48 @@ export interface FlomoPayload {
   dedupeKey: string;
 }
 
+function normalizeHomePageUrl(raw: string): string {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  try {
+    const parsed = new URL(candidate);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return "";
+    }
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+export function resolveFlomoHomePageUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const candidates = [
+    String(env.FLOMO_H5_URL || ""),
+    String(env.DIGEST_H5_URL || ""),
+    String(env.TRACKER_BASE_URL || ""),
+    String(env.AI_NEWS_BASE_URL || ""),
+    String(env.NEXT_PUBLIC_APP_URL || ""),
+    String(env.VERCEL_URL || ""),
+  ];
+
+  for (const raw of candidates) {
+    const normalized = normalizeHomePageUrl(raw);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return "";
+}
+
 export function renderFlomoContent(
   digest: DailyDigest,
   globalTagLimit = 20,
   linkResolver?: (article: ScoredArticle) => string,
+  homePageUrl = "",
 ): string {
   const resolver = linkResolver || ((article: ScoredArticle) => article.url);
   const lines: string[] = [];
@@ -35,6 +73,11 @@ export function renderFlomoContent(
     lines.push(`链接：${resolver(article)}`);
   });
 
+  const normalizedHomePageUrl = normalizeHomePageUrl(homePageUrl);
+  if (normalizedHomePageUrl) {
+    lines.push(`H5 页面：${normalizedHomePageUrl}`);
+  }
+
   if (digest.dailyTags.length) {
     lines.push(digest.dailyTags.slice(0, globalTagLimit).join(" "));
   }
@@ -46,8 +89,9 @@ export function buildFlomoPayload(
   digest: DailyDigest,
   linkResolver?: (article: ScoredArticle) => string,
 ): FlomoPayload {
+  const homePageUrl = resolveFlomoHomePageUrl();
   return {
-    content: renderFlomoContent(digest, 20, linkResolver),
+    content: renderFlomoContent(digest, 20, linkResolver, homePageUrl),
     dedupeKey: `digest-${digest.date}`,
   };
 }

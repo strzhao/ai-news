@@ -12,7 +12,7 @@ const IGNORE_SUMMARY_PREFIX_RE = /^(来源|阅读建议|阅读理由|链接|原�
 
 const DEFAULT_DAYS = 30;
 const DEFAULT_LIMIT_PER_DAY = 10;
-const DEFAULT_ARTICLE_LIMIT_PER_DAY = 24;
+const DEFAULT_ARTICLE_LIMIT_PER_DAY = 0;
 const DEFAULT_IMAGE_PROBE_LIMIT = 24;
 
 export interface ArchiveArticleSummary {
@@ -61,6 +61,13 @@ function boundedInt(value: number | undefined, min: number, max: number, fallbac
   const normalized = Number.parseInt(String(value ?? fallback), 10);
   if (!Number.isFinite(normalized)) return fallback;
   return Math.max(min, Math.min(max, normalized));
+}
+
+function boundedIntAllowZero(value: number | undefined, max: number, fallback: number): number {
+  const normalized = Number.parseInt(String(value ?? fallback), 10);
+  if (!Number.isFinite(normalized)) return fallback;
+  if (normalized <= 0) return 0;
+  return Math.max(1, Math.min(max, normalized));
 }
 
 function normalizeText(value: string, maxLen = 280): string {
@@ -270,7 +277,7 @@ export function aggregateArchiveArticlesFromDigests(
   digests: DigestArchiveSnapshot[],
   options: { articleLimitPerDay?: number } = {},
 ): ListArchiveArticlesResult {
-  const articleLimitPerDay = boundedInt(options.articleLimitPerDay, 1, 100, DEFAULT_ARTICLE_LIMIT_PER_DAY);
+  const articleLimitPerDay = boundedIntAllowZero(options.articleLimitPerDay, 5000, DEFAULT_ARTICLE_LIMIT_PER_DAY);
 
   const orderedDigests = [...digests].sort((left, right) => {
     const leftTs = generatedAtMs(left.generated_at);
@@ -338,7 +345,7 @@ export function aggregateArchiveArticlesFromDigests(
         return left.sequence - right.sequence;
       });
 
-      const items = rows.slice(0, articleLimitPerDay).map((row) => row.item);
+      const items = (articleLimitPerDay > 0 ? rows.slice(0, articleLimitPerDay) : rows).map((row) => row.item);
       return {
         date,
         items,
@@ -407,7 +414,7 @@ export async function listArchiveArticles(options: {
 } = {}): Promise<ListArchiveArticlesResult> {
   const days = boundedInt(options.days, 1, 180, DEFAULT_DAYS);
   const limitPerDay = boundedInt(options.limitPerDay, 1, 50, DEFAULT_LIMIT_PER_DAY);
-  const articleLimitPerDay = boundedInt(options.articleLimitPerDay, 1, 100, DEFAULT_ARTICLE_LIMIT_PER_DAY);
+  const articleLimitPerDay = boundedIntAllowZero(options.articleLimitPerDay, 5000, DEFAULT_ARTICLE_LIMIT_PER_DAY);
   const imageProbeLimit = boundedInt(options.imageProbeLimit, 0, 100, DEFAULT_IMAGE_PROBE_LIMIT);
 
   const archiveGroups = await listArchives(days, limitPerDay);

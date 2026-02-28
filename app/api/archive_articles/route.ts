@@ -11,6 +11,17 @@ function boundedInt(raw: string | null, fallback: number, min: number, max: numb
   return Math.max(min, Math.min(parsed, max));
 }
 
+function boundedIntAllowZero(raw: string | null, fallback: number, max: number): number {
+  const parsed = Number.parseInt(String(raw || fallback), 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  if (parsed <= 0) {
+    return 0;
+  }
+  return Math.max(1, Math.min(parsed, max));
+}
+
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
 
@@ -21,11 +32,10 @@ export async function GET(request: Request): Promise<Response> {
     1,
     50,
   );
-  const articleLimitPerDay = boundedInt(
+  const articleLimitPerDay = boundedIntAllowZero(
     url.searchParams.get("article_limit_per_day"),
-    Number.parseInt(process.env.ARCHIVE_ARTICLE_LIMIT_PER_DAY || "24", 10) || 24,
-    1,
-    100,
+    Number.parseInt(process.env.ARCHIVE_ARTICLE_LIMIT_PER_DAY || "0", 10) || 0,
+    5000,
   );
   const imageProbeLimit = boundedInt(
     url.searchParams.get("image_probe_limit"),

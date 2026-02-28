@@ -108,4 +108,32 @@ describe("archive articles", () => {
 
     expect(latestGroup?.items[0].article_id).toHaveLength(16);
   });
+
+  it("aggregateArchiveArticlesFromDigests supports unlimited per-day articles when limit is 0", () => {
+    const markdown = [
+      "## 重点文章",
+      "### 1. [A](https://example.com/a)",
+      "- summary",
+      "### 2. [B](https://example.com/b)",
+      "- summary",
+      "### 3. [C](https://example.com/c)",
+      "- summary",
+      "",
+    ].join("\n");
+
+    const result = aggregateArchiveArticlesFromDigests([
+      {
+        digest_id: "d_1",
+        date: "2026-02-28",
+        generated_at: "2026-02-28T09:00:00.000Z",
+        markdown,
+      },
+    ], {
+      articleLimitPerDay: 0,
+    });
+
+    expect(result.totalArticles).toBe(3);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].items).toHaveLength(3);
+  });
 });

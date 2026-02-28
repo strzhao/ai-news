@@ -85,7 +85,7 @@ export default function HomePage(): React.ReactNode {
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
-  const [articleLimitPerDay, setArticleLimitPerDay] = useState(24);
+  const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -94,7 +94,7 @@ export default function HomePage(): React.ReactNode {
       Math.max(1, Math.min(50, Number.parseInt(params.get("limit_per_day") || "10", 10) || 10)),
     );
     setArticleLimitPerDay(
-      Math.max(1, Math.min(100, Number.parseInt(params.get("article_limit_per_day") || "24", 10) || 24)),
+      Math.max(0, Math.min(5000, Number.parseInt(params.get("article_limit_per_day") || "0", 10) || 0)),
     );
     setReadSet(loadReadSet());
   }, []);
