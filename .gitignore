@@ -6,3 +6,5 @@ __pycache__/
 .cache/
 .DS_Store
 .vercel/
+tools/ai-news-cli/node_modules/
+tools/ai-news-cli/dist/
