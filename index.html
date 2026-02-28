@@ -3,257 +3,638 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI News 归档中心</title>
+  <title>AI News 每日文档</title>
   <style>
     :root {
-      --bg: #f2f6f3;
-      --ink: #123028;
-      --muted: #3f5f55;
-      --card: #ffffff;
-      --line: #cfe0d8;
-      --accent: #0c8f68;
-      --accent-2: #056f50;
-      --shadow: 0 12px 28px rgba(12, 59, 45, 0.08);
-      --code-bg: #0e241d;
-      --code-ink: #d8f4ea;
+      --bg: #f7f3ea;
+      --bg-glow: #efe6d7;
+      --paper: #fffdf7;
+      --paper-strong: #ffffff;
+      --ink: #2c2a25;
+      --muted: #7d7568;
+      --line: #ddd3c4;
+      --line-strong: #c8b79e;
+      --brand: #5f6f53;
+      --brand-hover: #4f6045;
+      --ok-bg: #ece6d8;
+      --ok-ink: #5d5547;
+      --danger-bg: #f7e8e5;
+      --danger-ink: #8f473f;
+      --shadow: 0 14px 30px rgba(77, 67, 50, 0.08);
+      --radius-lg: 20px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --drawer-width: min(760px, 100vw);
     }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       color: var(--ink);
       background:
-        radial-gradient(circle at 0% 0%, #dff7ec 0, transparent 35%),
-        radial-gradient(circle at 100% 20%, #d8ecff 0, transparent 30%),
+        radial-gradient(circle at 4% 0%, var(--bg-glow) 0, transparent 42%),
+        radial-gradient(circle at 100% 0%, #efeade 0, transparent 36%),
         var(--bg);
-      font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", serif;
+      line-height: 1.5;
     }
+
     .shell {
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 24px 14px 44px;
+      width: min(980px, calc(100vw - 28px));
+      margin: 28px auto 52px;
     }
+
     .hero {
-      background: linear-gradient(130deg, #0f7c5b, #16547a);
-      color: #ecfffa;
-      border-radius: 18px;
-      padding: 20px 18px;
-      box-shadow: var(--shadow);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 0;
+      padding: 10px 4px 14px;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+      overflow: visible;
     }
+
     .hero h1 {
       margin: 0;
-      font-size: clamp(22px, 3.4vw, 34px);
+      font-size: clamp(32px, 5vw, 54px);
+      line-height: 1.08;
+      font-weight: 600;
       letter-spacing: 0.2px;
     }
-    .hero p {
-      margin: 8px 0 0;
-      font-size: 14px;
-      color: #d7fbef;
-    }
-    .toolbar {
-      margin-top: 14px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-    }
-    .toolbar label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: #dff9f0;
-    }
-    .toolbar input {
-      width: 86px;
-      border: 1px solid #9ad8c5;
-      border-radius: 8px;
-      padding: 6px 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #123028;
-      font-size: 13px;
-    }
-    .toolbar button {
-      border: 0;
-      border-radius: 10px;
-      background: #f4fff9;
-      color: #0e6d4e;
-      font-weight: 600;
-      font-size: 13px;
-      padding: 7px 12px;
-      cursor: pointer;
-    }
-    .toolbar button:hover { background: #dff8ee; }
-    .status {
-      margin: 16px 2px 0;
-      min-height: 20px;
-      font-size: 13px;
+
+    .hero-meta {
+      margin-top: 8px;
       color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.12px;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     }
-    .groups {
-      margin-top: 12px;
+
+    .status {
+      margin: 14px 4px 6px;
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.15px;
+    }
+
+    .section {
+      margin-top: 16px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: zen-rise 0.42s ease both;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 16px 13px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #fffcf6, #fbf6eb);
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: 0.15px;
+      font-weight: 600;
+    }
+
+    .section-meta {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .today-list,
+    .history-groups {
+      padding: 14px;
       display: grid;
       gap: 12px;
     }
-    .group {
-      background: var(--card);
+
+    .doc-card {
       border: 1px solid var(--line);
-      border-radius: 14px;
-      box-shadow: var(--shadow);
-      overflow: hidden;
+      border-radius: var(--radius-sm);
+      background: var(--paper-strong);
+      padding: 13px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+      animation: zen-rise 0.36s ease both;
     }
-    .group-head {
+
+    .doc-card:hover {
+      border-color: var(--line-strong);
+      background: #fffefb;
+      box-shadow: 0 12px 20px rgba(89, 74, 46, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .doc-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 8px;
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--line);
-      background: #f5fbf8;
+      gap: 10px;
     }
-    .group-head h2 {
-      margin: 0;
-      font-size: 16px;
+
+    .doc-top-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    .count {
+
+    .doc-time {
       font-size: 12px;
       color: var(--muted);
-      background: #e2f6ee;
-      border-radius: 999px;
-      padding: 2px 10px;
+      font-weight: 500;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     }
-    .items {
+
+    .doc-read {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      background: #f9f4e9;
+      color: #71695d;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .doc-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ok-ink);
+      background: var(--ok-bg);
+      border: 1px solid #e1d8c7;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .doc-preview {
+      margin: 10px 0 0;
+      color: #464037;
+      font-size: 14px;
+      line-height: 1.68;
+    }
+
+    .doc-card.is-read {
+      opacity: 0.76;
+    }
+
+    .doc-card.is-read .doc-preview {
+      color: #6e665b;
+    }
+
+    .doc-card.is-read .doc-read {
+      background: #f0ece3;
+      color: #5f574b;
+      border-color: #d6cdbd;
+    }
+
+    .doc-meta {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--line);
+      display: grid;
+      gap: 7px;
+    }
+
+    .doc-meta-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .doc-meta-label {
+      margin-top: 1px;
+      min-width: 30px;
+      color: #7b7264;
+      font-size: 12px;
+      font-weight: 500;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .doc-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .doc-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid #dfd3bf;
+      background: #faf4e8;
+      color: #5c5244;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .doc-chip-muted {
+      border-style: dashed;
+      color: #8f8576;
+      background: #fbf7ef;
+    }
+
+    .doc-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: #fcf8ef;
+      color: #4f483d;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .btn:hover {
+      border-color: var(--line-strong);
+      background: #f8f0e2;
+      color: #3f392f;
+    }
+
+    .btn-primary {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #f7f4ec;
+    }
+
+    .btn-primary:hover {
+      background: var(--brand-hover);
+      border-color: var(--brand-hover);
+      color: #f7f4ec;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-style: solid;
+      color: var(--muted);
+    }
+
+    .history-group {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: var(--paper-strong);
+    }
+
+    .history-group-head {
+      background: #fcf7ed;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px 9px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .history-group-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .history-group-count {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .history-items {
+      padding: 10px;
       display: grid;
       gap: 10px;
-      padding: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     }
-    .item {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #fff;
-      padding: 10px;
+
+    .empty,
+    .error {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      font-size: 13px;
+      color: var(--muted);
+      background: #fffcf5;
     }
-    .item-top {
+
+    .error {
+      border-color: #e2c7c2;
+      background: var(--danger-bg);
+      color: var(--danger-ink);
+    }
+
+    .drawer-root {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: none;
+    }
+
+    .drawer-root.open {
+      display: block;
+    }
+
+    .drawer-mask {
+      position: absolute;
+      inset: 0;
+      background: rgba(42, 35, 24, 0.36);
+      backdrop-filter: blur(2px);
+    }
+
+    .drawer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: var(--drawer-width);
+      height: 100%;
+      background: #fffcf5;
+      border-left: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      box-shadow: -20px 0 34px rgba(77, 67, 50, 0.14);
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+    }
+
+    .drawer-root.open .drawer {
+      transform: translateX(0);
+    }
+
+    .drawer-head {
+      border-bottom: 1px solid var(--line);
+      padding: 14px 14px 10px;
+      background: #fcf6ea;
+    }
+
+    .drawer-top {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      gap: 8px;
+      align-items: flex-start;
+      gap: 12px;
     }
-    .time {
+
+    .drawer-title {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.32;
+      word-break: break-word;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .drawer-meta {
+      margin-top: 6px;
       font-size: 12px;
       color: var(--muted);
+      word-break: break-all;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     }
-    .badge {
+
+    .drawer-close {
+      border: 1px solid var(--line);
+      background: #fff8ec;
+      color: #554d40;
+      border-radius: 10px;
+      padding: 6px 9px;
+      cursor: pointer;
       font-size: 12px;
-      border-radius: 999px;
-      padding: 2px 8px;
-      background: #ebf8f3;
-      color: #0f6f50;
+      font-weight: 600;
+      white-space: nowrap;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     }
-    .preview {
-      margin: 8px 0 0;
-      font-size: 13px;
-      line-height: 1.6;
-      color: #234239;
-    }
-    .actions {
+
+    .drawer-tabs {
       margin-top: 10px;
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
     }
-    .btn {
-      border: 1px solid #9ed7c5;
-      border-radius: 8px;
-      background: #f7fffb;
-      color: #0f664a;
+
+    .drawer-tab {
+      border: 1px solid var(--line);
+      background: #fff8ec;
+      color: #554d40;
+      border-radius: 999px;
+      padding: 5px 11px;
       font-size: 12px;
-      padding: 6px 10px;
+      font-weight: 600;
       cursor: pointer;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     }
-    .btn.active,
-    .btn:hover {
-      background: #dcf6ea;
-      border-color: #7bcab1;
+
+    .drawer-tab.active {
+      border-color: var(--line-strong);
+      background: #f2e8d7;
+      color: #534b3d;
     }
-    .detail {
-      margin-top: 10px;
-      border: 1px solid #d6e9e1;
-      border-radius: 10px;
-      overflow: hidden;
-      display: none;
-    }
-    .detail-head {
-      background: #f2faf6;
-      border-bottom: 1px solid #d6e9e1;
-      font-size: 12px;
-      color: #2b5448;
-      padding: 8px 10px;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .detail-content {
+
+    .drawer-content {
+      flex: 1;
       margin: 0;
-      padding: 12px;
+      padding: 14px;
+      font-family: "SFMono-Regular", "Menlo", "Consolas", "Monaco", monospace;
+      font-size: 13px;
+      line-height: 1.66;
+      color: #2f2a23;
+      background: #fffdf7;
       white-space: pre-wrap;
       word-break: break-word;
-      line-height: 1.65;
-      font-size: 13px;
-      max-height: 60vh;
       overflow: auto;
-      background: var(--code-bg);
-      color: var(--code-ink);
-      font-family: "SFMono-Regular", "Menlo", "Consolas", "Monaco", monospace;
     }
-    .empty, .error {
-      background: #fff;
-      border: 1px dashed #c8ddd4;
-      border-radius: 12px;
-      padding: 16px;
+
+    .drawer-note {
+      border-top: 1px solid var(--line);
+      padding: 10px 14px;
+      background: #fbf5e8;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 12px;
+      font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     }
-    .error {
-      border-color: #f2b8b8;
-      background: #fff4f4;
-      color: #7b2f2f;
+
+    @keyframes zen-rise {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
-    @media (max-width: 680px) {
-      .shell { padding: 14px 10px 30px; }
-      .hero { padding: 16px 14px; border-radius: 14px; }
-      .group-head { padding: 10px; }
-      .items { padding: 10px; }
+
+    @media (max-width: 800px) {
+      .shell {
+        width: calc(100vw - 18px);
+        margin: 14px auto 32px;
+      }
+
+      .hero {
+        padding: 8px 2px 12px;
+      }
+
+      .hero h1 {
+        font-size: clamp(28px, 9.4vw, 40px);
+      }
+
+      .section-head {
+        padding: 12px;
+      }
+
+      .today-list,
+      .history-groups {
+        padding: 10px;
+      }
+
+      .doc-meta-label {
+        min-width: 28px;
+      }
+
+      .drawer {
+        width: 100vw;
+        border-left: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
+  <main class="shell">
     <section class="hero">
-      <h1>AI News 归档中心</h1>
-      <p>按日期查看每日日报与详尽分析报告。支持同一天多份产出，便于复盘与调参。</p>
-      <div class="toolbar">
-        <label>最近天数 <input id="days" type="number" min="1" max="180" value="30"></label>
-        <label>每日上限 <input id="limit" type="number" min="1" max="50" value="10"></label>
-        <button id="refresh">刷新归档</button>
-      </div>
+      <h1>AI News</h1>
+      <div id="heroMeta" class="hero-meta">--</div>
     </section>
-    <div id="status" class="status">正在加载归档…</div>
-    <main id="groups" class="groups"></main>
-  </div>
+
+    <div id="status" class="status">正在加载文档…</div>
+
+    <section class="section">
+      <header class="section-head">
+        <h2>今日文档</h2>
+        <div id="todayMeta" class="section-meta">--</div>
+      </header>
+      <div id="todayList" class="today-list"></div>
+    </section>
+
+    <section class="section">
+      <header class="section-head">
+        <h2>历史归档</h2>
+        <div id="historyMeta" class="section-meta">--</div>
+      </header>
+      <div id="historyGroups" class="history-groups"></div>
+    </section>
+  </main>
+
+  <aside id="drawerRoot" class="drawer-root" aria-hidden="true">
+    <div id="drawerMask" class="drawer-mask"></div>
+    <section class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+      <header class="drawer-head">
+        <div class="drawer-top">
+          <div>
+            <h3 id="drawerTitle" class="drawer-title">内容详情</h3>
+            <div id="drawerMeta" class="drawer-meta"></div>
+          </div>
+          <button id="drawerClose" class="drawer-close" type="button">关闭</button>
+        </div>
+        <div class="drawer-tabs">
+          <button id="tabReport" class="drawer-tab active" type="button">日报正文</button>
+          <button id="tabAnalysis" class="drawer-tab" type="button">分析报告</button>
+        </div>
+      </header>
+      <pre id="drawerContent" class="drawer-content">请选择一份文档。</pre>
+      <div id="drawerNote" class="drawer-note">内容来自归档 API，默认优先显示日报正文。</div>
+    </section>
+  </aside>
 
   <script>
-    const statusEl = document.getElementById("status");
-    const groupsEl = document.getElementById("groups");
-    const daysEl = document.getElementById("days");
-    const limitEl = document.getElementById("limit");
-    const refreshEl = document.getElementById("refresh");
+    const ARCHIVE_TZ = "Asia/Shanghai";
+    const READ_STORAGE_KEY = "ai_news_read_digest_ids_v1";
+    const TYPE_LABELS = {
+      model_release: "模型发布",
+      benchmark: "基准评测",
+      engineering_practice: "工程实践",
+      agent_workflow: "Agent 工作流",
+      inference_optimization: "推理优化",
+      cost_optimization: "成本优化",
+      data_engineering: "数据工程",
+      security_compliance: "安全合规",
+      product_release: "产品发布",
+      open_source_project: "开源项目",
+      research_progress: "研究进展",
+      other: "其他",
+    };
 
-    function formatTime(value) {
-      const raw = String(value || "").trim();
-      if (!raw) return "-";
-      const time = new Date(raw);
-      if (Number.isNaN(time.getTime())) return raw;
-      return time.toLocaleString("zh-CN", { hour12: false });
+    const searchParams = new URLSearchParams(window.location.search);
+    const SHOW_ANALYSIS = searchParams.get("show_analysis") === "1";
+    const ARCHIVE_DAYS = Math.max(1, Math.min(180, parseInt(searchParams.get("days") || "30", 10)));
+    const ARCHIVE_LIMIT = Math.max(1, Math.min(50, parseInt(searchParams.get("limit_per_day") || "10", 10)));
+
+    const heroMetaEl = document.getElementById("heroMeta");
+    const statusEl = document.getElementById("status");
+    const todayMetaEl = document.getElementById("todayMeta");
+    const historyMetaEl = document.getElementById("historyMeta");
+    const todayListEl = document.getElementById("todayList");
+    const historyGroupsEl = document.getElementById("historyGroups");
+
+    const drawerRootEl = document.getElementById("drawerRoot");
+    const drawerMaskEl = document.getElementById("drawerMask");
+    const drawerCloseEl = document.getElementById("drawerClose");
+    const drawerTitleEl = document.getElementById("drawerTitle");
+    const drawerMetaEl = document.getElementById("drawerMeta");
+    const drawerContentEl = document.getElementById("drawerContent");
+    const drawerNoteEl = document.getElementById("drawerNote");
+    const tabReportEl = document.getElementById("tabReport");
+    const tabAnalysisEl = document.getElementById("tabAnalysis");
+
+    if (!SHOW_ANALYSIS) {
+      tabAnalysisEl.style.display = "none";
+    }
+
+    const cache = new Map();
+    const analysisCache = new Map();
+    const digestMetaCache = new Map();
+    const cardRefsByDigestId = new Map();
+    const readDigestIds = loadReadDigestIds();
+
+    let currentDigestId = "";
+    let currentTab = "report";
+    let activeItem = null;
+
+    function makeEmpty(message) {
+      const div = document.createElement("div");
+      div.className = "empty";
+      div.textContent = message;
+      return div;
     }
 
     function makeError(message) {
@@ -263,152 +644,606 @@
       return div;
     }
 
-    function makeEmpty(message) {
-      const div = document.createElement("div");
-      div.className = "empty";
-      div.textContent = message;
-      return div;
+    function formatTime(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "-";
+      const time = new Date(raw);
+      if (Number.isNaN(time.getTime())) return raw;
+      return time.toLocaleString("zh-CN", {
+        hour12: false,
+        timeZone: ARCHIVE_TZ,
+      });
     }
 
-    function createDetailLoader(item, detailBox, typeLabel, endpoint, button) {
-      return async function loadDetail() {
-        const active = button.classList.contains("active");
-        if (active) {
-          button.classList.remove("active");
-          detailBox.style.display = "none";
-          return;
-        }
-        detailBox.style.display = "block";
-        detailBox.querySelector(".detail-content").textContent = "加载中…";
-        Array.from(button.parentElement.querySelectorAll(".btn")).forEach((el) => el.classList.remove("active"));
-        button.classList.add("active");
+    function formatClock(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "-";
+      const time = new Date(raw);
+      if (Number.isNaN(time.getTime())) return "-";
+      return time.toLocaleTimeString("zh-CN", {
+        hour12: false,
+        timeZone: ARCHIVE_TZ,
+      });
+    }
 
-        try {
-          const resp = await fetch(endpoint, { cache: "no-store" });
-          const data = await resp.json();
-          if (!resp.ok || !data.ok || !data.item) {
-            throw new Error(data.error || "接口返回异常");
-          }
-          const itemData = data.item;
-          const text = typeLabel === "日报正文"
-            ? String(itemData.markdown || "")
-            : String(itemData.analysis_markdown || "");
-          detailBox.querySelector(".detail-title").textContent = `${typeLabel} · ${item.digest_id}`;
-          detailBox.querySelector(".detail-time").textContent = `生成时间：${formatTime(itemData.generated_at)}`;
-          detailBox.querySelector(".detail-content").textContent = text || "暂无内容。";
-        } catch (error) {
-          detailBox.querySelector(".detail-content").textContent = `加载失败：${error.message}`;
+    function formatTodayLabel() {
+      return new Intl.DateTimeFormat("zh-CN", {
+        timeZone: ARCHIVE_TZ,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        weekday: "short",
+      }).format(new Date());
+    }
+
+    function updateHeroMeta(lastUpdatedRaw = "") {
+      if (!heroMetaEl) return;
+      const updatedAt = lastUpdatedRaw ? formatClock(lastUpdatedRaw) : formatClock(new Date().toISOString());
+      heroMetaEl.textContent = `${formatTodayLabel()} · 更新于 ${updatedAt} · ${ARCHIVE_TZ}`;
+    }
+
+    function toMs(value) {
+      const time = new Date(String(value || "")).getTime();
+      return Number.isFinite(time) ? time : 0;
+    }
+
+    function getTodayKey() {
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: ARCHIVE_TZ,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      return formatter.format(new Date());
+    }
+
+    function splitGroups(groups) {
+      const todayKey = getTodayKey();
+      const todayItems = [];
+      const historyGroups = [];
+
+      for (const group of Array.isArray(groups) ? groups : []) {
+        const date = String(group && group.date || "").trim();
+        const items = Array.isArray(group && group.items) ? [...group.items] : [];
+        items.sort((a, b) => toMs(b.generated_at) - toMs(a.generated_at));
+
+        if (date === todayKey) {
+          todayItems.push(...items);
+        } else if (items.length > 0) {
+          historyGroups.push({ date, items });
         }
+      }
+
+      todayItems.sort((a, b) => toMs(b.generated_at) - toMs(a.generated_at));
+      historyGroups.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+      return { todayKey, todayItems, historyGroups };
+    }
+
+    function loadReadDigestIds() {
+      try {
+        const raw = window.localStorage.getItem(READ_STORAGE_KEY);
+        if (!raw) return new Set();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return new Set();
+        const values = parsed
+          .map((item) => String(item || "").trim())
+          .filter(Boolean);
+        return new Set(values);
+      } catch (error) {
+        return new Set();
+      }
+    }
+
+    function persistReadDigestIds() {
+      try {
+        const values = Array.from(readDigestIds).slice(-500);
+        window.localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(values));
+      } catch (error) {
+        // ignore
+      }
+    }
+
+    function registerCardRef(digestId, card) {
+      const key = String(digestId || "").trim();
+      if (!key || !card) return;
+      const list = cardRefsByDigestId.get(key) || [];
+      list.push(card);
+      cardRefsByDigestId.set(key, list);
+    }
+
+    function refreshReadStateForDigest(digestId) {
+      const key = String(digestId || "").trim();
+      if (!key) return;
+      const list = cardRefsByDigestId.get(key) || [];
+      const read = readDigestIds.has(key);
+      for (const card of list) {
+        card.classList.toggle("is-read", read);
+        const stateEl = card.querySelector('[data-role="read-state"]');
+        if (stateEl) {
+          stateEl.textContent = read ? "已读" : "未读";
+        }
+      }
+    }
+
+    function markDigestRead(digestId) {
+      const key = String(digestId || "").trim();
+      if (!key || readDigestIds.has(key)) return;
+      readDigestIds.add(key);
+      persistReadDigestIds();
+      refreshReadStateForDigest(key);
+    }
+
+    function safeParseUrl(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return null;
+      try {
+        return new URL(raw, window.location.origin);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function normalizeHostname(hostname) {
+      const raw = String(hostname || "").trim().toLowerCase();
+      if (!raw) return "";
+      return raw.replace(/^www\./, "");
+    }
+
+    function incrementCount(map, key) {
+      const normalized = String(key || "").trim();
+      if (!normalized) return;
+      map.set(normalized, (map.get(normalized) || 0) + 1);
+    }
+
+    function topKeys(map, limit = 3) {
+      return Array.from(map.entries())
+        .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+        .slice(0, Math.max(1, limit))
+        .map((entry) => String(entry[0]));
+    }
+
+    function uniqueTop(values, limit = 3) {
+      const result = [];
+      const seen = new Set();
+      for (const item of Array.isArray(values) ? values : []) {
+        const normalized = String(item || "").trim();
+        if (!normalized) continue;
+        const key = normalized.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(normalized);
+        if (result.length >= limit) break;
+      }
+      return result;
+    }
+
+    function formatTypeLabel(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (!normalized) return "";
+      if (TYPE_LABELS[normalized]) return TYPE_LABELS[normalized];
+      return normalized.replace(/_/g, " ");
+    }
+
+    function parseMarkdownLinks(markdown) {
+      const source = String(markdown || "");
+      const links = [];
+      const pattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+      let match = pattern.exec(source);
+      while (match) {
+        const value = String(match[1] || "").trim();
+        if (value) links.push(value);
+        match = pattern.exec(source);
+      }
+      return links;
+    }
+
+    function extractMetaFromMarkdown(markdown) {
+      const domainCounts = new Map();
+      const typeCounts = new Map();
+      const links = parseMarkdownLinks(markdown);
+
+      for (const rawLink of links) {
+        const resolved = safeParseUrl(rawLink);
+        if (!resolved) continue;
+
+        const trackedType = String(resolved.searchParams.get("pt") || "").trim().toLowerCase();
+        if (trackedType) {
+          incrementCount(typeCounts, trackedType);
+        }
+
+        const targetRaw = String(resolved.searchParams.get("u") || "").trim();
+        const target = targetRaw ? safeParseUrl(targetRaw) : resolved;
+        if (!target) continue;
+        if (!(target.protocol === "http:" || target.protocol === "https:")) continue;
+        const hostname = normalizeHostname(target.hostname);
+        if (!hostname) continue;
+        incrementCount(domainCounts, hostname);
+      }
+
+      return {
+        domains: topKeys(domainCounts, 3),
+        types: topKeys(typeCounts, 3),
       };
     }
 
-    function renderGroups(groups) {
-      groupsEl.innerHTML = "";
-      if (!Array.isArray(groups) || groups.length === 0) {
-        groupsEl.appendChild(makeEmpty("暂无归档数据。先触发一次日报生成后再查看。"));
+    function extractTypesFromAnalysisItem(item) {
+      const parsed = item && item.analysis_json;
+      if (!parsed || typeof parsed !== "object") return [];
+      const quality = parsed.quality_distribution;
+      if (!quality || typeof quality !== "object") return [];
+      const typeCounts = quality.type_counts;
+      if (!typeCounts || typeof typeCounts !== "object") return [];
+      const rows = Object.entries(typeCounts)
+        .map((entry) => {
+          const key = String(entry[0] || "").trim().toLowerCase();
+          const count = Number(entry[1] || 0);
+          return [key, Number.isFinite(count) ? count : 0];
+        })
+        .filter((entry) => entry[0] && entry[1] > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const nonOther = rows.filter((entry) => entry[0] !== "other");
+      const picked = nonOther.length ? nonOther : rows;
+      return picked.slice(0, 3).map((entry) => String(entry[0]));
+    }
+
+    async function readAnalysisItem(digestId) {
+      const key = String(digestId || "").trim();
+      if (!key) return null;
+      if (analysisCache.has(key)) return analysisCache.get(key);
+
+      const task = (async () => {
+        try {
+          const response = await fetch(`/api/archive_analysis?id=${encodeURIComponent(key)}`, { cache: "no-store" });
+          let data = null;
+          try {
+            data = await response.json();
+          } catch (error) {
+            data = null;
+          }
+          if (!response.ok || !data || !data.ok || !data.item) return null;
+          return data.item;
+        } catch (error) {
+          return null;
+        }
+      })();
+
+      analysisCache.set(key, task);
+      return task;
+    }
+
+    async function readContent(digestId, tab) {
+      const key = `${digestId}:${tab}`;
+      if (cache.has(key)) {
+        return cache.get(key);
+      }
+
+      const endpoint = tab === "report"
+        ? `/api/archive_item?id=${encodeURIComponent(digestId)}`
+        : `/api/archive_analysis?id=${encodeURIComponent(digestId)}`;
+
+      const response = await fetch(endpoint, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !data.ok || !data.item) {
+        const message = data && data.error ? String(data.error) : "读取失败";
+        throw new Error(message);
+      }
+
+      const content = tab === "report"
+        ? String(data.item.markdown || "")
+        : String(data.item.analysis_markdown || "");
+      const normalized = {
+        content,
+        generatedAt: String(data.item.generated_at || ""),
+      };
+      cache.set(key, normalized);
+      return normalized;
+    }
+
+    async function readDigestMeta(digestId) {
+      const key = String(digestId || "").trim();
+      if (!key) return { domains: [], types: [] };
+      if (digestMetaCache.has(key)) return digestMetaCache.get(key);
+
+      const task = (async () => {
+        const domains = [];
+        const types = [];
+
+        try {
+          const reportPayload = await readContent(key, "report");
+          const parsed = extractMetaFromMarkdown(reportPayload.content || "");
+          domains.push(...parsed.domains);
+          types.push(...parsed.types);
+        } catch (error) {
+          // ignore
+        }
+
+        if (!types.length) {
+          const analysisItem = await readAnalysisItem(key);
+          if (analysisItem) {
+            types.push(...extractTypesFromAnalysisItem(analysisItem));
+          }
+        }
+
+        return {
+          domains: uniqueTop(domains, 3),
+          types: uniqueTop(types.map((item) => formatTypeLabel(item)).filter(Boolean), 3),
+        };
+      })();
+
+      digestMetaCache.set(key, task);
+      return task;
+    }
+
+    function createChip(text, muted = false) {
+      const chip = document.createElement("span");
+      chip.className = muted ? "doc-chip doc-chip-muted" : "doc-chip";
+      chip.textContent = text;
+      return chip;
+    }
+
+    function renderChipList(container, values, fallbackText) {
+      container.innerHTML = "";
+      if (!Array.isArray(values) || !values.length) {
+        container.appendChild(createChip(fallbackText, true));
+        return;
+      }
+      for (const value of values) {
+        container.appendChild(createChip(String(value)));
+      }
+    }
+
+    async function hydrateDocMeta(item, sourceChipsEl, typeChipsEl) {
+      const digestId = String(item && item.digest_id || "").trim();
+      if (!digestId) {
+        renderChipList(sourceChipsEl, [], "未知来源");
+        renderChipList(typeChipsEl, [], "未分类");
+        return;
+      }
+      try {
+        const meta = await readDigestMeta(digestId);
+        renderChipList(sourceChipsEl, meta.domains, "未知来源");
+        renderChipList(typeChipsEl, meta.types, "未分类");
+      } catch (error) {
+        renderChipList(sourceChipsEl, [], "未知来源");
+        renderChipList(typeChipsEl, [], "未分类");
+      }
+    }
+
+    function renderDocCard(item, { compact = false } = {}) {
+      const digestId = String(item && item.digest_id || "").trim();
+      const card = document.createElement("article");
+      card.className = "doc-card";
+      card.dataset.digestId = digestId;
+
+      const top = document.createElement("div");
+      top.className = "doc-top";
+
+      const time = document.createElement("div");
+      time.className = "doc-time";
+      time.textContent = formatTime(item.generated_at);
+
+      const topRight = document.createElement("div");
+      topRight.className = "doc-top-right";
+
+      const readState = document.createElement("div");
+      readState.className = "doc-read";
+      readState.dataset.role = "read-state";
+      readState.textContent = "未读";
+      topRight.appendChild(readState);
+
+      const badge = document.createElement("div");
+      badge.className = "doc-badge";
+      badge.textContent = item.has_highlights ? `重点 ${item.highlight_count || 0}` : "无重点";
+      topRight.appendChild(badge);
+
+      top.appendChild(time);
+      top.appendChild(topRight);
+      card.appendChild(top);
+
+      const preview = document.createElement("p");
+      preview.className = "doc-preview";
+      preview.textContent = String(item.summary_preview || "暂无摘要。");
+      card.appendChild(preview);
+
+      const meta = document.createElement("div");
+      meta.className = "doc-meta";
+
+      const sourceRow = document.createElement("div");
+      sourceRow.className = "doc-meta-row";
+      const sourceLabel = document.createElement("div");
+      sourceLabel.className = "doc-meta-label";
+      sourceLabel.textContent = "来源";
+      const sourceChips = document.createElement("div");
+      sourceChips.className = "doc-chips";
+      sourceRow.appendChild(sourceLabel);
+      sourceRow.appendChild(sourceChips);
+
+      const typeRow = document.createElement("div");
+      typeRow.className = "doc-meta-row";
+      const typeLabel = document.createElement("div");
+      typeLabel.className = "doc-meta-label";
+      typeLabel.textContent = "类型";
+      const typeChips = document.createElement("div");
+      typeChips.className = "doc-chips";
+      typeRow.appendChild(typeLabel);
+      typeRow.appendChild(typeChips);
+
+      meta.appendChild(sourceRow);
+      meta.appendChild(typeRow);
+      card.appendChild(meta);
+
+      renderChipList(sourceChips, [], "加载中");
+      renderChipList(typeChips, [], "加载中");
+      hydrateDocMeta(item, sourceChips, typeChips);
+
+      const actions = document.createElement("div");
+      actions.className = "doc-actions";
+
+      const reportBtn = document.createElement("button");
+      reportBtn.type = "button";
+      reportBtn.className = "btn btn-primary";
+      reportBtn.textContent = compact ? "打开日报" : "阅读日报";
+      reportBtn.addEventListener("click", () => openDrawer(item, "report"));
+      actions.appendChild(reportBtn);
+
+      if (SHOW_ANALYSIS) {
+        const analysisBtn = document.createElement("button");
+        analysisBtn.type = "button";
+        analysisBtn.className = "btn btn-ghost";
+        analysisBtn.textContent = "分析(维护)";
+        analysisBtn.addEventListener("click", () => openDrawer(item, "analysis"));
+        actions.appendChild(analysisBtn);
+      }
+
+      card.appendChild(actions);
+      registerCardRef(digestId, card);
+      refreshReadStateForDigest(digestId);
+      return card;
+    }
+
+    function renderToday(items) {
+      todayListEl.innerHTML = "";
+      if (!items.length) {
+        todayListEl.appendChild(makeEmpty("今天还没有文档，触发一次日报后会出现在这里。"));
+        return;
+      }
+      for (const item of items) {
+        todayListEl.appendChild(renderDocCard(item));
+      }
+    }
+
+    function renderHistory(groups) {
+      historyGroupsEl.innerHTML = "";
+      if (!groups.length) {
+        historyGroupsEl.appendChild(makeEmpty("暂无历史归档。"));
         return;
       }
 
       for (const group of groups) {
-        const section = document.createElement("section");
-        section.className = "group";
+        const block = document.createElement("section");
+        block.className = "history-group";
 
-        const head = document.createElement("div");
-        head.className = "group-head";
-        const title = document.createElement("h2");
+        const head = document.createElement("header");
+        head.className = "history-group-head";
+        const title = document.createElement("h3");
+        title.className = "history-group-title";
         title.textContent = String(group.date || "-");
         const count = document.createElement("span");
-        count.className = "count";
-        count.textContent = `${(group.items || []).length} 条`;
+        count.className = "history-group-count";
+        count.textContent = `${group.items.length} 份`;
         head.appendChild(title);
         head.appendChild(count);
-        section.appendChild(head);
+        block.appendChild(head);
 
-        const itemsEl = document.createElement("div");
-        itemsEl.className = "items";
-
-        for (const item of group.items || []) {
-          const card = document.createElement("article");
-          card.className = "item";
-
-          const top = document.createElement("div");
-          top.className = "item-top";
-          const time = document.createElement("div");
-          time.className = "time";
-          time.textContent = formatTime(item.generated_at);
-          const badge = document.createElement("div");
-          badge.className = "badge";
-          badge.textContent = item.has_highlights ? `重点 ${item.highlight_count || 0}` : "无重点";
-          top.appendChild(time);
-          top.appendChild(badge);
-          card.appendChild(top);
-
-          const preview = document.createElement("p");
-          preview.className = "preview";
-          preview.textContent = String(item.summary_preview || item.analysis_preview || "暂无摘要。");
-          card.appendChild(preview);
-
-          const actions = document.createElement("div");
-          actions.className = "actions";
-          const reportBtn = document.createElement("button");
-          reportBtn.className = "btn";
-          reportBtn.textContent = "查看日报";
-          const analysisBtn = document.createElement("button");
-          analysisBtn.className = "btn";
-          analysisBtn.textContent = "查看分析";
-          actions.appendChild(reportBtn);
-          actions.appendChild(analysisBtn);
-          card.appendChild(actions);
-
-          const detail = document.createElement("section");
-          detail.className = "detail";
-          detail.innerHTML = `
-            <div class="detail-head">
-              <span class="detail-title">详情</span>
-              <span class="detail-time"></span>
-            </div>
-            <pre class="detail-content"></pre>
-          `;
-          card.appendChild(detail);
-
-          reportBtn.addEventListener(
-            "click",
-            createDetailLoader(item, detail, "日报正文", `/api/archive_item?id=${encodeURIComponent(item.digest_id)}`, reportBtn)
-          );
-          analysisBtn.addEventListener(
-            "click",
-            createDetailLoader(item, detail, "分析报告", `/api/archive_analysis?id=${encodeURIComponent(item.digest_id)}`, analysisBtn)
-          );
-
-          itemsEl.appendChild(card);
+        const itemsWrap = document.createElement("div");
+        itemsWrap.className = "history-items";
+        for (const item of group.items) {
+          itemsWrap.appendChild(renderDocCard(item, { compact: true }));
         }
+        block.appendChild(itemsWrap);
 
-        section.appendChild(itemsEl);
-        groupsEl.appendChild(section);
+        historyGroupsEl.appendChild(block);
       }
     }
+
+    function setActiveTab(tab) {
+      currentTab = tab;
+      tabReportEl.classList.toggle("active", tab === "report");
+      tabAnalysisEl.classList.toggle("active", tab === "analysis");
+    }
+
+    function openDrawer(item, tab) {
+      activeItem = item;
+      currentDigestId = String(item.digest_id || "").trim();
+      if (!currentDigestId) {
+        return;
+      }
+
+      markDigestRead(currentDigestId);
+      setActiveTab(tab);
+      drawerTitleEl.textContent = tab === "report" ? "日报正文" : "分析报告";
+      drawerMetaEl.textContent = `digest_id: ${currentDigestId} · 生成时间: ${formatTime(item.generated_at)}`;
+      drawerContentEl.textContent = "加载中…";
+      drawerNoteEl.textContent = tab === "report"
+        ? "优先展示内容正文。"
+        : "分析归档默认关闭，若未启用会显示未找到。";
+
+      drawerRootEl.classList.add("open");
+      drawerRootEl.setAttribute("aria-hidden", "false");
+
+      readContent(currentDigestId, tab)
+        .then((payload) => {
+          drawerContentEl.textContent = payload.content || "暂无内容。";
+        })
+        .catch((error) => {
+          if (tab === "analysis" && String(error.message || "").toLowerCase().includes("not found")) {
+            drawerContentEl.textContent = "本次未启用分析归档（默认关闭）。\n如需写入分析，请触发：archive_analysis=1";
+            return;
+          }
+          drawerContentEl.textContent = `加载失败：${error.message}`;
+        });
+    }
+
+    function closeDrawer() {
+      drawerRootEl.classList.remove("open");
+      drawerRootEl.setAttribute("aria-hidden", "true");
+    }
+
+    tabReportEl.addEventListener("click", () => {
+      if (!currentDigestId || !activeItem) return;
+      openDrawer(activeItem, "report");
+    });
+
+    tabAnalysisEl.addEventListener("click", () => {
+      if (!SHOW_ANALYSIS || !currentDigestId || !activeItem) return;
+      openDrawer(activeItem, "analysis");
+    });
+
+    drawerMaskEl.addEventListener("click", closeDrawer);
+    drawerCloseEl.addEventListener("click", closeDrawer);
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeDrawer();
+      }
+    });
 
     async function loadArchive() {
-      const days = Math.max(1, Math.min(180, parseInt(daysEl.value || "30", 10)));
-      const limit = Math.max(1, Math.min(50, parseInt(limitEl.value || "10", 10)));
-      statusEl.textContent = "正在加载归档…";
-      groupsEl.innerHTML = "";
+      statusEl.textContent = "正在加载文档…";
+      todayListEl.innerHTML = "";
+      historyGroupsEl.innerHTML = "";
+      cardRefsByDigestId.clear();
 
       try {
-        const resp = await fetch(`/api/archive?days=${days}&limit_per_day=${limit}`, { cache: "no-store" });
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) {
-          throw new Error(data.error || "加载归档失败");
+        const response = await fetch(`/api/archive?days=${ARCHIVE_DAYS}&limit_per_day=${ARCHIVE_LIMIT}`, { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "加载失败");
         }
-        renderGroups(data.groups || []);
-        statusEl.textContent = `已加载：最近 ${data.days} 天，每日最多 ${data.limit_per_day} 条。`;
+
+        const { todayKey, todayItems, historyGroups } = splitGroups(data.groups || []);
+        renderToday(todayItems);
+        renderHistory(historyGroups);
+
+        const latestTodayAt = todayItems.length ? formatTime(todayItems[0].generated_at) : "-";
+        todayMetaEl.textContent = todayItems.length
+          ? `${todayKey} · 今日 ${todayItems.length} 份 · 最近 ${latestTodayAt}`
+          : `${todayKey} · 今日暂无文档`;
+        const historyCount = historyGroups.reduce((sum, group) => sum + group.items.length, 0);
+        historyMetaEl.textContent = `${historyGroups.length} 天 · ${historyCount} 份`;
+        statusEl.textContent = `已加载最近 ${data.days} 天文档`;
+        updateHeroMeta(String(data.generated_at || ""));
       } catch (error) {
-        groupsEl.appendChild(makeError(`加载失败：${error.message}`));
+        todayListEl.appendChild(makeError(`加载失败：${error.message}`));
+        historyGroupsEl.appendChild(makeEmpty("历史区暂不可用。"));
+        todayMetaEl.textContent = "--";
+        historyMetaEl.textContent = "--";
         statusEl.textContent = "加载失败";
+        updateHeroMeta();
       }
     }
 
-    refreshEl.addEventListener("click", loadArchive);
+    updateHeroMeta();
     loadArchive();
   </script>
 </body>
