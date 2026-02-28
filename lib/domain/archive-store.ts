@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { buildUpstashClient } from "@/lib/domain/tracker-common";
+import { buildUpstashClient, buildUpstashClientOrNone } from "@/lib/domain/tracker-common";
 
 function unwrapPipelineResult(item: unknown): unknown {
   if (item && typeof item === "object" && "result" in item) {
@@ -122,7 +122,10 @@ export async function saveAnalysisArchive(params: {
 export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<Record<string, unknown>>> {
   const boundedDays = Math.max(1, Math.min(Math.trunc(days), 180));
   const boundedLimit = Math.max(1, Math.min(Math.trunc(limitPerDay), 50));
-  const upstash = buildUpstashClient();
+  const upstash = buildUpstashClientOrNone();
+  if (!upstash) {
+    return [];
+  }
 
   const dateRows = await upstash.pipeline([["ZREVRANGE", "digest:dates", 0, boundedDays - 1]]);
   const dates = parseListPayload(dateRows[0]);
@@ -189,7 +192,10 @@ export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<R
 export async function getArchiveItem(digestId: string): Promise<Record<string, unknown> | null> {
   const normalized = String(digestId || "").trim();
   if (!normalized) return null;
-  const upstash = buildUpstashClient();
+  const upstash = buildUpstashClientOrNone();
+  if (!upstash) {
+    return null;
+  }
   const row = await upstash.hgetall(`digest:entry:${normalized}`);
   if (!Object.keys(row).length) {
     return null;
@@ -210,7 +216,10 @@ export async function getArchiveItem(digestId: string): Promise<Record<string, u
 export async function getArchiveAnalysis(digestId: string): Promise<Record<string, unknown> | null> {
   const normalized = String(digestId || "").trim();
   if (!normalized) return null;
-  const upstash = buildUpstashClient();
+  const upstash = buildUpstashClientOrNone();
+  if (!upstash) {
+    return null;
+  }
   const row = await upstash.hgetall(`digest:analysis:${normalized}`);
   if (!Object.keys(row).length) {
     return null;
