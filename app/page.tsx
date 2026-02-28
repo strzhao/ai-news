@@ -167,25 +167,12 @@ export default function HomePage(): React.ReactNode {
   function renderArticle(item: ArchiveArticleSummary, options: RenderOptions = {}): React.ReactNode {
     const articleId = String(item.article_id || "").trim();
     const read = readSet.has(articleId);
-    const hasImage = Boolean(item.image_url);
 
     return (
       <article
         key={articleId}
-        className={`article-row${read ? " is-read" : ""}${options.compact ? " is-compact" : ""}${options.lead ? " is-lead" : ""}${hasImage ? "" : " no-image"}`}
+        className={`article-row${read ? " is-read" : ""}${options.compact ? " is-compact" : ""}${options.lead ? " is-lead" : ""}`}
       >
-        {hasImage ? (
-          <a
-            className="article-media"
-            href={item.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            onClick={() => markArticleRead(articleId)}
-          >
-            <img className="article-image" src={item.image_url} alt={item.title} loading="lazy" />
-          </a>
-        ) : null}
-
         <div className="article-copy">
           <div className="article-meta">
             <span>{item.source_host || "未知来源"}</span>
@@ -193,28 +180,30 @@ export default function HomePage(): React.ReactNode {
             {read ? <span className="article-read">已读</span> : null}
           </div>
 
-          <h3 className="article-headline">
+          <div className="article-headline-row">
+            <h3 className="article-headline">
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={() => markArticleRead(articleId)}
+              >
+                {item.title || "无标题"}
+              </a>
+            </h3>
+
             <a
+              className="article-cta"
               href={item.url}
               target="_blank"
               rel="noreferrer noopener"
               onClick={() => markArticleRead(articleId)}
             >
-              {item.title || "无标题"}
+              阅读原文
             </a>
-          </h3>
+          </div>
 
           {item.summary ? <p className="article-dek">{item.summary}</p> : null}
-
-          <a
-            className="article-cta"
-            href={item.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            onClick={() => markArticleRead(articleId)}
-          >
-            阅读原文
-          </a>
         </div>
       </article>
     );
