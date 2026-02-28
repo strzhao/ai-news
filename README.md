@@ -2,8 +2,6 @@
 
 每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（重点文章 + 一句话总结 + 日报技术标签），并可同步到 flomo。当前主实现为 Next.js App Router + Route Handlers。
 
-> `api/*.py` 与 `src/*.py` 为历史参考实现，运行入口已迁移到 Next.js。
-
 ## Quick Start
 
 ```bash
@@ -65,7 +63,7 @@ npm run dev
 - `TYPE_PERSONALIZATION_MAX_MULTIPLIER` (default: `1.15`)
 - `TYPE_PERSONALIZATION_BLEND` (default: `0.20`, 类型偏好对文章排序的融合强度)
 - `TYPE_PERSONALIZATION_QUALITY_GAP_GUARD` (default: `8`, 超过分差不允许类型偏好反超)
-- `ARTICLE_TYPES_CONFIG` (optional, default: `src/config/article_types.yaml`)
+- `ARTICLE_TYPES_CONFIG` (optional, default: `config/article_types.yaml`)
 - `ANALYSIS_REPORT_ENABLED` (default: `true`，是否生成详尽分析报告)
 - `ANALYSIS_AI_SUMMARY_ENABLED` (default: `true`，是否在规则化诊断基础上追加 AI 改进建议)
 - `ARCHIVE_ENABLED` (default: `true`，是否写入日报正文归档)
@@ -78,7 +76,7 @@ npm run dev
 
 ### X/Twitter 源说明（RSSHub）
 
-`src/config/sources.yaml` 已内置一批 X/Twitter 作者源，默认通过 `rsshub_route` + `RSSHUB_BASE_URL` 自动拼接 URL。
+`config/sources.yaml` 已内置一批 X/Twitter 作者源，默认通过 `rsshub_route` + `RSSHUB_BASE_URL` 自动拼接 URL。
 
 - 未设置 `RSSHUB_BASE_URL` 时，这些 X 源会被自动跳过，不影响原有 RSS。
 - 已设置 `RSSHUB_BASE_URL` 时，会自动启用这些 X 源。
@@ -118,7 +116,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron_dig
 - 首页：
   - `GET /`（H5 页面，主体优先展示“今日文档”，页面末尾展示历史归档）
 - 建议在 Vercel 项目中设置 `CRON_SECRET`，平台会自动在 cron 请求里注入 `Authorization: Bearer <CRON_SECRET>`
-- `api/cron_digest.py` 默认将运行时写目录设为：
+- `GET /api/cron_digest` 默认将运行时写目录设为：
   - `AI_EVAL_CACHE_DB=/tmp/ai-news/article_eval.sqlite3`
   - `DIGEST_OUTPUT_DIR=/tmp/reports`
 

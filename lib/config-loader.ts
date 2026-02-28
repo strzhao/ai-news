@@ -3,7 +3,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { SourceConfig } from "@/lib/domain/models";
 
-const DEFAULT_CONFIG_DIR = path.join(process.cwd(), "src", "config");
+const DEFAULT_CONFIG_DIR = path.join(process.cwd(), "config");
 
 export function loadYaml(filePath: string): Record<string, unknown> {
   const raw = fs.readFileSync(filePath, "utf-8");

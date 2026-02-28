@@ -1,3 +1,0 @@
-# Exclude legacy Python serverless handlers.
-# Deployment should use Next.js Route Handlers under app/api/*.
-api/**

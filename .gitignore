@@ -1,6 +1,3 @@
-__pycache__/
-*.pyc
-.pytest_cache/
 .env
 .venv/
 .cache/
@@ -11,6 +8,4 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
-tools/ai-news-cli/node_modules/
-tools/ai-news-cli/dist/
 .env*.local
