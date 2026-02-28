@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI News 归档中心</title>
+  <style>
+    :root {
+      --bg: #f2f6f3;
+      --ink: #123028;
+      --muted: #3f5f55;
+      --card: #ffffff;
+      --line: #cfe0d8;
+      --accent: #0c8f68;
+      --accent-2: #056f50;
+      --shadow: 0 12px 28px rgba(12, 59, 45, 0.08);
+      --code-bg: #0e241d;
+      --code-ink: #d8f4ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 0% 0%, #dff7ec 0, transparent 35%),
+        radial-gradient(circle at 100% 20%, #d8ecff 0, transparent 30%),
+        var(--bg);
+      font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .shell {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 24px 14px 44px;
+    }
+    .hero {
+      background: linear-gradient(130deg, #0f7c5b, #16547a);
+      color: #ecfffa;
+      border-radius: 18px;
+      padding: 20px 18px;
+      box-shadow: var(--shadow);
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(22px, 3.4vw, 34px);
+      letter-spacing: 0.2px;
+    }
+    .hero p {
+      margin: 8px 0 0;
+      font-size: 14px;
+      color: #d7fbef;
+    }
+    .toolbar {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .toolbar label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #dff9f0;
+    }
+    .toolbar input {
+      width: 86px;
+      border: 1px solid #9ad8c5;
+      border-radius: 8px;
+      padding: 6px 8px;
+      background: rgba(255, 255, 255, 0.95);
+      color: #123028;
+      font-size: 13px;
+    }
+    .toolbar button {
+      border: 0;
+      border-radius: 10px;
+      background: #f4fff9;
+      color: #0e6d4e;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 7px 12px;
+      cursor: pointer;
+    }
+    .toolbar button:hover { background: #dff8ee; }
+    .status {
+      margin: 16px 2px 0;
+      min-height: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .groups {
+      margin-top: 12px;
+      display: grid;
+      gap: 12px;
+    }
+    .group {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #f5fbf8;
+    }
+    .group-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .count {
+      font-size: 12px;
+      color: var(--muted);
+      background: #e2f6ee;
+      border-radius: 999px;
+      padding: 2px 10px;
+    }
+    .items {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+    }
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+    }
+    .item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .time {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .badge {
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #ebf8f3;
+      color: #0f6f50;
+    }
+    .preview {
+      margin: 8px 0 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #234239;
+    }
+    .actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      border: 1px solid #9ed7c5;
+      border-radius: 8px;
+      background: #f7fffb;
+      color: #0f664a;
+      font-size: 12px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .btn.active,
+    .btn:hover {
+      background: #dcf6ea;
+      border-color: #7bcab1;
+    }
+    .detail {
+      margin-top: 10px;
+      border: 1px solid #d6e9e1;
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+    }
+    .detail-head {
+      background: #f2faf6;
+      border-bottom: 1px solid #d6e9e1;
+      font-size: 12px;
+      color: #2b5448;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .detail-content {
+      margin: 0;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.65;
+      font-size: 13px;
+      max-height: 60vh;
+      overflow: auto;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      font-family: "SFMono-Regular", "Menlo", "Consolas", "Monaco", monospace;
+    }
+    .empty, .error {
+      background: #fff;
+      border: 1px dashed #c8ddd4;
+      border-radius: 12px;
+      padding: 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .error {
+      border-color: #f2b8b8;
+      background: #fff4f4;
+      color: #7b2f2f;
+    }
+    @media (max-width: 680px) {
+      .shell { padding: 14px 10px 30px; }
+      .hero { padding: 16px 14px; border-radius: 14px; }
+      .group-head { padding: 10px; }
+      .items { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <h1>AI News 归档中心</h1>
+      <p>按日期查看每日日报与详尽分析报告。支持同一天多份产出，便于复盘与调参。</p>
+      <div class="toolbar">
+        <label>最近天数 <input id="days" type="number" min="1" max="180" value="30"></label>
+        <label>每日上限 <input id="limit" type="number" min="1" max="50" value="10"></label>
+        <button id="refresh">刷新归档</button>
+      </div>
+    </section>
+    <div id="status" class="status">正在加载归档…</div>
+    <main id="groups" class="groups"></main>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const groupsEl = document.getElementById("groups");
+    const daysEl = document.getElementById("days");
+    const limitEl = document.getElementById("limit");
+    const refreshEl = document.getElementById("refresh");
+
+    function formatTime(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "-";
+      const time = new Date(raw);
+      if (Number.isNaN(time.getTime())) return raw;
+      return time.toLocaleString("zh-CN", { hour12: false });
+    }
+
+    function makeError(message) {
+      const div = document.createElement("div");
+      div.className = "error";
+      div.textContent = message;
+      return div;
+    }
+
+    function makeEmpty(message) {
+      const div = document.createElement("div");
+      div.className = "empty";
+      div.textContent = message;
+      return div;
+    }
+
+    function createDetailLoader(item, detailBox, typeLabel, endpoint, button) {
+      return async function loadDetail() {
+        const active = button.classList.contains("active");
+        if (active) {
+          button.classList.remove("active");
+          detailBox.style.display = "none";
+          return;
+        }
+        detailBox.style.display = "block";
+        detailBox.querySelector(".detail-content").textContent = "加载中…";
+        Array.from(button.parentElement.querySelectorAll(".btn")).forEach((el) => el.classList.remove("active"));
+        button.classList.add("active");
+
+        try {
+          const resp = await fetch(endpoint, { cache: "no-store" });
+          const data = await resp.json();
+          if (!resp.ok || !data.ok || !data.item) {
+            throw new Error(data.error || "接口返回异常");
+          }
+          const itemData = data.item;
+          const text = typeLabel === "日报正文"
+            ? String(itemData.markdown || "")
+            : String(itemData.analysis_markdown || "");
+          detailBox.querySelector(".detail-title").textContent = `${typeLabel} · ${item.digest_id}`;
+          detailBox.querySelector(".detail-time").textContent = `生成时间：${formatTime(itemData.generated_at)}`;
+          detailBox.querySelector(".detail-content").textContent = text || "暂无内容。";
+        } catch (error) {
+          detailBox.querySelector(".detail-content").textContent = `加载失败：${error.message}`;
+        }
+      };
+    }
+
+    function renderGroups(groups) {
+      groupsEl.innerHTML = "";
+      if (!Array.isArray(groups) || groups.length === 0) {
+        groupsEl.appendChild(makeEmpty("暂无归档数据。先触发一次日报生成后再查看。"));
+        return;
+      }
+
+      for (const group of groups) {
+        const section = document.createElement("section");
+        section.className = "group";
+
+        const head = document.createElement("div");
+        head.className = "group-head";
+        const title = document.createElement("h2");
+        title.textContent = String(group.date || "-");
+        const count = document.createElement("span");
+        count.className = "count";
+        count.textContent = `${(group.items || []).length} 条`;
+        head.appendChild(title);
+        head.appendChild(count);
+        section.appendChild(head);
+
+        const itemsEl = document.createElement("div");
+        itemsEl.className = "items";
+
+        for (const item of group.items || []) {
+          const card = document.createElement("article");
+          card.className = "item";
+
+          const top = document.createElement("div");
+          top.className = "item-top";
+          const time = document.createElement("div");
+          time.className = "time";
+          time.textContent = formatTime(item.generated_at);
+          const badge = document.createElement("div");
+          badge.className = "badge";
+          badge.textContent = item.has_highlights ? `重点 ${item.highlight_count || 0}` : "无重点";
+          top.appendChild(time);
+          top.appendChild(badge);
+          card.appendChild(top);
+
+          const preview = document.createElement("p");
+          preview.className = "preview";
+          preview.textContent = String(item.summary_preview || item.analysis_preview || "暂无摘要。");
+          card.appendChild(preview);
+
+          const actions = document.createElement("div");
+          actions.className = "actions";
+          const reportBtn = document.createElement("button");
+          reportBtn.className = "btn";
+          reportBtn.textContent = "查看日报";
+          const analysisBtn = document.createElement("button");
+          analysisBtn.className = "btn";
+          analysisBtn.textContent = "查看分析";
+          actions.appendChild(reportBtn);
+          actions.appendChild(analysisBtn);
+          card.appendChild(actions);
+
+          const detail = document.createElement("section");
+          detail.className = "detail";
+          detail.innerHTML = `
+            <div class="detail-head">
+              <span class="detail-title">详情</span>
+              <span class="detail-time"></span>
+            </div>
+            <pre class="detail-content"></pre>
+          `;
+          card.appendChild(detail);
+
+          reportBtn.addEventListener(
+            "click",
+            createDetailLoader(item, detail, "日报正文", `/api/archive_item?id=${encodeURIComponent(item.digest_id)}`, reportBtn)
+          );
+          analysisBtn.addEventListener(
+            "click",
+            createDetailLoader(item, detail, "分析报告", `/api/archive_analysis?id=${encodeURIComponent(item.digest_id)}`, analysisBtn)
+          );
+
+          itemsEl.appendChild(card);
+        }
+
+        section.appendChild(itemsEl);
+        groupsEl.appendChild(section);
+      }
+    }
+
+    async function loadArchive() {
+      const days = Math.max(1, Math.min(180, parseInt(daysEl.value || "30", 10)));
+      const limit = Math.max(1, Math.min(50, parseInt(limitEl.value || "10", 10)));
+      statusEl.textContent = "正在加载归档…";
+      groupsEl.innerHTML = "";
+
+      try {
+        const resp = await fetch(`/api/archive?days=${days}&limit_per_day=${limit}`, { cache: "no-store" });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.error || "加载归档失败");
+        }
+        renderGroups(data.groups || []);
+        statusEl.textContent = `已加载：最近 ${data.days} 天，每日最多 ${data.limit_per_day} 条。`;
+      } catch (error) {
+        groupsEl.appendChild(makeError(`加载失败：${error.message}`));
+        statusEl.textContent = "加载失败";
+      }
+    }
+
+    refreshEl.addEventListener("click", loadArchive);
+    loadArchive();
+  </script>
+</body>
+</html>

@@ -4,8 +4,10 @@ import argparse
 import logging
 import os
 from collections import Counter
+from dataclasses import dataclass, field
 from math import ceil, floor
 from datetime import datetime, timezone
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from src.cache.article_eval_cache import ArticleEvalCache
@@ -22,6 +24,12 @@ from src.models import (
     WORTH_MUST_READ,
     WORTH_SKIP,
     WORTH_WORTH_READING,
+)
+from src.output.analysis_writer import (
+    build_analysis_json,
+    generate_ai_improvement,
+    render_analysis_markdown,
+    write_analysis_markdown,
 )
 from src.output.flomo_formatter import build_flomo_payload
 from src.output.markdown_writer import render_digest_markdown, write_digest_markdown
@@ -44,6 +52,23 @@ from src.personalization.type_weight import compute_type_multipliers
 from src.tracking.link_tracker import LinkTracker
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class DigestRunResult:
+    exit_code: int
+    report_date: str = ""
+    timezone_name: str = "Asia/Shanghai"
+    output_dir: str = "reports"
+    report_path: str = ""
+    report_markdown: str = ""
+    top_summary: str = ""
+    highlight_count: int = 0
+    has_highlights: bool = False
+    analysis_path: str = ""
+    analysis_markdown: str = ""
+    analysis_json: dict[str, Any] = field(default_factory=dict)
+    stats: dict[str, Any] = field(default_factory=dict)
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -82,7 +107,7 @@ def _expanded_discovery_mode_enabled() -> bool:
     }
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     expanded_mode = _expanded_discovery_mode_enabled()
     default_top_n = 32 if expanded_mode else 16
     parser = argparse.ArgumentParser(description="Generate daily AI RSS digest")
@@ -98,7 +123,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Temporarily bypass article repeat threshold guard for this run",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def _target_date(date_value: str | None, timezone_name: str) -> str:
@@ -206,30 +231,100 @@ def _reorder_candidates_by_type_preference(
     return [(index, scored_article) for index, scored_article, _ in ordered], reordered_count
 
 
-def run() -> int:
-    args = parse_args()
+def _summarize_multipliers(values: dict[str, float], top_n: int = 5) -> dict[str, Any]:
+    if not values:
+        return {
+            "count": 0,
+            "min": 1.0,
+            "max": 1.0,
+            "avg": 1.0,
+            "top_positive": [],
+        }
+    numeric_values = [float(item) for item in values.values()]
+    top_positive = sorted(values.items(), key=lambda item: item[1], reverse=True)[: max(1, top_n)]
+    return {
+        "count": len(values),
+        "min": round(min(numeric_values), 4),
+        "max": round(max(numeric_values), 4),
+        "avg": round(sum(numeric_values) / len(numeric_values), 4),
+        "top_positive": [{"id": key, "multiplier": round(float(value), 4)} for key, value in top_positive],
+    }
+
+
+def _source_quality_rows(rows: list[Any], limit: int = 5, reverse: bool = True) -> list[dict[str, Any]]:
+    sorted_rows = sorted(rows, key=lambda item: item.quality_score, reverse=reverse)
+    results: list[dict[str, Any]] = []
+    for item in sorted_rows[: max(1, limit)]:
+        results.append(
+            {
+                "source_id": item.source_id,
+                "quality_score": round(float(item.quality_score), 2),
+                "article_count": int(item.article_count),
+                "must_read_rate": round(float(item.must_read_rate), 3),
+                "avg_confidence": round(float(item.avg_confidence), 3),
+                "freshness": round(float(item.freshness), 3),
+            }
+        )
+    return results
+
+
+def _first_non_empty_line(text: str) -> str:
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+def _article_brief_row(article: ScoredArticle | Any) -> dict[str, Any]:
+    published = ""
+    published_at = getattr(article, "published_at", None)
+    if published_at is not None:
+        try:
+            published = published_at.isoformat()
+        except Exception:
+            published = ""
+    return {
+        "article_id": str(getattr(article, "id", "") or ""),
+        "title": str(getattr(article, "title", "") or ""),
+        "source_id": str(getattr(article, "source_id", "") or ""),
+        "url": str(getattr(article, "url", "") or ""),
+        "published_at": published,
+    }
+
+
+def run_with_result(argv: list[str] | None = None) -> DigestRunResult:
+    args = parse_args(argv)
     logging.basicConfig(
         level=os.getenv("LOG_LEVEL", "INFO"),
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+    report_date = _target_date(args.date, args.tz)
+    result = DigestRunResult(
+        exit_code=1,
+        report_date=report_date,
+        timezone_name=args.tz,
+        output_dir=args.output_dir,
     )
 
     try:
         client = _build_client()
     except RuntimeError as exc:
         LOGGER.error("%s", exc)
-        return 2
+        result.exit_code = 2
+        return result
 
     try:
         article_types = load_article_types(os.getenv("ARTICLE_TYPES_CONFIG") or None)
     except (OSError, ValueError) as exc:
         LOGGER.error("Failed to load article types config: %s", exc)
-        return 2
+        result.exit_code = 2
+        return result
 
     summarizer = _build_summarizer(client=client)
     evaluator = _build_evaluator(client=client, article_types=article_types)
     cache = evaluator.cache
 
-    report_date = _target_date(args.date, args.tz)
     sources = load_sources(args.sources_config)
     historical_source_scores = cache.load_source_scores()
     behavior_multipliers: dict[str, float] = {}
@@ -310,21 +405,45 @@ def run() -> int:
         total_budget=0,
     )
     normalized = normalize_articles(fetched)
-    deduped = dedupe_articles(normalized)
-    deduped = sorted(
-        deduped,
+    deduped_with_stats = dedupe_articles(normalized, return_stats=True)
+    deduped_pre_cap, dedupe_stats = deduped_with_stats
+    ranked_deduped = sorted(
+        deduped_pre_cap,
         key=lambda item: item.published_at or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
-    )[:max_eval_articles]
+    )
+    deduped = ranked_deduped[:max_eval_articles]
+    eval_cap_skipped = ranked_deduped[max_eval_articles:]
+    analysis_list_limit = max(1, min(int(os.getenv("ANALYSIS_DEDUPE_LIST_LIMIT", "300")), 1000))
 
     if not deduped:
         LOGGER.error("RSS 抓取后无可用文章，无法生成日报。")
-        return 3
+        result.exit_code = 3
+        result.stats = {
+            "source_count": len(sources),
+            "fetched_count": len(fetched),
+            "normalized_count": len(normalized),
+            "deduped_after_dedupe": dedupe_stats.kept,
+            "evaluation_pool_count": 0,
+            "eval_cap_skipped_count": len(eval_cap_skipped),
+            "max_eval_articles": max_eval_articles,
+        }
+        return result
 
     assessments = evaluator.evaluate_articles(deduped)
     if not assessments:
         LOGGER.error("AI 单篇评估失败：无可用评估结果。")
-        return 4
+        result.exit_code = 4
+        result.stats = {
+            "source_count": len(sources),
+            "fetched_count": len(fetched),
+            "normalized_count": len(normalized),
+            "deduped_after_dedupe": dedupe_stats.kept,
+            "evaluation_pool_count": len(deduped),
+            "eval_cap_skipped_count": len(eval_cap_skipped),
+            "evaluated_count": 0,
+        }
+        return result
 
     source_quality_list = compute_source_quality_scores(
         deduped,
@@ -345,9 +464,20 @@ def run() -> int:
         )
     except DeepSeekError as exc:
         LOGGER.error("AI 生成失败：%s", exc)
-        return 5
+        result.exit_code = 5
+        return result
 
     tagged_highlights: list[TaggedArticle] = []
+    gate_skips: Counter[str] = Counter(
+        {
+            "missing_assessment": 0,
+            "worth_skip": 0,
+            "low_confidence": 0,
+            "must_read_below_threshold": 0,
+            "worth_reading_below_threshold": 0,
+            "repeat_limit_blocked": 0,
+        }
+    )
     min_highlight_score = float(os.getenv("MIN_HIGHLIGHT_SCORE", "62"))
     min_worth_reading_score = float(os.getenv("MIN_WORTH_READING_SCORE", "58"))
     min_highlight_confidence = float(os.getenv("MIN_HIGHLIGHT_CONFIDENCE", "0.55"))
@@ -394,6 +524,7 @@ def run() -> int:
         historical_hits = int(historical_article_counts.get(article_key, 0))
         if historical_hits + int(article_key_counts[article_key]) >= max_info_dup:
             repeat_guard_skips += 1
+            gate_skips["repeat_limit_blocked"] += 1
             return False
         article_key_counts[article_key] += 1
         return True
@@ -401,14 +532,19 @@ def run() -> int:
     for index, article in enumerate(deduped):
         assessment = assessments.get(article.id)
         if not assessment:
+            gate_skips["missing_assessment"] += 1
             continue
         if assessment.worth == WORTH_SKIP:
+            gate_skips["worth_skip"] += 1
             continue
         if assessment.confidence < min_highlight_confidence:
+            gate_skips["low_confidence"] += 1
             continue
         if assessment.worth == WORTH_MUST_READ and assessment.quality_score < effective_threshold:
+            gate_skips["must_read_below_threshold"] += 1
             continue
         if assessment.worth == WORTH_WORTH_READING and assessment.quality_score < min_worth_reading_score:
+            gate_skips["worth_reading_below_threshold"] += 1
             continue
 
         scored_article = ScoredArticle(
@@ -456,18 +592,22 @@ def run() -> int:
             type_quality_gap_guard,
         )
 
+    selected_from_must_read = 0
     for _, scored_article in must_read_candidates:
         if not _reserve_report_slot(scored_article):
             continue
         tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
+        selected_from_must_read += 1
         if len(tagged_highlights) >= selection_cap:
             break
 
+    selected_from_worth_reading = 0
     if len(tagged_highlights) < selection_cap:
         for _, scored_article in fallback_worth_reading:
             if not _reserve_report_slot(scored_article):
                 continue
             tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
+            selected_from_worth_reading += 1
             if len(tagged_highlights) >= selection_cap:
                 break
     LOGGER.info(
@@ -508,6 +648,125 @@ def run() -> int:
     output_path = write_digest_markdown(markdown, report_date=report_date, output_dir=args.output_dir)
     LOGGER.info("Digest report generated: %s", output_path)
 
+    worth_counts = Counter(item.worth for item in assessments.values())
+    type_counts = Counter((item.primary_type or "other") for item in assessments.values())
+    quality_scores = [float(item.quality_score) for item in assessments.values()]
+    confidence_scores = [float(item.confidence) for item in assessments.values()]
+    skip_rate = (float(worth_counts.get(WORTH_SKIP, 0)) / len(assessments)) if assessments else 0.0
+    diagnostic_flags: list[str] = []
+    if not tagged_highlights:
+        diagnostic_flags.append("无重点文章入选")
+    if skip_rate >= 0.7:
+        diagnostic_flags.append("跳过占比过高")
+    if repeat_guard_skips > 0:
+        diagnostic_flags.append("重复限制阻塞了部分候选")
+    if dedupe_stats.url_duplicates + dedupe_stats.title_duplicates > max(10, len(normalized) // 3):
+        diagnostic_flags.append("去重命中偏高，信息同质化明显")
+    if personalization_enabled and not behavior_multipliers:
+        diagnostic_flags.append("行为个性化未获得有效权重")
+    if type_personalization_enabled and not type_multipliers:
+        diagnostic_flags.append("类型个性化未获得有效权重")
+
+    analysis_enabled = _is_enabled("ANALYSIS_REPORT_ENABLED", "true")
+    analysis_context = {
+        "report_date": report_date,
+        "timezone": args.tz,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "pipeline_overview": {
+            "source_count": len(sources),
+            "fetch_budget": fetch_budget,
+            "fetched_count": len(fetched),
+            "normalized_count": len(normalized),
+            "deduped_after_dedupe": dedupe_stats.kept,
+            "evaluation_pool_count": len(deduped),
+            "max_eval_articles": max_eval_articles,
+            "eval_cap_skipped_count": len(eval_cap_skipped),
+            "evaluated_count": len(assessments),
+            "selected_highlights_count": len(tagged_highlights),
+        },
+        "quality_scores": quality_scores,
+        "confidence_scores": confidence_scores,
+        "worth_counts": dict(worth_counts),
+        "type_counts": dict(type_counts),
+        "selection_gates": {
+            "thresholds": {
+                "min_highlight_score": round(min_highlight_score, 2),
+                "dynamic_percentile": round(dynamic_percentile, 2),
+                "dynamic_threshold": round(dynamic_threshold, 2),
+                "effective_threshold": round(effective_threshold, 2),
+                "min_worth_reading_score": round(min_worth_reading_score, 2),
+                "min_highlight_confidence": round(min_highlight_confidence, 3),
+                "selection_cap": int(selection_cap),
+            },
+            "gate_skips": dict(gate_skips),
+            "selection_mix": {
+                "must_read_candidates": len(must_read_candidates),
+                "worth_reading_candidates": len(fallback_worth_reading),
+                "selected_from_must_read": selected_from_must_read,
+                "selected_from_worth_reading": selected_from_worth_reading,
+                "selected_total": len(tagged_highlights),
+            },
+        },
+        "dedupe_and_repeat": {
+            "total_input": dedupe_stats.total_input,
+            "kept_after_dedupe": dedupe_stats.kept,
+            "url_duplicates": dedupe_stats.url_duplicates,
+            "title_duplicates": dedupe_stats.title_duplicates,
+            "dropped_items": dedupe_stats.dropped_items[:analysis_list_limit],
+            "dropped_items_total": len(dedupe_stats.dropped_items),
+            "analysis_list_limit": analysis_list_limit,
+            "eval_cap_skipped_count": len(eval_cap_skipped),
+            "eval_cap_skipped_items": [_article_brief_row(item) for item in eval_cap_skipped[:analysis_list_limit]],
+            "repeat_guard_enabled": repeat_limit_enabled,
+            "max_info_dup": max_info_dup,
+            "historical_article_key_count": len(historical_article_counts),
+            "repeat_blocked": repeat_guard_skips,
+        },
+        "personalization_impact": {
+            "behavior_summary": {
+                "enabled": personalization_enabled,
+                "lookback_days": lookback_days,
+                "half_life_days": half_life_days,
+                "preferred_source_count": len(preferred_source_ids),
+                **_summarize_multipliers(behavior_multipliers),
+            },
+            "type_summary": {
+                "enabled": type_personalization_enabled,
+                "lookback_days": type_lookback_days,
+                "half_life_days": type_half_life_days,
+                "blend": round(type_blend, 3),
+                "quality_gap_guard": round(type_quality_gap_guard, 3),
+                **_summarize_multipliers(type_multipliers),
+            },
+            "reorder_impact": {
+                "must_read_reordered": must_read_reordered,
+                "worth_reading_reordered": worth_reading_reordered,
+            },
+        },
+        "source_quality_snapshot": {
+            "top_sources": _source_quality_rows(source_quality_list, limit=5, reverse=True),
+            "bottom_sources": _source_quality_rows(source_quality_list, limit=5, reverse=False),
+        },
+        "diagnostic_flags": diagnostic_flags,
+    }
+    analysis_json: dict[str, Any] = {}
+    analysis_markdown = ""
+    analysis_path = ""
+    if analysis_enabled:
+        analysis_json = build_analysis_json(analysis_context)
+        ai_summary, ai_actions = generate_ai_improvement(
+            analysis_json,
+            client=client,
+            enabled=_is_enabled("ANALYSIS_AI_SUMMARY_ENABLED", "true"),
+        )
+        if ai_summary:
+            analysis_json["improvement_actions"]["ai_summary"] = ai_summary
+        if ai_actions:
+            analysis_json["improvement_actions"]["ai_actions"] = ai_actions
+        analysis_markdown = render_analysis_markdown(analysis_json)
+        analysis_path = str(write_analysis_markdown(analysis_markdown, report_date=report_date, output_dir=args.output_dir))
+        LOGGER.info("Digest analysis report generated: %s", analysis_path)
+
     if _should_sync_flomo(args):
         payload = build_flomo_payload(
             digest,
@@ -526,7 +785,21 @@ def run() -> int:
     if not tagged_highlights:
         LOGGER.warning("AI 未筛出可用重点文章，已降级为仅输出今日速览。")
 
-    return 0
+    result.exit_code = 0
+    result.report_path = str(output_path)
+    result.report_markdown = markdown
+    result.top_summary = top_summary
+    result.highlight_count = len(tagged_highlights)
+    result.has_highlights = len(tagged_highlights) > 0
+    result.analysis_path = analysis_path
+    result.analysis_markdown = analysis_markdown
+    result.analysis_json = analysis_json
+    result.stats = analysis_context
+    return result
+
+
+def run(argv: list[str] | None = None) -> int:
+    return run_with_result(argv).exit_code
 
 
 if __name__ == "__main__":

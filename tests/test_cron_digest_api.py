@@ -19,6 +19,16 @@ def test_build_digest_argv_supports_date_and_ignore_repeat_limit() -> None:
     assert "--ignore-repeat-limit" in argv
 
 
+def test_build_digest_argv_supports_top_n() -> None:
+    argv = _build_digest_argv(
+        "/api/cron_digest?top_n=12",
+        "Asia/Shanghai",
+        "/tmp/reports",
+    )
+    assert "--top-n" in argv
+    assert "12" in argv
+
+
 def test_count_highlights_from_markdown() -> None:
     markdown = "\n".join(
         [

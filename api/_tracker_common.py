@@ -191,6 +191,62 @@ class UpstashClient:
             raise RuntimeError("Upstash pipeline result must be an array")
         return result
 
+    def hset(self, key: str, mapping: dict[str, str | int | float]) -> int:
+        if not mapping:
+            return 0
+        command: list[str | int | float] = ["HSET", key]
+        for field, value in mapping.items():
+            command.extend([str(field), str(value)])
+        responses = self.pipeline([command])
+        payload = responses[0] if responses else 0
+        if isinstance(payload, dict):
+            payload = payload.get("result", 0)
+        try:
+            return int(payload)
+        except (TypeError, ValueError):
+            return 0
+
+    def hgetall(self, key: str) -> dict[str, str]:
+        responses = self.pipeline([["HGETALL", key]])
+        payload = responses[0] if responses else []
+        if isinstance(payload, dict):
+            payload = payload.get("result", [])
+        if isinstance(payload, dict):
+            result: dict[str, str] = {}
+            for field, value in payload.items():
+                normalized_field = str(field).strip()
+                if normalized_field:
+                    result[normalized_field] = str(value)
+            return result
+        if not isinstance(payload, list):
+            return {}
+        result: dict[str, str] = {}
+        for idx in range(0, len(payload) - 1, 2):
+            field = str(payload[idx]).strip()
+            if not field:
+                continue
+            result[field] = str(payload[idx + 1])
+        return result
+
+    def zadd(self, key: str, score: float, member: str) -> int:
+        responses = self.pipeline([["ZADD", key, str(score), member]])
+        payload = responses[0] if responses else 0
+        if isinstance(payload, dict):
+            payload = payload.get("result", 0)
+        try:
+            return int(payload)
+        except (TypeError, ValueError):
+            return 0
+
+    def zrevrange(self, key: str, start: int, stop: int) -> list[str]:
+        responses = self.pipeline([["ZREVRANGE", key, int(start), int(stop)]])
+        payload = responses[0] if responses else []
+        if isinstance(payload, dict):
+            payload = payload.get("result", [])
+        if not isinstance(payload, list):
+            return []
+        return [str(item) for item in payload if str(item).strip()]
+
 
 def build_upstash_client_or_none() -> UpstashClient | None:
     url = resolve_redis_rest_url()
