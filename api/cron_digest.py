@@ -81,6 +81,13 @@ def _runtime_env_overrides(path: str) -> dict[str, str]:
     return overrides
 
 
+def _analysis_archive_enabled(path: str) -> bool:
+    explicit = _first_query_value(path, "archive_analysis")
+    if explicit:
+        return _is_truthy(explicit)
+    return _is_enabled("ARCHIVE_ANALYSIS_ENABLED", "false")
+
+
 def _is_authorized(request: BaseHTTPRequestHandler) -> bool:
     cron_secret = (os.getenv("CRON_SECRET") or "").strip()
     auth_header = str(request.headers.get("authorization") or "").strip()
@@ -108,7 +115,9 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _run_digest(self) -> tuple[int, list[str], float, str, str, int | None, str, bool, str]:
+    def _run_digest(
+        self,
+    ) -> tuple[int, list[str], float, str, str, int | None, str, bool, bool, bool, str]:
         tz_name = (os.getenv("DIGEST_TIMEZONE") or "Asia/Shanghai").strip() or "Asia/Shanghai"
         output_dir = (os.getenv("DIGEST_OUTPUT_DIR") or "/tmp/reports").strip() or "/tmp/reports"
         report_date = _report_date(self.path, tz_name)
@@ -138,6 +147,8 @@ class handler(BaseHTTPRequestHandler):
         highlight_count: int | None = None
         digest_id = ""
         archive_saved = False
+        analysis_archive_enabled = _analysis_archive_enabled(self.path)
+        analysis_archive_saved = False
         archive_error = ""
         if run_result.report_markdown:
             try:
@@ -165,7 +176,7 @@ class handler(BaseHTTPRequestHandler):
                     has_highlights=bool(highlight_count and highlight_count > 0),
                     summary_preview=_first_non_empty_line(run_result.top_summary),
                 )
-                if run_result.analysis_markdown and run_result.analysis_json:
+                if analysis_archive_enabled and run_result.analysis_markdown and run_result.analysis_json:
                     save_analysis_archive(
                         digest_id=digest_id,
                         report_date=report_date,
@@ -173,6 +184,7 @@ class handler(BaseHTTPRequestHandler):
                         analysis_markdown=run_result.analysis_markdown,
                         analysis_json=run_result.analysis_json,
                     )
+                    analysis_archive_saved = True
                 archive_saved = True
             except Exception as exc:  # noqa: BLE001
                 archive_error = str(exc)
@@ -186,6 +198,8 @@ class handler(BaseHTTPRequestHandler):
             highlight_count,
             digest_id,
             archive_saved,
+            analysis_archive_enabled,
+            analysis_archive_saved,
             archive_error,
         )
 
@@ -205,6 +219,8 @@ class handler(BaseHTTPRequestHandler):
                 highlight_count,
                 digest_id,
                 archive_saved,
+                analysis_archive_enabled,
+                analysis_archive_saved,
                 archive_error,
             ) = self._run_digest()
         except Exception as exc:  # noqa: BLE001
@@ -234,6 +250,8 @@ class handler(BaseHTTPRequestHandler):
                 "has_highlights": bool(highlight_count and highlight_count > 0),
                 "digest_id": digest_id,
                 "archive_saved": archive_saved,
+                "analysis_archive_enabled": analysis_archive_enabled,
+                "analysis_archive_saved": analysis_archive_saved,
                 "archive_error": archive_error,
             },
         )

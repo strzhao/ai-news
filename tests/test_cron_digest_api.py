@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from api.cron_digest import _build_digest_argv, _count_highlights
+import pytest
+
+from api.cron_digest import _analysis_archive_enabled, _build_digest_argv, _count_highlights
 
 
 def test_build_digest_argv_default() -> None:
@@ -42,3 +44,15 @@ def test_count_highlights_from_markdown() -> None:
         ]
     )
     assert _count_highlights(markdown) == 2
+
+
+def test_analysis_archive_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ARCHIVE_ANALYSIS_ENABLED", raising=False)
+    assert _analysis_archive_enabled("/api/cron_digest") is False
+
+
+def test_analysis_archive_supports_query_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ARCHIVE_ANALYSIS_ENABLED", "false")
+    assert _analysis_archive_enabled("/api/cron_digest?archive_analysis=1") is True
+    monkeypatch.setenv("ARCHIVE_ANALYSIS_ENABLED", "true")
+    assert _analysis_archive_enabled("/api/cron_digest") is True

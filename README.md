@@ -70,7 +70,8 @@ python -m src.main --tz Asia/Shanghai
 - `ARTICLE_TYPES_CONFIG` (optional, default: `src/config/article_types.yaml`)
 - `ANALYSIS_REPORT_ENABLED` (default: `true`，是否生成详尽分析报告)
 - `ANALYSIS_AI_SUMMARY_ENABLED` (default: `true`，是否在规则化诊断基础上追加 AI 改进建议)
-- `ARCHIVE_ENABLED` (default: `true`，是否写入日报/分析报告归档)
+- `ARCHIVE_ENABLED` (default: `true`，是否写入日报正文归档)
+- `ARCHIVE_ANALYSIS_ENABLED` (default: `false`，是否默认写入分析报告归档)
 - `ARCHIVE_DEFAULT_DAYS` (default: `30`，首页默认展示最近归档天数)
 - `ARCHIVE_DEFAULT_LIMIT_PER_DAY` (default: `10`，首页默认每日展示上限)
 
@@ -114,7 +115,7 @@ python -m src.main --no-sync-flomo
   - `GET /api/archive_item?id=<digest_id>`
   - `GET /api/archive_analysis?id=<digest_id>`
 - 首页：
-  - `GET /`（归档 H5 页面，按日期分组，支持同一天多份日报）
+  - `GET /`（H5 页面，主体优先展示“今日文档”，页面末尾展示历史归档）
 - 建议在 Vercel 项目中设置 `CRON_SECRET`，平台会自动在 cron 请求里注入 `Authorization: Bearer <CRON_SECRET>`
 - `api/cron_digest.py` 默认将运行时写目录设为：
   - `AI_EVAL_CACHE_DB=/tmp/ai-news/article_eval.sqlite3`
@@ -135,4 +136,66 @@ curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_dig
 curl "https://<your-domain>/api/cron_digest?token=$CRON_SECRET"
 # 临时忽略“最多出现 2 次”阈值（仅本次运行）：
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest?ignore_repeat_limit=1"
+# 临时开启“分析报告归档入库”（默认关闭）：
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest?archive_analysis=1"
+```
+
+## Node CLI (ai-news)
+
+新增一个 Node.js 运维 CLI，支持高频手动操作与验收：
+
+- 触发日报：`trigger`
+- 归档查询：`archive list/item/analysis`
+- 消费统计：`stats sources/types`
+- 健康检查：`health`
+
+目录：`tools/ai-news-cli`
+
+CLI 会自动尝试加载 `.env`（从当前目录向上查找多级），因此在仓库根目录放置 `.env` 后通常无需手动 `source`。
+
+安装依赖：
+
+```bash
+cd tools/ai-news-cli
+npm install
+```
+
+本地运行：
+
+```bash
+# 触发一次日报（Header 鉴权优先）
+npm run dev -- trigger --base-url https://ai-news.stringzhao.life --token "$CRON_SECRET"
+
+# 若要临时忽略重复阈值，必须显式 --force
+npm run dev -- trigger --base-url https://ai-news.stringzhao.life --token "$CRON_SECRET" --ignore-repeat-limit --force
+
+# 查询最近 7 天归档
+npm run dev -- archive list --base-url https://ai-news.stringzhao.life --days 7 --limit-per-day 10
+
+# 查询 tracker 来源统计
+npm run dev -- stats sources --base-url https://ai-news.stringzhao.life --tracker-token "$TRACKER_API_TOKEN" --days 30
+```
+
+构建并生成可执行入口：
+
+```bash
+npm run build
+./dist/index.js health --base-url https://ai-news.stringzhao.life
+```
+
+环境变量（可替代命令参数）：
+
+- `AI_NEWS_BASE_URL`
+- `AI_NEWS_CRON_SECRET`
+- `AI_NEWS_TRACKER_TOKEN`
+- `AI_NEWS_TIMEOUT_MS` (default `15000`)
+- `CRON_SECRET`（可作为 `AI_NEWS_CRON_SECRET` 兜底）
+- `TRACKER_API_TOKEN`（可作为 `AI_NEWS_TRACKER_TOKEN` 兜底）
+
+说明：`trigger` 命令在未显式设置 `AI_NEWS_TIMEOUT_MS` / `--timeout-ms` 时，会默认使用 `300000ms`，避免长耗时生成被过早超时。
+
+JSON 输出（用于脚本集成）：
+
+```bash
+npm run dev -- trigger --base-url https://ai-news.stringzhao.life --token "$CRON_SECRET" --json
 ```
