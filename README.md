@@ -114,6 +114,8 @@ npx vercel deploy --prod
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest"
+# 如果调用链路会剥离 Authorization，可改用：
+curl "https://<your-domain>/api/cron_digest?token=$CRON_SECRET"
 ```
 
 ## Tracker Service

@@ -20,16 +20,19 @@ def _first_query_value(path: str, key: str) -> str:
 def _is_authorized(request: BaseHTTPRequestHandler) -> bool:
     cron_secret = (os.getenv("CRON_SECRET") or "").strip()
     auth_header = str(request.headers.get("authorization") or "").strip()
+    query_token = _first_query_value(request.path, "token")
 
     if cron_secret:
-        return auth_header == f"Bearer {cron_secret}"
+        if auth_header == f"Bearer {cron_secret}":
+            return True
+        # Compatibility fallback: some clients may not forward Authorization header.
+        return query_token == cron_secret
 
     # Fallback for manual invocation when CRON_SECRET is not configured.
     manual_token = (os.getenv("DIGEST_MANUAL_TOKEN") or "").strip()
     if not manual_token:
         return True
-    provided_token = _first_query_value(request.path, "token")
-    return provided_token == manual_token
+    return query_token == manual_token
 
 
 class handler(BaseHTTPRequestHandler):
@@ -100,4 +103,3 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         self._handle()
-
