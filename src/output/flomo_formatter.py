@@ -20,6 +20,9 @@ def render_flomo_content(
     lines.append("")
     lines.append("【重点文章】")
 
+    if not digest.highlights:
+        lines.append("- 今日暂无满足阈值的重点文章。")
+
     for idx, tagged_article in enumerate(digest.highlights, start=1):
         article = tagged_article.article
         marker = "⭐ " if article.worth == WORTH_MUST_READ else ""

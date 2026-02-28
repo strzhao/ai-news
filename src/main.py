@@ -496,8 +496,7 @@ def run() -> int:
             LOGGER.warning("Flomo sync failed: %s", exc)
 
     if not tagged_highlights:
-        LOGGER.error("AI 未返回可用重点文章，已中止。")
-        return 6
+        LOGGER.warning("AI 未筛出可用重点文章，已降级为仅输出今日速览。")
 
     return 0
 

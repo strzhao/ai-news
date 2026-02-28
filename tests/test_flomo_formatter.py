@@ -66,3 +66,17 @@ def test_flomo_supports_link_resolver() -> None:
     payload = build_flomo_payload(digest, link_resolver=lambda article: f"https://track.test/{article.id}")
 
     assert "链接：https://track.test/t1" in payload.content
+
+
+def test_flomo_handles_empty_highlights() -> None:
+    digest = DailyDigest(
+        date="2026-02-26",
+        timezone="Asia/Shanghai",
+        top_summary="- A",
+        highlights=[],
+    )
+
+    payload = build_flomo_payload(digest)
+
+    assert "【重点文章】" in payload.content
+    assert "- 今日暂无满足阈值的重点文章。" in payload.content
