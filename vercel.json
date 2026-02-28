@@ -3,7 +3,7 @@
   "functions": {
     "api/**/*.py": {
       "maxDuration": 300,
-      "excludeFiles": "{tests/**,.venv/**,tracker/**,.git/**,.github/**,.cache/**,.pytest_cache/**,reports/**,**/__pycache__/**}"
+      "excludeFiles": "{tests/**,.venv/**,.git/**,.github/**,.cache/**,.pytest_cache/**,reports/**,**/__pycache__/**}"
     }
   },
   "crons": [

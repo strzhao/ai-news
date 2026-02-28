@@ -5,6 +5,4 @@ __pycache__/
 .venv/
 .cache/
 .DS_Store
-tracker/node_modules/
-tracker/.vercel/
 .vercel/

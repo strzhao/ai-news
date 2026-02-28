@@ -49,10 +49,10 @@ python -m src.main --tz Asia/Shanghai
 
 ### 个性化点击反馈（302 Tracker）
 
-- `TRACKER_BASE_URL` (optional, 例如: `https://ai-news-tracker.vercel.app`)
-- `TRACKER_SIGNING_SECRET` (optional, 与 tracker 服务保持一致)
-- `TRACKER_API_TOKEN` (optional, 用于读取点击统计)
-- `TRACKER_INCLUDE_TYPE_PARAM` (default: `false`，仅当 tracker 已部署支持 `pt` 参数时再开启)
+- `TRACKER_BASE_URL` (optional，建议与当前服务域名一致，例如: `https://ai-news-liart.vercel.app`)
+- `TRACKER_SIGNING_SECRET` (用于签名 `/api/r` 跳转链接)
+- `TRACKER_API_TOKEN` (用于访问 `/api/stats/sources` 与 `/api/stats/types`)
+- `TRACKER_INCLUDE_TYPE_PARAM` (default: `false`，开启后会把文章类型写入 `pt` 参数)
 - `PERSONALIZATION_ENABLED` (default: `true`)
 - `PERSONALIZATION_LOOKBACK_DAYS` (default: `90`)
 - `PERSONALIZATION_HALF_LIFE_DAYS` (default: `21`)
@@ -69,7 +69,7 @@ python -m src.main --tz Asia/Shanghai
 - `ARTICLE_TYPES_CONFIG` (optional, default: `src/config/article_types.yaml`)
 
 当 `TRACKER_BASE_URL + TRACKER_SIGNING_SECRET` 可用时，Markdown/flomo 输出链接会替换为签名 302 跳转链接；
-点击数据会回流到 tracker，并在后续日报中温和影响抓取优先级、预算分配和文章类型排序。若 tracker 配置缺失，自动回退直链，不影响日报产出。
+点击数据会回流到本工程内置 tracker 接口（`/api/r`、`/api/stats/sources`、`/api/stats/types`），并在后续日报中温和影响抓取优先级、预算分配和文章类型排序。若 tracker 配置缺失，自动回退直链，不影响日报产出。
 
 ### X/Twitter 源说明（RSSHub）
 
@@ -98,6 +98,11 @@ python -m src.main --no-sync-flomo
 
 - Cron 配置在 `vercel.json`：`0 23 * * *` (UTC) = `07:00 Asia/Shanghai`
 - 生产环境会定时调用 `GET /api/cron_digest`
+- 内置 tracker 接口：
+  - `GET /api/healthz`
+  - `GET /api/r`
+  - `GET /api/stats/sources?days=90`
+  - `GET /api/stats/types?days=90`
 - 建议在 Vercel 项目中设置 `CRON_SECRET`，平台会自动在 cron 请求里注入 `Authorization: Bearer <CRON_SECRET>`
 - `api/cron_digest.py` 默认将运行时写目录设为：
   - `AI_EVAL_CACHE_DB=/tmp/ai-news/article_eval.sqlite3`
@@ -116,14 +121,4 @@ npx vercel deploy --prod
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest"
 # 如果调用链路会剥离 Authorization，可改用：
 curl "https://<your-domain>/api/cron_digest?token=$CRON_SECRET"
-```
-
-## Tracker Service
-
-`tracker/` 目录是独立的 Vercel tracker 项目，可单独部署：
-
-```bash
-cd tracker
-npm install
-vercel --prod
 ```
