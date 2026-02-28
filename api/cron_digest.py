@@ -7,7 +7,9 @@ import time
 import traceback
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo
 
 from src.main import run as run_digest
 
@@ -31,6 +33,20 @@ def _build_digest_argv(path: str, tz_name: str, output_dir: str) -> list[str]:
     if ignore_repeat_limit:
         argv.append("--ignore-repeat-limit")
     return argv
+
+
+def _report_date(path: str, tz_name: str) -> str:
+    target_date = _first_query_value(path, "date")
+    if target_date:
+        return target_date
+    try:
+        return datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _count_highlights(markdown: str) -> int:
+    return sum(1 for line in markdown.splitlines() if line.startswith("### "))
 
 
 def _is_authorized(request: BaseHTTPRequestHandler) -> bool:
@@ -60,9 +76,10 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _run_digest(self) -> tuple[int, list[str], float]:
+    def _run_digest(self) -> tuple[int, list[str], float, str, str, int | None]:
         tz_name = (os.getenv("DIGEST_TIMEZONE") or "Asia/Shanghai").strip() or "Asia/Shanghai"
         output_dir = (os.getenv("DIGEST_OUTPUT_DIR") or "/tmp/reports").strip() or "/tmp/reports"
+        report_date = _report_date(self.path, tz_name)
 
         # Vercel runtime filesystem is writable only under /tmp.
         os.environ.setdefault("AI_EVAL_CACHE_DB", "/tmp/ai-news/article_eval.sqlite3")
@@ -77,7 +94,15 @@ class handler(BaseHTTPRequestHandler):
         finally:
             sys.argv = original_argv
         elapsed_ms = (time.time() - started) * 1000.0
-        return exit_code, argv, elapsed_ms
+        report_path = Path(output_dir) / f"{report_date}.md"
+        highlight_count: int | None = None
+        try:
+            if report_path.exists():
+                content = report_path.read_text(encoding="utf-8")
+                highlight_count = _count_highlights(content)
+        except Exception:
+            highlight_count = None
+        return exit_code, argv, elapsed_ms, report_date, str(report_path), highlight_count
 
     def _handle(self) -> None:
         if not _is_authorized(self):
@@ -86,7 +111,7 @@ class handler(BaseHTTPRequestHandler):
 
         started_at = datetime.now(timezone.utc).isoformat()
         try:
-            exit_code, argv, elapsed_ms = self._run_digest()
+            exit_code, argv, elapsed_ms, report_date, report_path, highlight_count = self._run_digest()
         except Exception as exc:  # noqa: BLE001
             self._json(
                 500,
@@ -108,6 +133,10 @@ class handler(BaseHTTPRequestHandler):
                 "started_at": started_at,
                 "elapsed_ms": round(elapsed_ms, 2),
                 "argv": argv,
+                "report_date": report_date,
+                "report_path": report_path,
+                "highlight_count": highlight_count,
+                "has_highlights": bool(highlight_count and highlight_count > 0),
             },
         )
 

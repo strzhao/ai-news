@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from api.cron_digest import _build_digest_argv
+from api.cron_digest import _build_digest_argv, _count_highlights
 
 
 def test_build_digest_argv_default() -> None:
@@ -17,3 +17,18 @@ def test_build_digest_argv_supports_date_and_ignore_repeat_limit() -> None:
     assert "--date" in argv
     assert "2026-02-28" in argv
     assert "--ignore-repeat-limit" in argv
+
+
+def test_count_highlights_from_markdown() -> None:
+    markdown = "\n".join(
+        [
+            "## 今日速览",
+            "- A",
+            "## 重点文章",
+            "### 1. [a](https://example.com/a)",
+            "- one",
+            "### 2. [b](https://example.com/b)",
+            "- two",
+        ]
+    )
+    assert _count_highlights(markdown) == 2
