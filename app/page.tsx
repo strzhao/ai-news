@@ -3,53 +3,30 @@
 import { useEffect, useMemo, useState } from "react";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
-const READ_STORAGE_KEY = "ai_news_read_digest_ids_v1";
-const TYPE_LABELS: Record<string, string> = {
-  model_release: "模型发布",
-  benchmark: "基准评测",
-  engineering_practice: "工程实践",
-  agent_workflow: "Agent 工作流",
-  inference_optimization: "推理优化",
-  cost_optimization: "成本优化",
-  data_engineering: "数据工程",
-  security_compliance: "安全合规",
-  product_release: "产品发布",
-  open_source_project: "开源项目",
-  research_progress: "研究进展",
-  other: "其他",
-};
+const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
 
-interface ArchiveItemSummary {
-  digest_id: string;
+interface ArchiveArticleSummary {
+  article_id: string;
+  title: string;
+  url: string;
+  summary: string;
+  image_url: string;
+  source_host: string;
   date: string;
+  digest_id: string;
   generated_at: string;
-  highlight_count: number;
-  has_highlights: boolean;
-  summary_preview: string;
-  analysis_preview?: string;
 }
 
 interface ArchiveGroup {
   date: string;
-  items: ArchiveItemSummary[];
+  items: ArchiveArticleSummary[];
 }
 
-interface ArchiveResponse {
+interface ArchiveArticlesResponse {
   ok: boolean;
   groups: ArchiveGroup[];
   generated_at: string;
-}
-
-interface ArchiveDetailResponse {
-  ok: boolean;
-  item: {
-    digest_id: string;
-    date: string;
-    generated_at: string;
-    markdown?: string;
-    analysis_markdown?: string;
-    analysis_json?: Record<string, unknown>;
-  };
+  total_articles: number;
 }
 
 function formatTime(value: string): string {
@@ -95,28 +72,29 @@ function saveReadSet(set: Set<string>): void {
   window.localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(set)));
 }
 
+interface RenderOptions {
+  compact?: boolean;
+  lead?: boolean;
+}
+
 export default function HomePage(): React.ReactNode {
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState("正在加载文档…");
+  const [status, setStatus] = useState("正在更新");
   const [groups, setGroups] = useState<ArchiveGroup[]>([]);
   const [error, setError] = useState("");
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerDigestId, setDrawerDigestId] = useState("");
-  const [drawerTitle, setDrawerTitle] = useState("内容详情");
-  const [drawerMeta, setDrawerMeta] = useState("");
-  const [drawerContent, setDrawerContent] = useState("请选择一份文档。");
-  const [drawerTab, setDrawerTab] = useState<"report" | "analysis">("report");
-  const [showAnalysis, setShowAnalysis] = useState(false);
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
+  const [articleLimitPerDay, setArticleLimitPerDay] = useState(24);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setShowAnalysis(params.get("show_analysis") === "1");
     setDays(Math.max(1, Math.min(180, Number.parseInt(params.get("days") || "30", 10) || 30)));
     setLimitPerDay(
       Math.max(1, Math.min(50, Number.parseInt(params.get("limit_per_day") || "10", 10) || 10)),
+    );
+    setArticleLimitPerDay(
+      Math.max(1, Math.min(100, Number.parseInt(params.get("article_limit_per_day") || "24", 10) || 24)),
     );
     setReadSet(loadReadSet());
   }, []);
@@ -124,24 +102,26 @@ export default function HomePage(): React.ReactNode {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadArchive(): Promise<void> {
+    async function loadArchiveArticles(): Promise<void> {
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`/api/archive?days=${days}&limit_per_day=${limitPerDay}`, {
-          cache: "no-store",
-        });
-        const payload = (await response.json()) as ArchiveResponse;
+        const response = await fetch(
+          `/api/archive_articles?days=${days}&limit_per_day=${limitPerDay}&article_limit_per_day=${articleLimitPerDay}`,
+          {
+            cache: "no-store",
+          },
+        );
+        const payload = (await response.json()) as ArchiveArticlesResponse;
         if (!response.ok || !payload.ok) {
-          throw new Error("加载归档失败");
+          throw new Error("加载文章归档失败");
         }
 
         if (!cancelled) {
-          setGroups(Array.isArray(payload.groups) ? payload.groups : []);
-          const count = Array.isArray(payload.groups)
-            ? payload.groups.reduce((sum, group) => sum + group.items.length, 0)
-            : 0;
-          setStatus(`已加载 ${count} 份文档`);
+          const nextGroups = Array.isArray(payload.groups) ? payload.groups : [];
+          setGroups(nextGroups);
+          const count = Number(payload.total_articles || 0);
+          setStatus(`已收录 ${count} 篇`);
         }
       } catch (err) {
         if (!cancelled) {
@@ -156,11 +136,11 @@ export default function HomePage(): React.ReactNode {
       }
     }
 
-    loadArchive();
+    void loadArchiveArticles();
     return () => {
       cancelled = true;
     };
-  }, [days, limitPerDay]);
+  }, [days, limitPerDay, articleLimitPerDay]);
 
   const todayDate = useMemo(() => currentDateInTz(), []);
 
@@ -172,8 +152,8 @@ export default function HomePage(): React.ReactNode {
   const todayItems = todayGroup?.items || [];
   const historyGroups = groups.filter((group) => group.date !== todayDate);
 
-  function markDigestRead(digestId: string): void {
-    const normalized = String(digestId || "").trim();
+  function markArticleRead(articleId: string): void {
+    const normalized = String(articleId || "").trim();
     if (!normalized) return;
     setReadSet((prev) => {
       if (prev.has(normalized)) return prev;
@@ -184,190 +164,111 @@ export default function HomePage(): React.ReactNode {
     });
   }
 
-  async function readContent(digestId: string, tab: "report" | "analysis"): Promise<string> {
-    const endpoint =
-      tab === "report"
-        ? `/api/archive_item?id=${encodeURIComponent(digestId)}`
-        : `/api/archive_analysis?id=${encodeURIComponent(digestId)}`;
-    const response = await fetch(endpoint, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(tab === "analysis" ? "分析报告读取失败" : "正文读取失败");
-    }
-    const payload = (await response.json()) as ArchiveDetailResponse;
-    if (!payload.ok || !payload.item) {
-      throw new Error(tab === "analysis" ? "分析报告不存在" : "正文不存在");
-    }
-    if (tab === "analysis") {
-      return String(payload.item.analysis_markdown || "").trim() || "本次未启用分析归档（默认关闭）。";
-    }
-    return String(payload.item.markdown || "").trim() || "正文为空。";
-  }
+  function renderArticle(item: ArchiveArticleSummary, options: RenderOptions = {}): React.ReactNode {
+    const articleId = String(item.article_id || "").trim();
+    const read = readSet.has(articleId);
+    const hasImage = Boolean(item.image_url);
 
-  async function openDrawer(item: ArchiveItemSummary): Promise<void> {
-    const digestId = String(item.digest_id || "").trim();
-    if (!digestId) return;
-
-    markDigestRead(digestId);
-    setDrawerDigestId(digestId);
-    setDrawerTitle(item.summary_preview || `文档 ${digestId}`);
-    setDrawerMeta(`digest_id: ${digestId} · 生成时间: ${formatTime(item.generated_at)}`);
-    setDrawerTab("report");
-    setDrawerContent("正在加载正文...");
-    setDrawerOpen(true);
-
-    try {
-      const content = await readContent(digestId, "report");
-      setDrawerContent(content);
-    } catch (error) {
-      setDrawerContent(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function switchDrawerTab(tab: "report" | "analysis"): Promise<void> {
-    setDrawerTab(tab);
-    if (!drawerDigestId) return;
-    setDrawerContent(tab === "report" ? "正在加载正文..." : "正在加载分析...");
-    try {
-      const content = await readContent(drawerDigestId, tab);
-      setDrawerContent(content);
-    } catch (error) {
-      setDrawerContent(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  function renderCard(item: ArchiveItemSummary): React.ReactNode {
-    const digestId = String(item.digest_id || "").trim();
-    const read = readSet.has(digestId);
     return (
-      <article key={digestId} className={`doc-card${read ? " is-read" : ""}`}>
-        <div className="doc-top">
-          <span className="doc-time">{formatTime(item.generated_at)}</span>
-          <div className="doc-top-right">
-            {read ? <span className="doc-read">已读</span> : null}
-            <span className="doc-badge">重点 {Number(item.highlight_count || 0)}</span>
+      <article
+        key={articleId}
+        className={`article-row${read ? " is-read" : ""}${options.compact ? " is-compact" : ""}${options.lead ? " is-lead" : ""}${hasImage ? "" : " no-image"}`}
+      >
+        {hasImage ? (
+          <a
+            className="article-media"
+            href={item.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={() => markArticleRead(articleId)}
+          >
+            <img className="article-image" src={item.image_url} alt={item.title} loading="lazy" />
+          </a>
+        ) : null}
+
+        <div className="article-copy">
+          <div className="article-meta">
+            <span>{item.source_host || "未知来源"}</span>
+            <span>{formatTime(item.generated_at)}</span>
+            {read ? <span className="article-read">已读</span> : null}
           </div>
-        </div>
-        <p className="doc-preview">{item.summary_preview || "暂无摘要"}</p>
-        <div className="doc-meta">
-          <div className="doc-meta-row">
-            <span className="doc-meta-label">类型</span>
-            <div className="doc-chips">
-              {(item.analysis_preview || "")
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 3)
-                .map((token) => (
-                  <span className="doc-chip" key={`${digestId}-${token}`}>
-                    {TYPE_LABELS[token] || token}
-                  </span>
-                ))}
-              {!item.analysis_preview ? <span className="doc-chip doc-chip-muted">暂无</span> : null}
-            </div>
-          </div>
-        </div>
-        <div className="doc-actions">
-          <button className="btn btn-primary" type="button" onClick={() => void openDrawer(item)}>
-            查看正文
-          </button>
-          {showAnalysis ? (
-            <button
-              className="btn"
-              type="button"
-              onClick={() => {
-                void openDrawer(item).then(() => switchDrawerTab("analysis"));
-              }}
+
+          <h3 className="article-headline">
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={() => markArticleRead(articleId)}
             >
-              查看分析
-            </button>
-          ) : null}
+              {item.title || "无标题"}
+            </a>
+          </h3>
+
+          {item.summary ? <p className="article-dek">{item.summary}</p> : null}
+
+          <a
+            className="article-cta"
+            href={item.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={() => markArticleRead(articleId)}
+          >
+            阅读原文
+          </a>
         </div>
       </article>
     );
   }
 
   return (
-    <main className="shell">
-      <section className="hero">
-        <h1>AI News</h1>
-        <div className="hero-meta">
-          {todayDate} · {ARCHIVE_TZ} · 共 {groups.length} 天归档
-        </div>
-      </section>
+    <main className="newsroom-shell">
+      <header className="newsroom-hero">
+        <p className="eyebrow">AI News Daily Edition</p>
+        <h1>今天值得读的 AI 文章</h1>
+        <p className="hero-meta">
+          {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
+        </p>
+      </header>
 
-      <div className="status">{loading ? "正在加载文档…" : status}</div>
+      {error ? <div className="error-banner">{error}</div> : null}
 
-      <section className="section">
-        <header className="section-head">
-          <h2>今日文档</h2>
-          <div className="section-meta">{todayItems.length} 份</div>
+      <section className="content-block">
+        <header className="block-head">
+          <h2>今日精选</h2>
+          <span>{todayItems.length} 篇</span>
         </header>
-        <div className="today-list">
-          {todayItems.length ? todayItems.map((item) => renderCard(item)) : <div className="empty">今日暂无文档。</div>}
-        </div>
-      </section>
 
-      <section className="section">
-        <header className="section-head">
-          <h2>历史归档</h2>
-          <div className="section-meta">{historyGroups.length} 天</div>
-        </header>
-        <div className="history-groups">
-          {historyGroups.length ? (
-            historyGroups.map((group) => (
-              <div key={group.date} className="history-group">
-                <div className="history-group-head">
-                  <h3 className="history-group-title">{group.date}</h3>
-                  <div className="history-group-count">{group.items.length} 份</div>
-                </div>
-                <div className="history-items">{group.items.map((item) => renderCard(item))}</div>
-              </div>
-            ))
+        <div className="editorial-list">
+          {todayItems.length ? (
+            todayItems.map((item, index) => renderArticle(item, { lead: index === 0 }))
           ) : (
-            <div className="empty">暂无历史归档。</div>
+            <p className="empty-note">今日暂无文章。</p>
           )}
         </div>
       </section>
 
-      {error ? <div className="error">{error}</div> : null}
+      <section className="content-block content-block-history">
+        <header className="block-head">
+          <h2>历史归档</h2>
+          <span>{historyGroups.length} 天</span>
+        </header>
 
-      <aside className={`drawer-root${drawerOpen ? " open" : ""}`} aria-hidden={!drawerOpen}>
-        <div className="drawer-mask" onClick={() => setDrawerOpen(false)} />
-        <section className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
-          <header className="drawer-head">
-            <div className="drawer-top">
-              <div>
-                <h3 id="drawerTitle" className="drawer-title">
-                  {drawerTitle}
-                </h3>
-                <div className="drawer-meta">{drawerMeta}</div>
-              </div>
-              <button className="drawer-close" type="button" onClick={() => setDrawerOpen(false)}>
-                关闭
-              </button>
-            </div>
-            <div className="drawer-tabs">
-              <button
-                className={`drawer-tab${drawerTab === "report" ? " active" : ""}`}
-                type="button"
-                onClick={() => void switchDrawerTab("report")}
-              >
-                日报正文
-              </button>
-              {showAnalysis ? (
-                <button
-                  className={`drawer-tab${drawerTab === "analysis" ? " active" : ""}`}
-                  type="button"
-                  onClick={() => void switchDrawerTab("analysis")}
-                >
-                  分析报告
-                </button>
-              ) : null}
-            </div>
-          </header>
-          <pre className="drawer-content">{drawerContent}</pre>
-          <div className="drawer-note">内容来自归档 API，默认优先显示日报正文。</div>
-        </section>
-      </aside>
+        <div className="archive-days">
+          {historyGroups.length ? (
+            historyGroups.map((group, idx) => (
+              <details key={group.date} className="archive-day" open={idx === 0}>
+                <summary className="archive-day-summary">
+                  <span className="archive-date">{group.date}</span>
+                  <span className="archive-count">{group.items.length} 篇</span>
+                </summary>
+                <div className="archive-day-items">{group.items.map((item) => renderArticle(item, { compact: true }))}</div>
+              </details>
+            ))
+          ) : (
+            <p className="empty-note">暂无历史文章。</p>
+          )}
+        </div>
+      </section>
     </main>
   );
 }

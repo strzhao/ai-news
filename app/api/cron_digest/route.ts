@@ -97,7 +97,7 @@ export async function GET(request: Request): Promise<Response> {
     });
 
     const elapsedMs = Date.now() - startedAtTs;
-    const exitCode = Number(runResult.exitCode || 1);
+    const exitCode = Number(runResult.exitCode ?? 1);
 
     let highlightCount: number | null = null;
     if (runResult.reportMarkdown) {

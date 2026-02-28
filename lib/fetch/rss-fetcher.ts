@@ -21,6 +21,31 @@ const parser = new Parser({
   },
 });
 
+async function fetchFeedWithTimeout(feedUrl: string, timeoutMs: number): Promise<Parser.Output<Parser.Item>> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(feedUrl, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`RSS fetch failed: ${response.status}`);
+    }
+
+    const xml = await response.text();
+    return await parser.parseString(xml);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function cleanHtmlText(value: string): string {
   return String(value || "")
     .replace(TAG_RE, " ")
@@ -126,6 +151,7 @@ export async function fetchArticles(
   } = {},
 ): Promise<Article[]> {
   const timeoutSeconds = options.timeoutSeconds ?? 20;
+  const timeoutMs = Math.max(1_000, Math.trunc(timeoutSeconds * 1_000));
   const maxPerSource = options.maxPerSource ?? 25;
   const perSourceLimits = options.perSourceLimits || {};
   const totalBudget = options.totalBudget ?? 0;
@@ -138,7 +164,7 @@ export async function fetchArticles(
     }
 
     try {
-      const feed = await parser.parseURL(source.url);
+      const feed = await fetchFeedWithTimeout(source.url, timeoutMs);
       const perSourceCap = Math.trunc(perSourceLimits[source.id] ?? maxPerSource);
       const entries = (feed.items || []).slice(0, Math.max(0, perSourceCap));
 
