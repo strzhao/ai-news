@@ -17,6 +17,22 @@ def _first_query_value(path: str, key: str) -> str:
     return str(values[0] if values else "").strip()
 
 
+def _is_truthy(raw: str) -> bool:
+    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_digest_argv(path: str, tz_name: str, output_dir: str) -> list[str]:
+    target_date = _first_query_value(path, "date")
+    ignore_repeat_limit = _is_truthy(_first_query_value(path, "ignore_repeat_limit"))
+
+    argv = ["vercel-cron", "--tz", tz_name, "--output-dir", output_dir]
+    if target_date:
+        argv.extend(["--date", target_date])
+    if ignore_repeat_limit:
+        argv.append("--ignore-repeat-limit")
+    return argv
+
+
 def _is_authorized(request: BaseHTTPRequestHandler) -> bool:
     cron_secret = (os.getenv("CRON_SECRET") or "").strip()
     auth_header = str(request.headers.get("authorization") or "").strip()
@@ -47,14 +63,11 @@ class handler(BaseHTTPRequestHandler):
     def _run_digest(self) -> tuple[int, list[str], float]:
         tz_name = (os.getenv("DIGEST_TIMEZONE") or "Asia/Shanghai").strip() or "Asia/Shanghai"
         output_dir = (os.getenv("DIGEST_OUTPUT_DIR") or "/tmp/reports").strip() or "/tmp/reports"
-        target_date = _first_query_value(self.path, "date")
 
         # Vercel runtime filesystem is writable only under /tmp.
         os.environ.setdefault("AI_EVAL_CACHE_DB", "/tmp/ai-news/article_eval.sqlite3")
 
-        argv = ["vercel-cron", "--tz", tz_name, "--output-dir", output_dir]
-        if target_date:
-            argv.extend(["--date", target_date])
+        argv = _build_digest_argv(self.path, tz_name, output_dir)
 
         started = time.time()
         original_argv = sys.argv[:]

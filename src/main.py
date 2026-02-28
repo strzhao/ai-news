@@ -93,6 +93,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sources-config", default="src/config/sources.yaml")
     parser.add_argument("--sync-flomo", action="store_true", help="Force sync to flomo")
     parser.add_argument("--no-sync-flomo", action="store_true", help="Disable flomo sync")
+    parser.add_argument(
+        "--ignore-repeat-limit",
+        action="store_true",
+        help="Temporarily bypass article repeat threshold guard for this run",
+    )
     return parser.parse_args()
 
 
@@ -137,6 +142,11 @@ def _should_sync_flomo(args: argparse.Namespace) -> bool:
 
 def _is_enabled(env_name: str, default: str = "true") -> bool:
     return os.getenv(env_name, default).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _repeat_limit_enabled(args: argparse.Namespace) -> bool:
+    env_enabled = _is_enabled("REPORT_ARTICLE_REPEAT_LIMIT_ENABLED", "true")
+    return env_enabled and (not bool(args.ignore_repeat_limit))
 
 
 def _personalized_quality_score(
@@ -359,20 +369,31 @@ def run() -> int:
 
     must_read_candidates: list[tuple[int, ScoredArticle]] = []
     fallback_worth_reading: list[tuple[int, ScoredArticle]] = []
+    repeat_limit_enabled = _repeat_limit_enabled(args)
     max_info_dup = max(1, int(os.getenv("MAX_INFO_DUP_PER_DIGEST", "2")))
-    historical_article_counts = cache.load_report_article_counts()
+    historical_article_counts = cache.load_report_article_counts() if repeat_limit_enabled else {}
     article_key_counts: Counter[str] = Counter()
-    if historical_article_counts:
+    repeat_guard_skips = 0
+    if repeat_limit_enabled and historical_article_counts:
         LOGGER.info(
             "Historical article guard loaded: article_keys=%d max_per_article=%d",
             len(historical_article_counts),
             max_info_dup,
         )
+    if not repeat_limit_enabled:
+        LOGGER.info(
+            "Historical article guard bypassed for this run: max_per_article=%d",
+            max_info_dup,
+        )
 
     def _reserve_report_slot(article: ScoredArticle) -> bool:
+        nonlocal repeat_guard_skips
+        if not repeat_limit_enabled:
+            return True
         article_key = build_info_key(article)
         historical_hits = int(historical_article_counts.get(article_key, 0))
         if historical_hits + int(article_key_counts[article_key]) >= max_info_dup:
+            repeat_guard_skips += 1
             return False
         article_key_counts[article_key] += 1
         return True
@@ -449,6 +470,13 @@ def run() -> int:
             tagged_highlights.append(TaggedArticle(article=scored_article, generated_tags=[]))
             if len(tagged_highlights) >= selection_cap:
                 break
+    LOGGER.info(
+        "Highlight selection result: selected=%d cap=%d repeat_guard=%s skipped_by_repeat_guard=%d",
+        len(tagged_highlights),
+        selection_cap,
+        repeat_limit_enabled,
+        repeat_guard_skips,
+    )
 
     digest = DailyDigest(
         date=report_date,

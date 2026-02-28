@@ -43,6 +43,7 @@ python -m src.main --tz Asia/Shanghai
 - `HIGHLIGHT_MIN_COUNT` (default: `8` when `EXPANDED_DISCOVERY_MODE=true`, else `4`)
 - `RSSHUB_BASE_URL` (optional, 例如: `https://rsshub.example.com`，用于启用 `sources.yaml` 中的 X/Twitter 源)
 - `MAX_INFO_DUP_PER_DIGEST` (default: `2`, 任意文章在日报中的全局最大出现次数，不区分日期；进入当日评估池即计数，达到上限后不再进日报)
+- `REPORT_ARTICLE_REPEAT_LIMIT_ENABLED` (default: `true`，是否启用「任意文章最多出现 2 次」阈值守卫；设为 `false` 可全局关闭)
 
 系统会对每篇文章单独做 AI 质量评估并持久化缓存；同时根据近期评估结果更新「源质量分」，高质量源在抓取顺序和预算分配上优先。
 重点文章会按当日质量门槛动态收缩，宁缺毋滥。
@@ -121,4 +122,6 @@ npx vercel deploy --prod
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest"
 # 如果调用链路会剥离 Authorization，可改用：
 curl "https://<your-domain>/api/cron_digest?token=$CRON_SECRET"
+# 临时忽略“最多出现 2 次”阈值（仅本次运行）：
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest?ignore_repeat_limit=1"
 ```
