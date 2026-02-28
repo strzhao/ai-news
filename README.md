@@ -1,20 +1,18 @@
-# AI News Daily Digest
+# AI News Daily Digest (Next.js)
 
-每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（重点文章 + 一句话总结 + 日报技术标签），并可同步到 flomo。
+每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（重点文章 + 一句话总结 + 日报技术标签），并可同步到 flomo。当前主实现为 Next.js App Router + Route Handlers。
+
+> `api/*.py` 与 `src/*.py` 为历史参考实现，运行入口已迁移到 Next.js。
 
 ## Quick Start
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-ln -sf ../ai-news/.env .env
-# share env from ../ai-news/.env to avoid duplicate maintenance
-set -a; source .env; set +a
-python -m src.main --tz Asia/Shanghai
+npm install
+npm run dev
 ```
 
-输出文件：`reports/YYYY-MM-DD.md`
+本地访问：`http://localhost:3000`  
+手动触发日报：`GET /api/cron_digest`（支持原有参数与鉴权方式）
 
 ## Environment Variables
 
@@ -93,12 +91,15 @@ python -m src.main --tz Asia/Shanghai
 ## Run Modes
 
 ```bash
-# normal run (auto sync flomo only when FLOMO_API_URL exists)
-python -m src.main --tz Asia/Shanghai
+# dev server
+npm run dev
 
-# force sync / disable sync
-python -m src.main --sync-flomo
-python -m src.main --no-sync-flomo
+# production build
+npm run build
+npm run start
+
+# manual trigger
+curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron_digest"
 ```
 
 ## Vercel Cron Deployment
