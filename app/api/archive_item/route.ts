@@ -2,6 +2,7 @@ import { getArchiveItem } from "@/lib/domain/archive-store";
 import { jsonResponse } from "@/lib/infra/route-utils";
 
 export const runtime = "nodejs";
+export const preferredRegion = ["hkg1", "sin1"];
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);

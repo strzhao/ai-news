@@ -189,6 +189,38 @@ export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<R
   return groups;
 }
 
+export async function getArchiveMarkdownMap(digestIds: string[]): Promise<Record<string, string>> {
+  const normalizedIds = Array.from(
+    new Set(
+      digestIds
+        .map((digestId) => String(digestId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (!normalizedIds.length) {
+    return {};
+  }
+
+  const upstash = buildUpstashClientOrNone();
+  if (!upstash) {
+    return {};
+  }
+
+  const commands: Array<Array<string>> = normalizedIds.map((digestId) => ["HGET", `digest:entry:${digestId}`, "markdown"]);
+  const rows = await upstash.pipeline(commands);
+
+  const markdownMap: Record<string, string> = {};
+  normalizedIds.forEach((digestId, idx) => {
+    const payload = unwrapPipelineResult(rows[idx]);
+    const markdown = String(payload ?? "");
+    if (markdown.trim()) {
+      markdownMap[digestId] = markdown;
+    }
+  });
+
+  return markdownMap;
+}
+
 export async function getArchiveItem(digestId: string): Promise<Record<string, unknown> | null> {
   const normalized = String(digestId || "").trim();
   if (!normalized) return null;

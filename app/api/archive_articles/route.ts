@@ -2,6 +2,7 @@ import { listArchiveArticles } from "@/lib/domain/archive-articles";
 import { jsonResponse } from "@/lib/infra/route-utils";
 
 export const runtime = "nodejs";
+export const preferredRegion = ["hkg1", "sin1"];
 
 function boundedInt(raw: string | null, fallback: number, min: number, max: number): number {
   const parsed = Number.parseInt(String(raw || fallback), 10);
@@ -39,7 +40,7 @@ export async function GET(request: Request): Promise<Response> {
   );
   const imageProbeLimit = boundedInt(
     url.searchParams.get("image_probe_limit"),
-    Number.parseInt(process.env.ARCHIVE_IMAGE_PROBE_LIMIT || "24", 10) || 24,
+    Number.parseInt(process.env.ARCHIVE_IMAGE_PROBE_LIMIT || "0", 10) || 0,
     0,
     100,
   );

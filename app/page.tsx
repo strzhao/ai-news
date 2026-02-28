@@ -107,7 +107,7 @@ export default function HomePage(): React.ReactNode {
       setError("");
       try {
         const response = await fetch(
-          `/api/archive_articles?days=${days}&limit_per_day=${limitPerDay}&article_limit_per_day=${articleLimitPerDay}`,
+          `/api/archive_articles?days=${days}&limit_per_day=${limitPerDay}&article_limit_per_day=${articleLimitPerDay}&image_probe_limit=0`,
           {
             cache: "no-store",
           },
@@ -180,18 +180,20 @@ export default function HomePage(): React.ReactNode {
             {read ? <span className="article-read">已读</span> : null}
           </div>
 
-          <div className="article-headline-row">
-            <h3 className="article-headline">
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                onClick={() => markArticleRead(articleId)}
-              >
-                {item.title || "无标题"}
-              </a>
-            </h3>
+          <h3 className="article-headline">
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={() => markArticleRead(articleId)}
+            >
+              {item.title || "无标题"}
+            </a>
+          </h3>
 
+          {item.summary ? <p className="article-dek">{item.summary}</p> : null}
+
+          <div className="article-actions">
             <a
               className="article-cta"
               href={item.url}
@@ -202,8 +204,6 @@ export default function HomePage(): React.ReactNode {
               阅读原文
             </a>
           </div>
-
-          {item.summary ? <p className="article-dek">{item.summary}</p> : null}
         </div>
       </article>
     );

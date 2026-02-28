@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getArchiveItem, listArchives } from "@/lib/domain/archive-store";
+import { getArchiveMarkdownMap, listArchives } from "@/lib/domain/archive-store";
 import { normalizeUrl } from "@/lib/domain/tracker-common";
 import { resolveFirstImageUrl } from "@/lib/domain/article-image";
 
@@ -13,7 +13,7 @@ const IGNORE_SUMMARY_PREFIX_RE = /^(来源|阅读建议|阅读理由|链接|原�
 const DEFAULT_DAYS = 30;
 const DEFAULT_LIMIT_PER_DAY = 10;
 const DEFAULT_ARTICLE_LIMIT_PER_DAY = 0;
-const DEFAULT_IMAGE_PROBE_LIMIT = 24;
+const DEFAULT_IMAGE_PROBE_LIMIT = 0;
 
 export interface ArchiveArticleSummary {
   article_id: string;
@@ -451,25 +451,19 @@ export async function listArchiveArticles(options: {
     };
   }
 
-  const withMarkdown = await Promise.all(
-    digestRows.map(async (row) => {
-      try {
-        const detail = await getArchiveItem(row.digest_id);
-        const markdown = String((detail || {}).markdown || "").trim();
-        if (!markdown) {
-          return null;
-        }
-        return {
-          ...row,
-          markdown,
-        };
-      } catch {
+  const markdownMap = await getArchiveMarkdownMap(digestRows.map((row) => row.digest_id));
+  const digests: DigestArchiveSnapshot[] = digestRows
+    .map((row) => {
+      const markdown = String(markdownMap[row.digest_id] || "").trim();
+      if (!markdown) {
         return null;
       }
-    }),
-  );
-
-  const digests = withMarkdown.filter((item): item is DigestArchiveSnapshot => Boolean(item));
+      return {
+        ...row,
+        markdown,
+      };
+    })
+    .filter((item): item is DigestArchiveSnapshot => Boolean(item));
   const aggregated = aggregateArchiveArticlesFromDigests(digests, {
     articleLimitPerDay,
   });

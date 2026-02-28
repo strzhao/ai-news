@@ -70,7 +70,7 @@ describe("archive_articles route", () => {
       days: 30,
       limitPerDay: 10,
       articleLimitPerDay: 0,
-      imageProbeLimit: 24,
+      imageProbeLimit: 0,
     });
   });
 
