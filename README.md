@@ -94,15 +94,27 @@ python -m src.main --sync-flomo
 python -m src.main --no-sync-flomo
 ```
 
-## GitHub Actions
+## Vercel Cron Deployment
 
-Workflow: `.github/workflows/daily_digest.yml`
+- Cron 配置在 `vercel.json`：`0 23 * * *` (UTC) = `07:00 Asia/Shanghai`
+- 生产环境会定时调用 `GET /api/cron_digest`
+- 建议在 Vercel 项目中设置 `CRON_SECRET`，平台会自动在 cron 请求里注入 `Authorization: Bearer <CRON_SECRET>`
+- `api/cron_digest.py` 默认将运行时写目录设为：
+  - `AI_EVAL_CACHE_DB=/tmp/ai-news/article_eval.sqlite3`
+  - `DIGEST_OUTPUT_DIR=/tmp/reports`
 
-- cron: `0 23 * * *` (UTC) = `07:00 Asia/Shanghai`
-- supports manual `workflow_dispatch`
-- restores `.cache/ai-news` to reduce repeated AI calls
-- 默认会使用 `https://rsshub-vercel-deploy-cyan.vercel.app` 作为 `RSSHUB_BASE_URL`（可通过仓库变量 `RSSHUB_BASE_URL` 覆盖）
-- optional auto-commit by repository variable `AUTO_COMMIT_REPORTS=true`
+部署命令：
+
+```bash
+npx vercel link
+npx vercel deploy --prod
+```
+
+手动触发（用于验收）：
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest"
+```
 
 ## Tracker Service
 
