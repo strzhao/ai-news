@@ -119,3 +119,9 @@ sources:
     source_type: twitter
     only_external_links: true
     source_weight: 1.08
+  - id: x_trq212
+    name: trq212（X）
+    rsshub_route: /twitter/user/trq212
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
