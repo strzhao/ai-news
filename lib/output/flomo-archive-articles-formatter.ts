@@ -1,5 +1,6 @@
 import { ArchiveArticleSummary } from "@/lib/domain/archive-articles";
 import { resolveFlomoHomePageUrl } from "@/lib/output/flomo-formatter";
+import { buildSignedTrackingUrl } from "@/lib/tracking/signed-url";
 
 export interface FlomoArchiveArticlesPayload {
   content: string;
@@ -39,6 +40,37 @@ function normalizeUrl(value: string): string {
   }
 }
 
+function trackerBaseUrl(): string {
+  return String(process.env.TRACKER_BASE_URL || "").trim().replace(/\/$/, "");
+}
+
+function trackerSigningSecret(): string {
+  return String(process.env.TRACKER_SIGNING_SECRET || "").trim();
+}
+
+function buildArchiveArticleLink(article: ArchiveArticleSummary, reportDate: string): string {
+  const targetUrl = normalizeUrl(article.url);
+  if (!targetUrl) {
+    return "";
+  }
+
+  const baseUrl = trackerBaseUrl();
+  const signingSecret = trackerSigningSecret();
+  if (!baseUrl || !signingSecret) {
+    return targetUrl;
+  }
+
+  const params: Record<string, string> = {
+    u: targetUrl,
+    sid: normalizeText(article.source_host, 120) || "archive_articles",
+    aid: normalizeText(article.article_id, 120) || "archive_article",
+    d: normalizeDate(reportDate),
+    ch: "flomo",
+  };
+
+  return buildSignedTrackingUrl(baseUrl, params, signingSecret);
+}
+
 export function renderFlomoArchiveArticlesContent(params: {
   reportDate: string;
   articles: ArchiveArticleSummary[];
@@ -54,13 +86,15 @@ export function renderFlomoArchiveArticlesContent(params: {
   if (!articles.length) {
     lines.push("- 今日暂无满足阈值的重点文章。");
   } else {
-    lines.push(`- 日期：${reportDate}`);
-    lines.push(`- 今日共 ${articles.length} 篇重点文章。`);
     const previews = articles
       .slice(0, overviewLimit)
       .map((item) => normalizeText(item.summary || item.title, 120))
       .filter(Boolean);
-    previews.forEach((preview) => lines.push(`- ${preview}`));
+    if (!previews.length) {
+      lines.push("- 今日暂无可用摘要。");
+    } else {
+      previews.forEach((preview) => lines.push(`- ${preview}`));
+    }
   }
 
   lines.push("");
@@ -71,7 +105,7 @@ export function renderFlomoArchiveArticlesContent(params: {
     articles.forEach((article, index) => {
       const title = normalizeText(article.title, 200) || `未命名文章 ${index + 1}`;
       const summary = normalizeText(article.summary, 320);
-      const url = normalizeUrl(article.url);
+      const url = buildArchiveArticleLink(article, reportDate);
       lines.push(`${index + 1}. ${title}`);
       if (summary) {
         lines.push(summary);

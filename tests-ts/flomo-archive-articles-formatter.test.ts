@@ -11,8 +11,10 @@ afterEach(() => {
 });
 
 describe("flomo archive articles formatter", () => {
-  it("renders overview, article list and home page link", () => {
+  it("renders summary-first overview and tracker links", () => {
     process.env.FLOMO_H5_URL = "https://ai-news.example.com";
+    process.env.TRACKER_BASE_URL = "https://tracker.example.com";
+    process.env.TRACKER_SIGNING_SECRET = "tracker-secret";
 
     const payload = buildFlomoArchiveArticlesPayload({
       reportDate: "2026-03-01",
@@ -44,11 +46,17 @@ describe("flomo archive articles formatter", () => {
 
     expect(payload.dedupeKey).toBe("archive-articles-2026-03-01");
     expect(payload.content).toContain("【今日速览】");
-    expect(payload.content).toContain("- 日期：2026-03-01");
-    expect(payload.content).toContain("- 今日共 2 篇重点文章。");
+    expect(payload.content).not.toContain("日期：");
+    expect(payload.content).not.toContain("今日共");
+    expect(payload.content).toContain("- 第一篇摘要");
     expect(payload.content).toContain("【重点文章】");
     expect(payload.content).toContain("1. First");
-    expect(payload.content).toContain("链接：https://example.com/a1");
+    expect(payload.content).toContain("链接：https://tracker.example.com/api/r?");
+    expect(payload.content).toContain("sid=example.com");
+    expect(payload.content).toContain("aid=a1");
+    expect(payload.content).toContain("d=2026-03-01");
+    expect(payload.content).toContain("ch=flomo");
+    expect(payload.content).toContain("sig=");
     expect(payload.content).toContain("查看更多：https://ai-news.example.com/");
   });
 

@@ -30,6 +30,8 @@ describe("flomo push from archive_articles route", () => {
     vi.clearAllMocks();
     delete process.env.CRON_SECRET;
     delete process.env.FLOMO_H5_URL;
+    delete process.env.TRACKER_BASE_URL;
+    delete process.env.TRACKER_SIGNING_SECRET;
   });
 
   it("returns 401 when cron secret does not match", async () => {
@@ -70,6 +72,8 @@ describe("flomo push from archive_articles route", () => {
   it("sends flomo payload based on archive_articles data", async () => {
     process.env.CRON_SECRET = "expected";
     process.env.FLOMO_H5_URL = "https://ai-news.example.com";
+    process.env.TRACKER_BASE_URL = "https://tracker.example.com";
+    process.env.TRACKER_SIGNING_SECRET = "tracker-secret";
     vi.mocked(listArchiveArticles).mockResolvedValue({
       totalArticles: 2,
       groups: [
@@ -126,6 +130,14 @@ describe("flomo push from archive_articles route", () => {
     expect(sentPayload.content).toContain("【重点文章】");
     expect(sentPayload.content).toContain("1. First title");
     expect(sentPayload.content).toContain("2. Second title");
+    expect(sentPayload.content).not.toContain("日期：");
+    expect(sentPayload.content).not.toContain("今日共");
+    expect(sentPayload.content).toContain("https://tracker.example.com/api/r?");
+    expect(sentPayload.content).toContain("sid=example.com");
+    expect(sentPayload.content).toContain("aid=a1");
+    expect(sentPayload.content).toContain("d=2026-03-01");
+    expect(sentPayload.content).toContain("ch=flomo");
+    expect(sentPayload.content).toContain("sig=");
     expect(sentPayload.content).toContain("查看更多：https://ai-news.example.com/");
   });
 
