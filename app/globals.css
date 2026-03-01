@@ -35,7 +35,7 @@ a {
 }
 
 .newsroom-shell {
-  width: min(920px, calc(100vw - 56px));
+  width: min(920px, calc(100% - 56px));
   margin: 48px auto 96px;
 }
 
@@ -66,6 +66,8 @@ a {
   margin: 14px 0 0;
   color: var(--muted);
   font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .content-block {
@@ -151,6 +153,8 @@ a {
 .article-headline a {
   text-decoration: none;
   border-bottom: 1px solid transparent;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .article-headline a:hover {
@@ -162,6 +166,8 @@ a {
   color: var(--ink-soft);
   font-size: 17px;
   line-height: 1.68;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -307,7 +313,7 @@ a {
 
 @media (max-width: 920px) {
   .newsroom-shell {
-    width: calc(100vw - 32px);
+    width: calc(100% - 32px);
     margin: 26px auto 64px;
   }
 
