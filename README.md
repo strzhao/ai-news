@@ -16,6 +16,7 @@
   - `DELETE /api/v1/tags/groups/:group_key/:tag_key`
 - 消费层（AI-news）：
   - `GET /api/archive_articles` 对前端保持兼容，内部优先消费 `ARTICLE_DB_BASE_URL`
+  - `GET /api/v1/flomo/push-from-archive-articles`：基于 `/api/archive_articles` 同源数据推送 flomo（支持 `Authorization: Bearer $CRON_SECRET` 或 `?token=`）
 - 旧入口 `GET /api/cron_digest` 已废弃，返回 `410`。
 
 ## Quick Start
@@ -126,6 +127,9 @@ npm run dev
 ### flomo Sync (optional)
 
 - `FLOMO_API_URL` (enable sync when provided)
+- `FLOMO_ARCHIVE_DAYS` (default: `1`)
+- `FLOMO_ARCHIVE_LIMIT_PER_DAY` (default: `30`)
+- `FLOMO_ARCHIVE_ARTICLE_LIMIT_PER_DAY` (default: `30`)
 
 ## Run Modes
 
@@ -139,23 +143,24 @@ npm run start
 
 # manual trigger
 curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/ingestion/run"
+# manual flomo push (from /api/archive_articles data source)
+curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/flomo/push-from-archive-articles"
 # import legacy archive (optional)
 curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/migration/import-legacy?days=30&limit_per_day=10&article_limit_per_day=1000&overwrite=0"
 ```
 
 ## Vercel Cron Deployment
 
-- Cron 配置在 `vercel.json`：`0 23 * * *` (UTC) = `07:00 Asia/Shanghai`
-- 生产环境会定时调用 `GET /api/v1/ingestion/run`
+- Cron 配置在 `vercel.json`：
+  - `0 23 * * *` (UTC) = `07:00 Asia/Shanghai` -> `GET /api/v1/ingestion/run`
+  - `10 23 * * *` (UTC) = `07:10 Asia/Shanghai` -> `GET /api/v1/flomo/push-from-archive-articles`
 - 内置 tracker 接口：
   - `GET /api/healthz`
   - `GET /api/r`
   - `GET /api/stats/sources?days=90`
   - `GET /api/stats/types?days=90`
 - 归档接口（首页 H5 使用）：
-  - `GET /api/archive?days=30&limit_per_day=10`
-  - `GET /api/archive_item?id=<digest_id>`
-  - `GET /api/archive_analysis?id=<digest_id>`
+  - `GET /api/archive_articles?days=30&limit_per_day=10`
 - 首页：
   - `GET /`（H5 页面，主体优先展示“今日文档”，页面末尾展示历史归档）
 - 建议在 Vercel 项目中设置 `CRON_SECRET`，平台会自动在 cron 请求里注入 `Authorization: Bearer <CRON_SECRET>`
@@ -174,6 +179,11 @@ npx vercel deploy --prod
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/v1/ingestion/run"
 # 如果调用链路会剥离 Authorization，可改用：
 curl "https://<your-domain>/api/v1/ingestion/run?token=$CRON_SECRET"
+
+# 手动触发 flomo 推送（基于 /api/archive_articles）
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/v1/flomo/push-from-archive-articles"
+# 如果调用链路会剥离 Authorization，可改用：
+curl "https://<your-domain>/api/v1/flomo/push-from-archive-articles?token=$CRON_SECRET"
 
 # 导入旧归档（默认追加 upsert，不覆盖；overwrite=1 表示按天覆盖）
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/v1/migration/import-legacy?days=30&limit_per_day=10&article_limit_per_day=1000&overwrite=0&quality_score=62"

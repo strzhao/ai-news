@@ -177,8 +177,6 @@ export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<R
         has_highlights: hasHighlights,
         summary_preview: row.summary_preview || "",
         analysis_preview: (analysisEntries[digestId] || {}).analysis_preview || "",
-        view_url: `/api/archive_item?id=${encodeURIComponent(digestId)}`,
-        analysis_url: `/api/archive_analysis?id=${encodeURIComponent(digestId)}`,
       });
     }
     if (items.length) {
@@ -219,58 +217,4 @@ export async function getArchiveMarkdownMap(digestIds: string[]): Promise<Record
   });
 
   return markdownMap;
-}
-
-export async function getArchiveItem(digestId: string): Promise<Record<string, unknown> | null> {
-  const normalized = String(digestId || "").trim();
-  if (!normalized) return null;
-  const upstash = buildUpstashClientOrNone();
-  if (!upstash) {
-    return null;
-  }
-  const row = await upstash.hgetall(`digest:entry:${normalized}`);
-  if (!Object.keys(row).length) {
-    return null;
-  }
-  const highlightCount = Number(row.highlight_count || 0);
-  const hasHighlights = ["1", "true", "yes", "on"].includes(String(row.has_highlights || "").toLowerCase());
-  return {
-    digest_id: normalized,
-    date: row.date || "",
-    generated_at: row.generated_at || "",
-    highlight_count: Number.isFinite(highlightCount) ? Math.trunc(highlightCount) : 0,
-    has_highlights: hasHighlights,
-    summary_preview: row.summary_preview || "",
-    markdown: row.markdown || "",
-  };
-}
-
-export async function getArchiveAnalysis(digestId: string): Promise<Record<string, unknown> | null> {
-  const normalized = String(digestId || "").trim();
-  if (!normalized) return null;
-  const upstash = buildUpstashClientOrNone();
-  if (!upstash) {
-    return null;
-  }
-  const row = await upstash.hgetall(`digest:analysis:${normalized}`);
-  if (!Object.keys(row).length) {
-    return null;
-  }
-  let parsedJson: Record<string, unknown> = {};
-  try {
-    const raw = JSON.parse(row.analysis_json || "{}");
-    if (raw && typeof raw === "object") {
-      parsedJson = raw as Record<string, unknown>;
-    }
-  } catch {
-    parsedJson = {};
-  }
-  return {
-    digest_id: normalized,
-    date: row.date || "",
-    generated_at: row.generated_at || "",
-    analysis_preview: row.analysis_preview || "",
-    analysis_markdown: row.analysis_markdown || "",
-    analysis_json: parsedJson,
-  };
 }
