@@ -3,6 +3,7 @@ import { ArticleEvaluator } from "@/lib/llm/article-evaluator";
 
 describe("article evaluator normalization", () => {
   const evaluator = new ArticleEvaluator({} as any, {} as any, [
+    "strategic_analysis",
     "engineering_practice",
     "research_progress",
     "open_source_project",
@@ -34,6 +35,33 @@ describe("article evaluator normalization", () => {
     expect(parsed.primaryType).toBe("research_progress");
     expect(parsed.secondaryTypes).not.toContain("research_progress");
     expect(parsed.tagGroups.type).toContain("research_progress");
+  });
+
+  it("promotes type from type_candidates when primary_type is other", () => {
+    const parsed = (evaluator as any).parseAssessment("a1b", {
+      article_id: "a1b",
+      worth: "可读",
+      reading_roi_score: 58,
+      company_impact: 55,
+      team_impact: 55,
+      personal_impact: 55,
+      execution_clarity: 45,
+      novelty: 50,
+      clarity_score: 55,
+      one_line_summary: "summary",
+      reason_short: "reason",
+      action_hint: "hint",
+      best_for_roles: ["技术负责人"],
+      evidence_signals: ["benchmark"],
+      confidence: 0.88,
+      primary_type: "other",
+      secondary_types: [],
+      type_candidates: ["strategic_analysis", "other"],
+      tag_groups: {},
+    });
+
+    expect(parsed.primaryType).toBe("strategic_analysis");
+    expect(parsed.tagGroups.type).toContain("strategic_analysis");
   });
 
   it("parses JSON-string tag_groups and normalizes to snake_case", () => {

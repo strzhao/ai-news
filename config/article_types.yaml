@@ -1,4 +1,9 @@
 types:
+  - market_competition
+  - policy_regulation
+  - funding_finance
+  - strategic_analysis
+  - developer_tooling
   - model_release
   - benchmark
   - engineering_practice

@@ -10,7 +10,7 @@ import {
 import { DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
 
 const VALID_WORTH = new Set([WORTH_MUST_READ, WORTH_WORTH_READING, WORTH_SKIP]);
-const ASSESSMENT_SCHEMA_VERSION = "assessment_r2";
+const ASSESSMENT_SCHEMA_VERSION = "assessment_r3";
 
 function coerceScore(value: unknown): number {
   let score = Number(value);
@@ -279,9 +279,11 @@ export class ArticleEvaluator {
       "你必须只输出 JSON 对象，不能输出解释文本、Markdown 或代码块。" +
       "输出字段：article_id, worth, reading_roi_score, company_impact, team_impact, personal_impact, " +
       "execution_clarity, novelty, clarity_score, one_line_summary, reason_short, action_hint, " +
-      "best_for_roles, evidence_signals, confidence, primary_type, secondary_types, tag_groups。" +
+      "best_for_roles, evidence_signals, confidence, primary_type, secondary_types, type_candidates, tag_groups。" +
       "worth 仅允许：必读/可读/跳过。" +
       `primary_type 必须从以下枚举中选择：${allowedTypes}。` +
+      "type_candidates 必须是你在该枚举中的排序候选列表（长度 1-3），primary_type 应等于第一候选。" +
+      "除非内容明显不属于 AI 主题或信息严重不足，否则不要把 primary_type 设为 other。" +
       "若 primary_type 为 other，请在 secondary_types 给出 1-2 个更具体类型（若存在）。" +
       "tag_groups 为对象，键建议使用 topic/tech/role/scenario/impact/evidence/type/source，值是 snake_case 标签数组；至少输出一个非空标签组。" +
       "confidence 含义是“你对评分与类型判断的证据充分度”，只有证据非常充分且结论稳定时才可 >0.9。";
@@ -339,6 +341,13 @@ export class ArticleEvaluator {
 
     const typeMap = buildTypeMap(this.articleTypes);
     let primaryType = resolveType(typeMap, row.primary_type) || "other";
+    const typeCandidates = Array.from(
+      new Set(
+        parseStringArray(row.type_candidates)
+          .map((item) => resolveType(typeMap, item))
+          .filter((item): item is string => Boolean(item)),
+      ),
+    );
     const rawSecondaryTypes = parseStringArray(row.secondary_types);
     let secondaryTypes = Array.from(
       new Set(
@@ -349,7 +358,7 @@ export class ArticleEvaluator {
     );
 
     if (primaryType === "other") {
-      const promotable = secondaryTypes.find((item) => item !== "other");
+      const promotable = typeCandidates.find((item) => item !== "other") || secondaryTypes.find((item) => item !== "other");
       if (promotable) {
         primaryType = promotable;
         secondaryTypes = secondaryTypes.filter((item) => item !== promotable);
