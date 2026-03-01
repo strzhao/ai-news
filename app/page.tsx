@@ -217,6 +217,9 @@ export default function HomePage(): React.ReactNode {
         <p className="hero-meta">
           {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
         </p>
+        <p className="hero-meta">
+          <a href="/archive-review">进入归档审查页（完整列表 + 好/不好反馈）</a>
+        </p>
       </header>
 
       {error ? <div className="error-banner">{error}</div> : null}

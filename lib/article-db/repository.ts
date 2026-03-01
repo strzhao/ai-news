@@ -4,6 +4,10 @@ import { Article, ArticleAssessment, SourceConfig } from "@/lib/domain/models";
 import { normalizeUrl } from "@/lib/domain/tracker-common";
 import { getPgPool } from "@/lib/infra/postgres";
 import {
+  ArchivedArticleRow,
+  ArticleQualityFeedback,
+  ArticleQualityFeedbackEvent,
+  FeedbackAdjustmentMap,
   HighQualityArticleDetail,
   HighQualityArticleGroup,
   HighQualityArticleItem,
@@ -232,6 +236,83 @@ function parseGovernanceFeedbackEventRow(row: Record<string, unknown>): TagGover
   };
 }
 
+function normalizeFeedbackValue(value: string): ArticleQualityFeedback {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "bad" ? "bad" : "good";
+}
+
+function parseArticleQualityFeedbackRow(row: Record<string, unknown>): ArticleQualityFeedbackEvent {
+  return {
+    id: String(row.id || ""),
+    article_id: String(row.article_id || ""),
+    feedback: normalizeFeedbackValue(String(row.feedback || "")),
+    feedback_score: Number(row.feedback_score || 0),
+    source_id: String(row.source_id || ""),
+    primary_type: normalizeTagKey(String(row.primary_type || "other")) || "other",
+    quality_score_snapshot: Number(row.quality_score_snapshot || 0),
+    confidence_snapshot: Number(row.confidence_snapshot || 0),
+    worth_snapshot: String(row.worth_snapshot || ""),
+    reason_short_snapshot: String(row.reason_short_snapshot || ""),
+    action_hint_snapshot: String(row.action_hint_snapshot || ""),
+    tag_groups_snapshot: parseTagGroups(row.tag_groups_snapshot),
+    evidence_signals_snapshot: parseStringArray(row.evidence_signals_snapshot),
+    context_json: parseJsonObject(row.context_json),
+    created_at: toIso(row.created_at),
+  };
+}
+
+function rowToArchivedArticle(
+  row: Record<string, unknown>,
+  qualityThreshold: number,
+): ArchivedArticleRow {
+  const snapshotScore = Number(row.quality_score_snapshot || 0);
+  const derivedTier = tierByScore(snapshotScore, qualityThreshold);
+  const qualityTierRaw = normalizeQualityTier(String(row.quality_tier || ""), derivedTier);
+  const qualityTier = qualityTierRaw === "all" ? derivedTier : qualityTierRaw;
+  return {
+    article_id: String(row.article_id || ""),
+    date: toDateString(row.date),
+    analyzed_at: toIso(row.analyzed_at),
+    selected_at: toIso(row.selected_at),
+    is_selected: Boolean(row.is_selected),
+    source_id: String(row.source_id || ""),
+    source_name: String(row.source_name || ""),
+    source_host: String(row.source_host || ""),
+    title: String(row.title || ""),
+    canonical_url: String(row.canonical_url || ""),
+    original_url: String(row.original_url || ""),
+    info_url: String(row.info_url || ""),
+    published_at: toIso(row.published_at),
+    summary_raw: String(row.summary_raw || ""),
+    lead_paragraph: String(row.lead_paragraph || ""),
+    quality_score_snapshot: snapshotScore,
+    rank_score: Number(row.rank_score || 0),
+    quality_score: Number(row.quality_score || 0),
+    confidence: Number(row.confidence || 0),
+    worth: String(row.worth || ""),
+    one_line_summary: String(row.one_line_summary || ""),
+    reason_short: String(row.reason_short || ""),
+    action_hint: String(row.action_hint || ""),
+    company_impact: Number(row.company_impact || 0),
+    team_impact: Number(row.team_impact || 0),
+    personal_impact: Number(row.personal_impact || 0),
+    execution_clarity: Number(row.execution_clarity || 0),
+    novelty_score: Number(row.novelty_score || 0),
+    clarity_score: Number(row.clarity_score || 0),
+    best_for_roles: parseStringArray(row.best_for_roles),
+    evidence_signals: parseStringArray(row.evidence_signals),
+    primary_type: normalizeTagKey(String(row.primary_type || "other")) || "other",
+    secondary_types: parseStringArray(row.secondary_types),
+    tag_groups: parseTagGroups(row.tag_groups),
+    quality_tier: qualityTier,
+    feedback_good_count: Number(row.feedback_good_count || 0),
+    feedback_bad_count: Number(row.feedback_bad_count || 0),
+    feedback_total_count: Number(row.feedback_total_count || 0),
+    feedback_last: String(row.feedback_last || ""),
+    feedback_last_at: toIso(row.feedback_last_at),
+  };
+}
+
 export async function ensureArticleDbSchema(): Promise<void> {
   if (schemaReady) {
     return schemaReady;
@@ -374,6 +455,25 @@ export async function ensureArticleDbSchema(): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS article_quality_feedback (
+        id TEXT PRIMARY KEY,
+        article_id TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+        feedback TEXT NOT NULL,
+        feedback_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+        source_id TEXT NOT NULL DEFAULT '',
+        primary_type TEXT NOT NULL DEFAULT 'other',
+        quality_score_snapshot DOUBLE PRECISION NOT NULL DEFAULT 0,
+        confidence_snapshot DOUBLE PRECISION NOT NULL DEFAULT 0,
+        worth_snapshot TEXT NOT NULL DEFAULT '',
+        reason_short_snapshot TEXT NOT NULL DEFAULT '',
+        action_hint_snapshot TEXT NOT NULL DEFAULT '',
+        tag_groups_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+        evidence_signals_snapshot JSONB NOT NULL DEFAULT '[]'::jsonb,
+        context_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT chk_article_quality_feedback_value CHECK (feedback IN ('good', 'bad'))
+      );
+
       ALTER TABLE article_analysis ADD COLUMN IF NOT EXISTS tag_groups JSONB NOT NULL DEFAULT '{}'::jsonb;
       ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -387,6 +487,12 @@ export async function ensureArticleDbSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_tag_governance_runs_started_at ON tag_governance_runs (started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tag_governance_feedback_created_at ON tag_governance_feedback (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tag_governance_feedback_objective ON tag_governance_feedback (objective_id, event_type, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_article_quality_feedback_article_created
+        ON article_quality_feedback (article_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_article_quality_feedback_source_created
+        ON article_quality_feedback (source_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_article_quality_feedback_type_created
+        ON article_quality_feedback (primary_type, created_at DESC);
 
       INSERT INTO daily_analyzed_articles (date, article_id, quality_score_snapshot, rank_score, analyzed_at)
       SELECT date, article_id, quality_score_snapshot, rank_score, selected_at
@@ -1289,6 +1395,385 @@ export async function listHighQualityRange(params: {
   return {
     groups,
     totalArticles,
+  };
+}
+
+export async function listArchivedArticles(params: {
+  fromDate: string;
+  toDate: string;
+  limit: number;
+  offset: number;
+  qualityTier?: string;
+  qualityThreshold?: number;
+  sourceId?: string;
+  primaryType?: string;
+  search?: string;
+}): Promise<{ total: number; items: ArchivedArticleRow[] }> {
+  await ensureArticleDbSchema();
+  const pool = getPgPool();
+  const fromDate = normalizeDate(params.fromDate);
+  const toDate = normalizeDate(params.toDate);
+  const limit = Math.max(1, Math.min(Math.trunc(params.limit), 200));
+  const offset = Math.max(0, Math.min(Math.trunc(params.offset), 20_000));
+  const qualityTier = normalizeQualityTier(params.qualityTier, "all");
+  const qualityThreshold = boundedScore(
+    Number(params.qualityThreshold ?? Number.parseFloat(String(process.env.QUALITY_SCORE_THRESHOLD || "62"))),
+    62,
+  );
+  const sourceId = String(params.sourceId || "").trim() || null;
+  const primaryType = normalizeTagKey(String(params.primaryType || "")) || null;
+  const searchRaw = String(params.search || "").trim();
+  const search = searchRaw ? searchRaw.slice(0, 160) : null;
+
+  const totalRow = await pool.query<{ total: string | number }>(
+    `
+    SELECT COUNT(*) AS total
+    FROM daily_analyzed_articles d
+    INNER JOIN articles a ON a.id = d.article_id
+    INNER JOIN sources s ON s.id = a.source_id
+    INNER JOIN article_analysis aa ON aa.article_id = a.id
+    WHERE d.date BETWEEN $1::date AND $2::date
+      AND (
+        $3::text = 'all'
+        OR ($3::text = 'high' AND d.quality_score_snapshot >= $4::double precision)
+        OR ($3::text = 'general' AND d.quality_score_snapshot < $4::double precision)
+      )
+      AND ($5::text IS NULL OR a.source_id = $5::text)
+      AND ($6::text IS NULL OR aa.primary_type = $6::text)
+      AND (
+        $7::text IS NULL
+        OR a.title ILIKE ('%' || $7 || '%')
+        OR s.name ILIKE ('%' || $7 || '%')
+        OR a.info_url ILIKE ('%' || $7 || '%')
+        OR aa.one_line_summary ILIKE ('%' || $7 || '%')
+        OR aa.reason_short ILIKE ('%' || $7 || '%')
+      )
+  `,
+    [fromDate, toDate, qualityTier, qualityThreshold, sourceId, primaryType, search],
+  );
+
+  const rows = await pool.query(
+    `
+    WITH filtered AS (
+      SELECT
+        d.date,
+        d.analyzed_at,
+        d.quality_score_snapshot,
+        d.rank_score,
+        a.id AS article_id,
+        a.source_id,
+        s.name AS source_name,
+        a.title,
+        a.canonical_url,
+        a.original_url,
+        a.info_url,
+        a.published_at,
+        a.summary_raw,
+        a.lead_paragraph,
+        a.source_host,
+        aa.quality_score,
+        aa.confidence,
+        aa.worth,
+        aa.one_line_summary,
+        aa.reason_short,
+        aa.action_hint,
+        aa.company_impact,
+        aa.team_impact,
+        aa.personal_impact,
+        aa.execution_clarity,
+        aa.novelty_score,
+        aa.clarity_score,
+        aa.best_for_roles,
+        aa.evidence_signals,
+        aa.primary_type,
+        aa.secondary_types,
+        aa.tag_groups,
+        h.selected_at,
+        (h.article_id IS NOT NULL) AS is_selected
+      FROM daily_analyzed_articles d
+      INNER JOIN articles a ON a.id = d.article_id
+      INNER JOIN sources s ON s.id = a.source_id
+      INNER JOIN article_analysis aa ON aa.article_id = a.id
+      LEFT JOIN daily_high_quality_articles h
+        ON h.date = d.date
+       AND h.article_id = d.article_id
+      WHERE d.date BETWEEN $1::date AND $2::date
+        AND (
+          $3::text = 'all'
+          OR ($3::text = 'high' AND d.quality_score_snapshot >= $4::double precision)
+          OR ($3::text = 'general' AND d.quality_score_snapshot < $4::double precision)
+        )
+        AND ($5::text IS NULL OR a.source_id = $5::text)
+        AND ($6::text IS NULL OR aa.primary_type = $6::text)
+        AND (
+          $7::text IS NULL
+          OR a.title ILIKE ('%' || $7 || '%')
+          OR s.name ILIKE ('%' || $7 || '%')
+          OR a.info_url ILIKE ('%' || $7 || '%')
+          OR aa.one_line_summary ILIKE ('%' || $7 || '%')
+          OR aa.reason_short ILIKE ('%' || $7 || '%')
+        )
+    )
+    SELECT
+      filtered.*,
+      CASE WHEN filtered.quality_score_snapshot >= $4::double precision THEN 'high' ELSE 'general' END AS quality_tier,
+      COALESCE(feedback.good_count, 0) AS feedback_good_count,
+      COALESCE(feedback.bad_count, 0) AS feedback_bad_count,
+      COALESCE(feedback.total_count, 0) AS feedback_total_count,
+      COALESCE(feedback.last_feedback, '') AS feedback_last,
+      feedback.last_feedback_at AS feedback_last_at
+    FROM filtered
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) FILTER (WHERE aqf.feedback = 'good') AS good_count,
+        COUNT(*) FILTER (WHERE aqf.feedback = 'bad') AS bad_count,
+        COUNT(*) AS total_count,
+        MAX(aqf.created_at) AS last_feedback_at,
+        (
+          SELECT aqf2.feedback
+          FROM article_quality_feedback aqf2
+          WHERE aqf2.article_id = filtered.article_id
+          ORDER BY aqf2.created_at DESC
+          LIMIT 1
+        ) AS last_feedback
+      FROM article_quality_feedback aqf
+      WHERE aqf.article_id = filtered.article_id
+    ) AS feedback ON TRUE
+    ORDER BY filtered.date DESC, filtered.rank_score DESC, filtered.analyzed_at DESC
+    LIMIT $8 OFFSET $9
+  `,
+    [fromDate, toDate, qualityTier, qualityThreshold, sourceId, primaryType, search, limit, offset],
+  );
+
+  return {
+    total: Number(totalRow.rows[0]?.total || 0),
+    items: rows.rows.map((row) => rowToArchivedArticle(row as Record<string, unknown>, qualityThreshold)),
+  };
+}
+
+export async function recordArticleQualityFeedback(params: {
+  articleId: string;
+  feedback: string;
+  source?: string;
+  contextJson?: Record<string, unknown>;
+}): Promise<ArticleQualityFeedbackEvent | null> {
+  await ensureArticleDbSchema();
+  const articleId = String(params.articleId || "").trim();
+  if (!articleId) {
+    throw new Error("Missing article_id");
+  }
+  const feedback = normalizeFeedbackValue(params.feedback);
+  const feedbackScore = feedback === "good" ? 1 : -1;
+  const source = String(params.source || "archive_review_ui").trim() || "archive_review_ui";
+  const contextJson = params.contextJson && typeof params.contextJson === "object" ? params.contextJson : {};
+  const pool = getPgPool();
+
+  const snapshotQuery = await pool.query(
+    `
+    SELECT
+      a.id AS article_id,
+      a.source_id,
+      aa.primary_type,
+      aa.quality_score,
+      aa.confidence,
+      aa.worth,
+      aa.reason_short,
+      aa.action_hint,
+      aa.tag_groups,
+      aa.evidence_signals
+    FROM articles a
+    INNER JOIN article_analysis aa ON aa.article_id = a.id
+    WHERE a.id = $1
+    LIMIT 1
+  `,
+    [articleId],
+  );
+
+  if (!snapshotQuery.rows.length) {
+    return null;
+  }
+
+  const snapshot = snapshotQuery.rows[0] as Record<string, unknown>;
+  const id = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const mergedContext = {
+    ...contextJson,
+    source,
+    article_id: articleId,
+  };
+
+  const inserted = await pool.query(
+    `
+    INSERT INTO article_quality_feedback (
+      id,
+      article_id,
+      feedback,
+      feedback_score,
+      source_id,
+      primary_type,
+      quality_score_snapshot,
+      confidence_snapshot,
+      worth_snapshot,
+      reason_short_snapshot,
+      action_hint_snapshot,
+      tag_groups_snapshot,
+      evidence_signals_snapshot,
+      context_json,
+      created_at
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6,
+      $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb, NOW()
+    )
+    RETURNING *
+  `,
+    [
+      id,
+      articleId,
+      feedback,
+      feedbackScore,
+      String(snapshot.source_id || ""),
+      normalizeTagKey(String(snapshot.primary_type || "other")) || "other",
+      Number(snapshot.quality_score || 0),
+      Number(snapshot.confidence || 0),
+      String(snapshot.worth || ""),
+      String(snapshot.reason_short || ""),
+      String(snapshot.action_hint || ""),
+      JSON.stringify(parseTagGroups(snapshot.tag_groups)),
+      JSON.stringify(parseStringArray(snapshot.evidence_signals)),
+      JSON.stringify(mergedContext),
+    ],
+  );
+
+  return parseArticleQualityFeedbackRow(inserted.rows[0] as Record<string, unknown>);
+}
+
+function boundedPositive(value: number, fallback: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, value));
+}
+
+function computeBiasMap(
+  rows: Array<Record<string, unknown>>,
+  params: {
+    keyField: string;
+    weight: number;
+    minSamples: number;
+    maxAbs: number;
+    normalizeKey?: (value: string) => string;
+  },
+): Record<string, number> {
+  const output: Record<string, number> = {};
+  rows.forEach((row) => {
+    const rawKey = String(row[params.keyField] || "").trim();
+    const key = params.normalizeKey ? params.normalizeKey(rawKey) : rawKey;
+    if (!key) return;
+    const avg = Number(row.avg_score || 0);
+    const count = Number(row.sample_count || 0);
+    if (!Number.isFinite(avg) || count <= 0) return;
+    const confidenceScale = Math.min(1, count / Math.max(1, params.minSamples));
+    const rawBias = avg * params.weight * confidenceScale;
+    const rounded = Number(rawBias.toFixed(4));
+    if (!Number.isFinite(rounded) || rounded === 0) return;
+    output[key] = Math.max(-params.maxAbs, Math.min(params.maxAbs, rounded));
+  });
+  return output;
+}
+
+export async function loadFeedbackAdjustmentMap(params: {
+  lookbackDays?: number;
+  articleWeight?: number;
+  sourceWeight?: number;
+  typeWeight?: number;
+  articleMinSamples?: number;
+  sourceMinSamples?: number;
+  typeMinSamples?: number;
+  articleMaxAbs?: number;
+  sourceMaxAbs?: number;
+  typeMaxAbs?: number;
+} = {}): Promise<FeedbackAdjustmentMap> {
+  await ensureArticleDbSchema();
+  const lookbackDays = Math.max(1, Math.min(365, Math.trunc(params.lookbackDays ?? 120)));
+  const articleWeight = boundedPositive(Number(params.articleWeight ?? 6), 6, 0, 20);
+  const sourceWeight = boundedPositive(Number(params.sourceWeight ?? 3), 3, 0, 20);
+  const typeWeight = boundedPositive(Number(params.typeWeight ?? 2), 2, 0, 20);
+  const articleMinSamples = Math.max(1, Math.min(1000, Math.trunc(params.articleMinSamples ?? 3)));
+  const sourceMinSamples = Math.max(1, Math.min(1000, Math.trunc(params.sourceMinSamples ?? 6)));
+  const typeMinSamples = Math.max(1, Math.min(1000, Math.trunc(params.typeMinSamples ?? 8)));
+  const articleMaxAbs = boundedPositive(Number(params.articleMaxAbs ?? 10), 10, 0, 30);
+  const sourceMaxAbs = boundedPositive(Number(params.sourceMaxAbs ?? 6), 6, 0, 30);
+  const typeMaxAbs = boundedPositive(Number(params.typeMaxAbs ?? 5), 5, 0, 30);
+
+  const pool = getPgPool();
+
+  const [sampleRow, articleRows, sourceRows, typeRows] = await Promise.all([
+    pool.query<{ sample_count: string | number }>(
+      `
+      SELECT COUNT(*) AS sample_count
+      FROM article_quality_feedback
+      WHERE created_at >= NOW() - make_interval(days => $1::int)
+    `,
+      [lookbackDays],
+    ),
+    pool.query(
+      `
+      SELECT
+        article_id,
+        AVG(feedback_score) AS avg_score,
+        COUNT(*) AS sample_count
+      FROM article_quality_feedback
+      WHERE created_at >= NOW() - make_interval(days => $1::int)
+      GROUP BY article_id
+    `,
+      [lookbackDays],
+    ),
+    pool.query(
+      `
+      SELECT
+        source_id,
+        AVG(feedback_score) AS avg_score,
+        COUNT(*) AS sample_count
+      FROM article_quality_feedback
+      WHERE created_at >= NOW() - make_interval(days => $1::int)
+      GROUP BY source_id
+    `,
+      [lookbackDays],
+    ),
+    pool.query(
+      `
+      SELECT
+        primary_type,
+        AVG(feedback_score) AS avg_score,
+        COUNT(*) AS sample_count
+      FROM article_quality_feedback
+      WHERE created_at >= NOW() - make_interval(days => $1::int)
+      GROUP BY primary_type
+    `,
+      [lookbackDays],
+    ),
+  ]);
+
+  return {
+    lookback_days: lookbackDays,
+    sample_count: Number(sampleRow.rows[0]?.sample_count || 0),
+    article_bias: computeBiasMap(articleRows.rows as Array<Record<string, unknown>>, {
+      keyField: "article_id",
+      weight: articleWeight,
+      minSamples: articleMinSamples,
+      maxAbs: articleMaxAbs,
+    }),
+    source_bias: computeBiasMap(sourceRows.rows as Array<Record<string, unknown>>, {
+      keyField: "source_id",
+      weight: sourceWeight,
+      minSamples: sourceMinSamples,
+      maxAbs: sourceMaxAbs,
+    }),
+    type_bias: computeBiasMap(typeRows.rows as Array<Record<string, unknown>>, {
+      keyField: "primary_type",
+      weight: typeWeight,
+      minSamples: typeMinSamples,
+      maxAbs: typeMaxAbs,
+      normalizeKey: (value) => normalizeTagKey(value),
+    }),
   };
 }
 

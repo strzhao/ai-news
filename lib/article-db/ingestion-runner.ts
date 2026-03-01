@@ -12,6 +12,7 @@ import {
   createIngestionRun,
   failStaleIngestionRuns,
   finishIngestionRun,
+  loadFeedbackAdjustmentMap,
   pruneDailyHighQualityByCurrentScore,
   removeDailyHighQualityByArticleIds,
   replaceDailyAnalyzed,
@@ -69,6 +70,15 @@ function boundedFloat(raw: string, fallback: number, min: number, max: number): 
   return Math.max(min, Math.min(parsed, max));
 }
 
+function normalizeBucketKey(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 async function withTimeout<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
   let timer: NodeJS.Timeout | null = null;
   const timeout = new Promise<never>((_, reject) => {
@@ -123,6 +133,23 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
     12_000,
     1_000,
     30_000,
+  );
+  const feedbackAdjustEnabled = isEnabled("INGESTION_FEEDBACK_ADJUST_ENABLED", "true");
+  const feedbackLookbackDays = boundedInt(String(process.env.FEEDBACK_LOOKBACK_DAYS || "120"), 120, 1, 365);
+  const feedbackArticleWeight = boundedFloat(String(process.env.FEEDBACK_ARTICLE_WEIGHT || "6"), 6, 0, 20);
+  const feedbackSourceWeight = boundedFloat(String(process.env.FEEDBACK_SOURCE_WEIGHT || "3"), 3, 0, 20);
+  const feedbackTypeWeight = boundedFloat(String(process.env.FEEDBACK_TYPE_WEIGHT || "2"), 2, 0, 20);
+  const feedbackArticleMinSamples = boundedInt(String(process.env.FEEDBACK_ARTICLE_MIN_SAMPLES || "3"), 3, 1, 1000);
+  const feedbackSourceMinSamples = boundedInt(String(process.env.FEEDBACK_SOURCE_MIN_SAMPLES || "6"), 6, 1, 1000);
+  const feedbackTypeMinSamples = boundedInt(String(process.env.FEEDBACK_TYPE_MIN_SAMPLES || "8"), 8, 1, 1000);
+  const feedbackArticleMaxAbs = boundedFloat(String(process.env.FEEDBACK_ARTICLE_MAX_ABS || "10"), 10, 0, 30);
+  const feedbackSourceMaxAbs = boundedFloat(String(process.env.FEEDBACK_SOURCE_MAX_ABS || "6"), 6, 0, 30);
+  const feedbackTypeMaxAbs = boundedFloat(String(process.env.FEEDBACK_TYPE_MAX_ABS || "5"), 5, 0, 30);
+  const feedbackMaxPerArticle = boundedFloat(
+    String(process.env.FEEDBACK_MAX_TOTAL_ADJUST_PER_ARTICLE || "12"),
+    12,
+    0,
+    30,
   );
   const evalBudgetCap = Math.max(1, Math.floor(evalStageTimeoutMs / evalPerArticleEstimateMs));
   const maxEvalArticles = Math.max(1, Math.min(maxEvalArticlesConfig, evalBudgetCap));
@@ -238,19 +265,66 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
           promptVersion: evaluator.promptVersion,
         });
 
+        const feedbackAdjustment = feedbackAdjustEnabled
+          ? await loadFeedbackAdjustmentMap({
+              lookbackDays: feedbackLookbackDays,
+              articleWeight: feedbackArticleWeight,
+              sourceWeight: feedbackSourceWeight,
+              typeWeight: feedbackTypeWeight,
+              articleMinSamples: feedbackArticleMinSamples,
+              sourceMinSamples: feedbackSourceMinSamples,
+              typeMinSamples: feedbackTypeMinSamples,
+              articleMaxAbs: feedbackArticleMaxAbs,
+              sourceMaxAbs: feedbackSourceMaxAbs,
+              typeMaxAbs: feedbackTypeMaxAbs,
+            })
+          : {
+              lookback_days: feedbackLookbackDays,
+              sample_count: 0,
+              article_bias: {},
+              source_bias: {},
+              type_bias: {},
+            };
+
         const scoredRows = evaluationPool
           .map((article) => {
             const assessment = assessments[article.id];
             if (!assessment) return null;
             const storedId = inputToStoredId[article.id];
             if (!storedId) return null;
+            const baseQuality = Number(assessment.qualityScore || 0);
+            const typeKey = normalizeBucketKey(String(assessment.primaryType || "other")) || "other";
+            const articleBias = Number(feedbackAdjustment.article_bias[storedId] || 0);
+            const sourceBias = Number(feedbackAdjustment.source_bias[String(article.sourceId || "").trim()] || 0);
+            const typeBias = Number(feedbackAdjustment.type_bias[typeKey] || 0);
+            const totalBiasRaw = articleBias + sourceBias + typeBias;
+            const totalBias = Math.max(-feedbackMaxPerArticle, Math.min(feedbackMaxPerArticle, totalBiasRaw));
+            const adjustedQuality = Math.max(0, Math.min(100, Number((baseQuality + totalBias).toFixed(4))));
             return {
               articleId: storedId,
-              quality: Number(assessment.qualityScore || 0),
+              quality: adjustedQuality,
               confidence: Number(assessment.confidence || 0),
+              baseQuality,
+              feedbackAdjustment: Number(totalBias.toFixed(4)),
+              feedbackArticleBias: Number(articleBias.toFixed(4)),
+              feedbackSourceBias: Number(sourceBias.toFixed(4)),
+              feedbackTypeBias: Number(typeBias.toFixed(4)),
             };
           })
-          .filter((item): item is { articleId: string; quality: number; confidence: number } => Boolean(item))
+          .filter(
+            (
+              item,
+            ): item is {
+              articleId: string;
+              quality: number;
+              confidence: number;
+              baseQuality: number;
+              feedbackAdjustment: number;
+              feedbackArticleBias: number;
+              feedbackSourceBias: number;
+              feedbackTypeBias: number;
+            } => Boolean(item),
+          )
           .sort((left, right) => {
             if (right.quality !== left.quality) return right.quality - left.quality;
             return right.confidence - left.confidence;
@@ -269,6 +343,11 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
             qualityScoreSnapshot: item.quality,
             rankScore: Number((1000000 - index * 1000 + item.quality).toFixed(4)),
           }));
+
+        const adjustedRows = scoredRows.filter((item) => item.feedbackAdjustment !== 0);
+        const feedbackAdjustmentTotal = adjustedRows.reduce((sum, item) => sum + item.feedbackAdjustment, 0);
+        const feedbackAdjustmentPositive = adjustedRows.filter((item) => item.feedbackAdjustment > 0).length;
+        const feedbackAdjustmentNegative = adjustedRows.filter((item) => item.feedbackAdjustment < 0).length;
 
         let demotedCount = 0;
         let prunedByCurrentScore = 0;
@@ -315,6 +394,18 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
           fetch_stage_timeout_ms: fetchStageTimeoutMs,
           eval_stage_timeout_ms: evalStageTimeoutMs,
           run_timeout_ms: runHardTimeoutMs,
+          feedback_adjust_enabled: feedbackAdjustEnabled,
+          feedback_lookback_days: feedbackAdjustment.lookback_days,
+          feedback_sample_count: feedbackAdjustment.sample_count,
+          feedback_article_bias_keys: Object.keys(feedbackAdjustment.article_bias).length,
+          feedback_source_bias_keys: Object.keys(feedbackAdjustment.source_bias).length,
+          feedback_type_bias_keys: Object.keys(feedbackAdjustment.type_bias).length,
+          feedback_adjusted_article_count: adjustedRows.length,
+          feedback_adjustment_total: Number(feedbackAdjustmentTotal.toFixed(4)),
+          feedback_adjustment_avg: adjustedRows.length ? Number((feedbackAdjustmentTotal / adjustedRows.length).toFixed(4)) : 0,
+          feedback_adjustment_positive_count: feedbackAdjustmentPositive,
+          feedback_adjustment_negative_count: feedbackAdjustmentNegative,
+          feedback_adjustment_max_per_article: feedbackMaxPerArticle,
         };
 
         await finishIngestionRun({
