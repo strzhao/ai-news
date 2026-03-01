@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
+const TODAY_PAGE_SIZE = 10;
 
 interface ArchiveArticleSummary {
   article_id: string;
@@ -86,6 +87,7 @@ export default function HomePage(): React.ReactNode {
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
+  const [todayVisibleCount, setTodayVisibleCount] = useState(TODAY_PAGE_SIZE);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -149,8 +151,14 @@ export default function HomePage(): React.ReactNode {
     [groups, todayDate],
   );
 
-  const todayItems = todayGroup?.items || [];
+  const todayItems = useMemo(() => todayGroup?.items || [], [todayGroup]);
+  const visibleTodayItems = useMemo(() => todayItems.slice(0, todayVisibleCount), [todayItems, todayVisibleCount]);
+  const hasMoreTodayItems = todayVisibleCount < todayItems.length;
   const historyGroups = groups.filter((group) => group.date !== todayDate);
+
+  useEffect(() => {
+    setTodayVisibleCount(TODAY_PAGE_SIZE);
+  }, [todayGroup?.date, todayItems.length]);
 
   function markArticleRead(articleId: string): void {
     const normalized = String(articleId || "").trim();
@@ -217,9 +225,6 @@ export default function HomePage(): React.ReactNode {
         <p className="hero-meta">
           {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
         </p>
-        <p className="hero-meta">
-          <a href="/archive-review">进入归档审查页（完整列表 + 好/不好反馈）</a>
-        </p>
       </header>
 
       {error ? <div className="error-banner">{error}</div> : null}
@@ -232,11 +237,23 @@ export default function HomePage(): React.ReactNode {
 
         <div className="editorial-list">
           {todayItems.length ? (
-            todayItems.map((item, index) => renderArticle(item, { lead: index === 0 }))
+            visibleTodayItems.map((item, index) => renderArticle(item, { lead: index === 0 }))
           ) : (
             <p className="empty-note">今日暂无文章。</p>
           )}
         </div>
+        {todayItems.length ? (
+          <div className="load-more-wrap">
+            <button
+              type="button"
+              className="load-more-btn"
+              onClick={() => setTodayVisibleCount((prev) => prev + TODAY_PAGE_SIZE)}
+              disabled={!hasMoreTodayItems}
+            >
+              查看更多
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="content-block content-block-history">
@@ -260,6 +277,12 @@ export default function HomePage(): React.ReactNode {
             <p className="empty-note">暂无历史文章。</p>
           )}
         </div>
+      </section>
+
+      <section className="content-block">
+        <p className="hero-meta">
+          <a href="/archive-review">进入归档审查页（完整列表 + 好/不好反馈）</a>
+        </p>
       </section>
     </main>
   );

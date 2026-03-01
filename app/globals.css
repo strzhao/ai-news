@@ -201,6 +201,35 @@ a {
   color: var(--accent-hover);
 }
 
+.load-more-wrap {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.load-more-btn {
+  height: 36px;
+  min-width: 120px;
+  border-radius: 999px;
+  border: 1px solid #c8cfdb;
+  background: #ffffff;
+  color: #1e2430;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.load-more-btn:hover:not(:disabled) {
+  background: #f4f6fa;
+}
+
+.load-more-btn:disabled {
+  color: #9aa2b1;
+  border-color: #d9dee8;
+  background: #f6f8fb;
+  cursor: not-allowed;
+}
+
 .content-block-history {
   margin-top: 42px;
 }
@@ -214,7 +243,7 @@ a {
 }
 
 .archive-day[open] {
-  background: #fafafd;
+  background: transparent;
 }
 
 .archive-day-summary {
