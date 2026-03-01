@@ -42,17 +42,19 @@ afterEach(() => {
 });
 
 describe("flomo formatter", () => {
-  it("inserts H5 page link before ending tags", () => {
+  it("inserts more-link line with blank lines before ending tags", () => {
     const digest = sampleDigest();
     const content = renderFlomoContent(digest, 20, undefined, "https://ai-news.example.com");
     const lines = content.trim().split("\n");
 
-    const h5LineIndex = lines.findIndex((line) => line.startsWith("H5 页面："));
+    const moreLineIndex = lines.findIndex((line) => line.startsWith("查看更多："));
     const tagLineIndex = lines.findIndex((line) => line.includes("#TagA"));
 
-    expect(h5LineIndex).toBeGreaterThan(-1);
+    expect(moreLineIndex).toBeGreaterThan(-1);
     expect(tagLineIndex).toBeGreaterThan(-1);
-    expect(h5LineIndex).toBeLessThan(tagLineIndex);
+    expect(moreLineIndex).toBeLessThan(tagLineIndex);
+    expect(lines[moreLineIndex - 1]).toBe("");
+    expect(lines[moreLineIndex + 1]).toBe("");
   });
 
   it("resolves home page URL from environment and adds it to payload", () => {
@@ -62,7 +64,7 @@ describe("flomo formatter", () => {
     expect(resolveFlomoHomePageUrl()).toBe("https://ai-news.example.com/");
 
     const payload = buildFlomoPayload(digest);
-    expect(payload.content).toContain("H5 页面：https://ai-news.example.com/");
+    expect(payload.content).toContain("查看更多：https://ai-news.example.com/");
     expect(payload.content).toContain("#TagA #TagB");
   });
 });

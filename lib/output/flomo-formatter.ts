@@ -75,7 +75,9 @@ export function renderFlomoContent(
 
   const normalizedHomePageUrl = normalizeHomePageUrl(homePageUrl);
   if (normalizedHomePageUrl) {
-    lines.push(`H5 页面：${normalizedHomePageUrl}`);
+    lines.push("");
+    lines.push(`查看更多：${normalizedHomePageUrl}`);
+    lines.push("");
   }
 
   if (digest.dailyTags.length) {
