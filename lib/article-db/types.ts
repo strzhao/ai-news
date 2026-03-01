@@ -154,6 +154,7 @@ export interface IngestionRunRow {
   run_date: string;
   status: string;
   started_at: string;
+  heartbeat_at: string;
   finished_at: string;
   fetched_count: number;
   deduped_count: number;

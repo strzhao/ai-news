@@ -145,6 +145,8 @@ export async function fetchArticles(
   sources: SourceConfig[],
   options: {
     timeoutSeconds?: number;
+    totalTimeoutSeconds?: number;
+    concurrency?: number;
     maxPerSource?: number;
     perSourceLimits?: Record<string, number>;
     totalBudget?: number;
@@ -152,66 +154,87 @@ export async function fetchArticles(
 ): Promise<Article[]> {
   const timeoutSeconds = options.timeoutSeconds ?? 20;
   const timeoutMs = Math.max(1_000, Math.trunc(timeoutSeconds * 1_000));
+  const totalTimeoutMs = Math.max(timeoutMs, Math.trunc((options.totalTimeoutSeconds ?? 120) * 1_000));
+  const concurrency = Math.max(1, Math.min(12, Math.trunc(options.concurrency ?? 4)));
   const maxPerSource = options.maxPerSource ?? 25;
   const perSourceLimits = options.perSourceLimits || {};
   const totalBudget = options.totalBudget ?? 0;
 
   const articles: Article[] = [];
+  const deadline = Date.now() + totalTimeoutMs;
+  let cursor = 0;
 
-  for (const source of sources) {
-    if (totalBudget > 0 && articles.length >= totalBudget) {
-      break;
-    }
-
-    try {
-      const feed = await fetchFeedWithTimeout(source.url, timeoutMs);
-      const perSourceCap = Math.trunc(perSourceLimits[source.id] ?? maxPerSource);
-      const entries = (feed.items || []).slice(0, Math.max(0, perSourceCap));
-
-      for (const entry of entries) {
-        if (totalBudget > 0 && articles.length >= totalBudget) {
-          break;
-        }
-        if (source.onlyExternalLinks && !entryHasExternalLink(entry)) {
-          continue;
-        }
-
-        const title = cleanHtmlText(String(entry.title || ""));
-        const url = String(entry.link || "").trim();
-        if (!title || !url) {
-          continue;
-        }
-
-        const summary = cleanHtmlText(String(entry.summary || entry.contentSnippet || ""));
-        const lead = extractLeadParagraph(entry);
-        const contentText = [title, summary, lead].filter(Boolean).join(" ");
-
-        articles.push({
-          id: makeArticleId(source.id, url, title),
-          title,
-          url,
-          sourceId: source.id,
-          sourceName: source.name,
-          publishedAt: parsePublishedAt(entry),
-          summaryRaw: summary,
-          leadParagraph: lead,
-          contentText,
-          infoUrl: selectInfoUrl(entry, url),
-          tags: [],
-          primaryType: "",
-          secondaryTypes: [],
-        });
+  async function worker(): Promise<void> {
+    while (true) {
+      if (Date.now() >= deadline) {
+        return;
       }
-    } catch {
-      // keep running if one source fails
-      continue;
-    }
+      if (totalBudget > 0 && articles.length >= totalBudget) {
+        return;
+      }
 
-    if (timeoutSeconds > 0) {
-      // avoid burst to upstream feeds
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      const index = cursor;
+      cursor += 1;
+      if (index >= sources.length) {
+        return;
+      }
+
+      const source = sources[index];
+      try {
+        const remainingMs = Math.max(1_000, deadline - Date.now());
+        const feed = await fetchFeedWithTimeout(source.url, Math.min(timeoutMs, remainingMs));
+        const perSourceCap = Math.trunc(perSourceLimits[source.id] ?? maxPerSource);
+        const entries = (feed.items || []).slice(0, Math.max(0, perSourceCap));
+
+        for (const entry of entries) {
+          if (Date.now() >= deadline) {
+            return;
+          }
+          if (totalBudget > 0 && articles.length >= totalBudget) {
+            return;
+          }
+          if (source.onlyExternalLinks && !entryHasExternalLink(entry)) {
+            continue;
+          }
+
+          const title = cleanHtmlText(String(entry.title || ""));
+          const url = String(entry.link || "").trim();
+          if (!title || !url) {
+            continue;
+          }
+
+          const summary = cleanHtmlText(String(entry.summary || entry.contentSnippet || ""));
+          const lead = extractLeadParagraph(entry);
+          const contentText = [title, summary, lead].filter(Boolean).join(" ");
+
+          articles.push({
+            id: makeArticleId(source.id, url, title),
+            title,
+            url,
+            sourceId: source.id,
+            sourceName: source.name,
+            publishedAt: parsePublishedAt(entry),
+            summaryRaw: summary,
+            leadParagraph: lead,
+            contentText,
+            infoUrl: selectInfoUrl(entry, url),
+            tags: [],
+            primaryType: "",
+            secondaryTypes: [],
+          });
+        }
+      } catch {
+        // keep running if one source fails
+      }
+
+      if (timeoutSeconds > 0) {
+        // avoid burst to upstream feeds
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
     }
   }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, sources.length)) }, () => worker()));
 
   return articles;
 }

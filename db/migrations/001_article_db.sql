@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS ingestion_runs (
   id TEXT PRIMARY KEY,
   run_date DATE NOT NULL,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   finished_at TIMESTAMPTZ,
   status TEXT NOT NULL,
   fetched_count INTEGER NOT NULL DEFAULT 0,

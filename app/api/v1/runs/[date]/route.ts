@@ -1,5 +1,5 @@
 import { requireArticleDbAuth } from "@/lib/article-db/auth";
-import { getLatestIngestionRunByDate } from "@/lib/article-db/repository";
+import { failStaleIngestionRuns, getLatestIngestionRunByDate } from "@/lib/article-db/repository";
 import { jsonResponse } from "@/lib/infra/route-utils";
 
 export const runtime = "nodejs";
@@ -22,6 +22,15 @@ export async function GET(
   }
 
   try {
+    const staleSeconds = Math.max(
+      120,
+      Math.min(86_400, Number.parseInt(String(process.env.INGESTION_RUN_STALE_SECONDS || "900"), 10) || 900),
+    );
+    await failStaleIngestionRuns({
+      runDate: date,
+      staleSeconds,
+    });
+
     const run = await getLatestIngestionRunByDate(date);
     if (!run) {
       return jsonResponse(404, { ok: false, error: "Not found" }, true);

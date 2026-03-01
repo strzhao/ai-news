@@ -181,6 +181,7 @@ function parseRunRow(row: Record<string, unknown>): IngestionRunRow {
     run_date: toDateString(row.run_date),
     status: String(row.status || ""),
     started_at: toIso(row.started_at),
+    heartbeat_at: toIso(row.heartbeat_at),
     finished_at: toIso(row.finished_at),
     fetched_count: Number(row.fetched_count || 0),
     deduped_count: Number(row.deduped_count || 0),
@@ -327,6 +328,7 @@ export async function ensureArticleDbSchema(): Promise<void> {
         id TEXT PRIMARY KEY,
         run_date DATE NOT NULL,
         started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         finished_at TIMESTAMPTZ,
         status TEXT NOT NULL,
         fetched_count INTEGER NOT NULL DEFAULT 0,
@@ -373,6 +375,7 @@ export async function ensureArticleDbSchema(): Promise<void> {
       );
 
       ALTER TABLE article_analysis ADD COLUMN IF NOT EXISTS tag_groups JSONB NOT NULL DEFAULT '{}'::jsonb;
+      ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
       CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles (published_at DESC);
       CREATE INDEX IF NOT EXISTS idx_analysis_quality_score ON article_analysis (quality_score DESC, analyzed_at DESC);
@@ -769,12 +772,52 @@ export async function createIngestionRun(runDate: string): Promise<string> {
   const pool = getPgPool();
   await pool.query(
     `
-    INSERT INTO ingestion_runs (id, run_date, status, started_at)
-    VALUES ($1, $2::date, 'running', NOW())
+    INSERT INTO ingestion_runs (id, run_date, status, started_at, heartbeat_at)
+    VALUES ($1, $2::date, 'running', NOW(), NOW())
   `,
     [runId, normalizedDate],
   );
   return runId;
+}
+
+export async function touchIngestionRun(runId: string): Promise<void> {
+  await ensureArticleDbSchema();
+  const normalizedRunId = String(runId || "").trim();
+  if (!normalizedRunId) return;
+  const pool = getPgPool();
+  await pool.query(
+    `
+    UPDATE ingestion_runs
+    SET heartbeat_at = NOW()
+    WHERE id = $1
+  `,
+    [normalizedRunId],
+  );
+}
+
+export async function failStaleIngestionRuns(params: { runDate?: string; staleSeconds: number }): Promise<number> {
+  await ensureArticleDbSchema();
+  const staleSeconds = Math.max(60, Math.min(86_400, Math.trunc(params.staleSeconds || 600)));
+  const runDateOrNull = params.runDate ? normalizeDate(params.runDate) : null;
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    UPDATE ingestion_runs
+    SET
+      status = 'failed',
+      finished_at = NOW(),
+      heartbeat_at = NOW(),
+      error_message = CASE
+        WHEN COALESCE(error_message, '') = '' THEN 'Marked failed by stale-run watchdog'
+        ELSE error_message
+      END
+    WHERE status = 'running'
+      AND (heartbeat_at <= NOW() - ($1::int * INTERVAL '1 second') OR started_at <= NOW() - ($1::int * INTERVAL '1 second'))
+      AND ($2::date IS NULL OR run_date = $2::date)
+  `,
+    [staleSeconds, runDateOrNull],
+  );
+  return Number(result.rowCount || 0);
 }
 
 export async function finishIngestionRun(params: {
@@ -795,6 +838,7 @@ export async function finishIngestionRun(params: {
     SET
       status = $2,
       finished_at = NOW(),
+      heartbeat_at = NOW(),
       fetched_count = $3,
       deduped_count = $4,
       analyzed_count = $5,

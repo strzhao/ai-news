@@ -116,10 +116,20 @@ export class ArticleEvaluator {
     this.articleTypes = deduped.length ? deduped : ["other"];
   }
 
-  async evaluateArticles(articles: Article[]): Promise<Record<string, ArticleAssessment>> {
+  async evaluateArticles(
+    articles: Article[],
+    options: {
+      maxWallTimeMs?: number;
+    } = {},
+  ): Promise<Record<string, ArticleAssessment>> {
     const assessments: Record<string, ArticleAssessment> = {};
+    const startedAt = Date.now();
+    const maxWallTimeMs = Math.max(10_000, Number.parseInt(String(options.maxWallTimeMs || 180_000), 10) || 180_000);
 
     for (const article of articles) {
+      if (Date.now() - startedAt >= maxWallTimeMs) {
+        break;
+      }
       const cacheKey = buildArticleCacheKey({
         article,
         modelName: this.client.model,
