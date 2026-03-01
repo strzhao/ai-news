@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
 const TODAY_PAGE_SIZE = 10;
+const LIMIT_PER_DAY_MAX = 200;
 
 interface ArchiveArticleSummary {
   article_id: string;
@@ -26,6 +27,7 @@ interface ArchiveGroup {
 interface ArchiveArticlesResponse {
   ok: boolean;
   groups: ArchiveGroup[];
+  has_more_by_date?: Record<string, boolean>;
   generated_at: string;
   total_articles: number;
 }
@@ -82,18 +84,18 @@ export default function HomePage(): React.ReactNode {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("正在更新");
   const [groups, setGroups] = useState<ArchiveGroup[]>([]);
+  const [hasMoreByDate, setHasMoreByDate] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
-  const [todayVisibleCount, setTodayVisibleCount] = useState(TODAY_PAGE_SIZE);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setDays(Math.max(1, Math.min(180, Number.parseInt(params.get("days") || "30", 10) || 30)));
     setLimitPerDay(
-      Math.max(1, Math.min(50, Number.parseInt(params.get("limit_per_day") || "10", 10) || 10)),
+      Math.max(1, Math.min(LIMIT_PER_DAY_MAX, Number.parseInt(params.get("limit_per_day") || "10", 10) || 10)),
     );
     setArticleLimitPerDay(
       Math.max(0, Math.min(5000, Number.parseInt(params.get("article_limit_per_day") || "0", 10) || 0)),
@@ -121,7 +123,10 @@ export default function HomePage(): React.ReactNode {
 
         if (!cancelled) {
           const nextGroups = Array.isArray(payload.groups) ? payload.groups : [];
+          const nextHasMoreByDate =
+            payload.has_more_by_date && typeof payload.has_more_by_date === "object" ? payload.has_more_by_date : {};
           setGroups(nextGroups);
+          setHasMoreByDate(nextHasMoreByDate);
           const count = Number(payload.total_articles || 0);
           setStatus(`已收录 ${count} 篇`);
         }
@@ -152,13 +157,8 @@ export default function HomePage(): React.ReactNode {
   );
 
   const todayItems = useMemo(() => todayGroup?.items || [], [todayGroup]);
-  const visibleTodayItems = useMemo(() => todayItems.slice(0, todayVisibleCount), [todayItems, todayVisibleCount]);
-  const hasMoreTodayItems = todayVisibleCount < todayItems.length;
+  const hasMoreTodayItems = !loading && Boolean(hasMoreByDate[todayDate]);
   const historyGroups = groups.filter((group) => group.date !== todayDate);
-
-  useEffect(() => {
-    setTodayVisibleCount(TODAY_PAGE_SIZE);
-  }, [todayGroup?.date, todayItems.length]);
 
   function markArticleRead(articleId: string): void {
     const normalized = String(articleId || "").trim();
@@ -237,7 +237,7 @@ export default function HomePage(): React.ReactNode {
 
         <div className="editorial-list">
           {todayItems.length ? (
-            visibleTodayItems.map((item, index) => renderArticle(item, { lead: index === 0 }))
+            todayItems.map((item, index) => renderArticle(item, { lead: index === 0 }))
           ) : (
             <p className="empty-note">今日暂无文章。</p>
           )}
@@ -247,10 +247,10 @@ export default function HomePage(): React.ReactNode {
             <button
               type="button"
               className="load-more-btn"
-              onClick={() => setTodayVisibleCount((prev) => prev + TODAY_PAGE_SIZE)}
-              disabled={!hasMoreTodayItems}
+              onClick={() => setLimitPerDay((prev) => Math.min(LIMIT_PER_DAY_MAX, prev + TODAY_PAGE_SIZE))}
+              disabled={!hasMoreTodayItems || loading}
             >
-              查看更多
+              {loading ? "加载中..." : hasMoreTodayItems ? "查看更多" : "没有更多精选文章"}
             </button>
           </div>
         ) : null}

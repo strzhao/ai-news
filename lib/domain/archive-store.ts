@@ -121,7 +121,7 @@ export async function saveAnalysisArchive(params: {
 
 export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<Record<string, unknown>>> {
   const boundedDays = Math.max(1, Math.min(Math.trunc(days), 180));
-  const boundedLimit = Math.max(1, Math.min(Math.trunc(limitPerDay), 50));
+  const boundedLimit = Math.max(1, Math.min(Math.trunc(limitPerDay), 200));
   const upstash = buildUpstashClientOrNone();
   if (!upstash) {
     return [];

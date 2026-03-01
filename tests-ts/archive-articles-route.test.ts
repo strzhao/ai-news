@@ -48,7 +48,7 @@ describe("archive_articles route", () => {
     expect(Array.isArray(payload.groups)).toBe(true);
     expect(listArchiveArticles).toHaveBeenCalledWith({
       days: 7,
-      limitPerDay: 12,
+      limitPerDay: 13,
       articleLimitPerDay: 30,
       imageProbeLimit: 5,
       qualityTier: "high",
@@ -69,7 +69,7 @@ describe("archive_articles route", () => {
     expect(payload.ok).toBe(true);
     expect(listArchiveArticles).toHaveBeenCalledWith({
       days: 30,
-      limitPerDay: 10,
+      limitPerDay: 11,
       articleLimitPerDay: 0,
       imageProbeLimit: 0,
       qualityTier: "high",
@@ -91,7 +91,7 @@ describe("archive_articles route", () => {
     expect(payload.quality_tier).toBe("general");
     expect(listArchiveArticles).toHaveBeenCalledWith({
       days: 30,
-      limitPerDay: 10,
+      limitPerDay: 11,
       articleLimitPerDay: 0,
       imageProbeLimit: 0,
       qualityTier: "general",

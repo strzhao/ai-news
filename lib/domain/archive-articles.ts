@@ -423,7 +423,7 @@ export async function listArchiveArticles(options: {
   qualityTier?: string;
 } = {}): Promise<ListArchiveArticlesResult> {
   const days = boundedInt(options.days, 1, 180, DEFAULT_DAYS);
-  const limitPerDay = boundedInt(options.limitPerDay, 1, 50, DEFAULT_LIMIT_PER_DAY);
+  const limitPerDay = boundedInt(options.limitPerDay, 1, 200, DEFAULT_LIMIT_PER_DAY);
   const articleLimitPerDay = boundedIntAllowZero(options.articleLimitPerDay, 5000, DEFAULT_ARTICLE_LIMIT_PER_DAY);
   const imageProbeLimit = boundedInt(options.imageProbeLimit, 0, 100, DEFAULT_IMAGE_PROBE_LIMIT);
   const qualityTier = normalizeQualityTier(options.qualityTier || DEFAULT_QUALITY_TIER);

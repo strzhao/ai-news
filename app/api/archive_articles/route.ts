@@ -38,7 +38,7 @@ export async function GET(request: Request): Promise<Response> {
     url.searchParams.get("limit_per_day"),
     Number.parseInt(process.env.ARCHIVE_DEFAULT_LIMIT_PER_DAY || "10", 10) || 10,
     1,
-    50,
+    200,
   );
   const articleLimitPerDay = boundedIntAllowZero(
     url.searchParams.get("article_limit_per_day"),
@@ -54,13 +54,24 @@ export async function GET(request: Request): Promise<Response> {
   const qualityTier = normalizeQualityTier(url.searchParams.get("quality_tier"));
 
   try {
-    const result = await listArchiveArticles({
+    const probeLimitPerDay = Math.min(200, limitPerDay + 1);
+    const rawResult = await listArchiveArticles({
       days,
-      limitPerDay,
+      limitPerDay: probeLimitPerDay,
       articleLimitPerDay,
       imageProbeLimit,
       qualityTier,
     });
+    const hasMoreByDate: Record<string, boolean> = {};
+    const groups = rawResult.groups.map((group) => {
+      const items = Array.isArray(group.items) ? group.items : [];
+      hasMoreByDate[group.date] = items.length > limitPerDay;
+      return {
+        ...group,
+        items: items.slice(0, limitPerDay),
+      };
+    });
+    const totalArticles = groups.reduce((sum, group) => sum + group.items.length, 0);
 
     return jsonResponse(
       200,
@@ -72,8 +83,9 @@ export async function GET(request: Request): Promise<Response> {
         article_limit_per_day: articleLimitPerDay,
         image_probe_limit: imageProbeLimit,
         quality_tier: qualityTier,
-        total_articles: result.totalArticles,
-        groups: result.groups,
+        total_articles: totalArticles,
+        has_more_by_date: hasMoreByDate,
+        groups,
       },
       true,
     );
