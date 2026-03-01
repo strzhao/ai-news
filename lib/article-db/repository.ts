@@ -735,6 +735,24 @@ export async function removeDailyHighQualityByArticleIds(date: string, articleId
   return Number(result.rowCount || 0);
 }
 
+export async function pruneDailyHighQualityByCurrentScore(date: string, minScore: number): Promise<number> {
+  await ensureArticleDbSchema();
+  const normalizedDate = normalizeDate(date);
+  const boundedMinScore = boundedScore(minScore, 62);
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    DELETE FROM daily_high_quality_articles d
+    USING article_analysis aa
+    WHERE d.date = $1::date
+      AND aa.article_id = d.article_id
+      AND aa.quality_score < $2::double precision
+  `,
+    [normalizedDate, boundedMinScore],
+  );
+  return Number(result.rowCount || 0);
+}
+
 export async function replaceDailyAnalyzed(
   date: string,
   rows: Array<{ articleId: string; qualityScoreSnapshot: number; rankScore: number }>,

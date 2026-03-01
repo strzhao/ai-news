@@ -12,6 +12,7 @@ import {
   createIngestionRun,
   failStaleIngestionRuns,
   finishIngestionRun,
+  pruneDailyHighQualityByCurrentScore,
   removeDailyHighQualityByArticleIds,
   replaceDailyAnalyzed,
   replaceDailyHighQuality,
@@ -180,6 +181,10 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
         result.dedupedCount = evaluationPool.length;
 
         if (!evaluationPool.length) {
+          let prunedByCurrentScore = 0;
+          if (mergeDailySnapshot) {
+            prunedByCurrentScore = await pruneDailyHighQualityByCurrentScore(reportDate, qualityThreshold);
+          }
           if (!mergeDailySnapshot) {
             await replaceDailyHighQuality(reportDate, []);
             await replaceDailyAnalyzed(reportDate, []);
@@ -199,6 +204,7 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
             analyzed_count_total: analyzedTotal,
             selected_count_new: 0,
             selected_count_total: selectedTotal,
+            selected_count_pruned_by_current_score: prunedByCurrentScore,
             daily_snapshot_merge_mode: mergeDailySnapshot,
             max_eval_articles: maxEvalArticles,
           };
@@ -265,6 +271,7 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
           }));
 
         let demotedCount = 0;
+        let prunedByCurrentScore = 0;
         if (mergeDailySnapshot) {
           await upsertDailyHighQuality(reportDate, selectedRows);
           await upsertDailyAnalyzed(reportDate, analyzedRows);
@@ -273,6 +280,7 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
             .map((item) => item.articleId)
             .filter((articleId) => !selectedIdSet.has(articleId));
           demotedCount = await removeDailyHighQualityByArticleIds(reportDate, demotedArticleIds);
+          prunedByCurrentScore = await pruneDailyHighQualityByCurrentScore(reportDate, qualityThreshold);
         } else {
           await replaceDailyHighQuality(reportDate, selectedRows);
           await replaceDailyAnalyzed(reportDate, analyzedRows);
@@ -296,6 +304,7 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
           selected_count_new: selectedRows.length,
           selected_count_total: selectedTotal,
           selected_count_demoted: demotedCount,
+          selected_count_pruned_by_current_score: prunedByCurrentScore,
           daily_snapshot_merge_mode: mergeDailySnapshot,
           quality_threshold: qualityThreshold,
           max_eval_articles: maxEvalArticles,
