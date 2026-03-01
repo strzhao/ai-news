@@ -715,6 +715,26 @@ export async function upsertDailyHighQuality(
   });
 }
 
+export async function removeDailyHighQualityByArticleIds(date: string, articleIds: string[]): Promise<number> {
+  await ensureArticleDbSchema();
+  const normalizedDate = normalizeDate(date);
+  const normalizedIds = Array.from(new Set(articleIds.map((id) => String(id || "").trim()).filter(Boolean)));
+  if (!normalizedIds.length) {
+    return 0;
+  }
+
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    DELETE FROM daily_high_quality_articles
+    WHERE date = $1::date
+      AND article_id = ANY($2::text[])
+  `,
+    [normalizedDate, normalizedIds],
+  );
+  return Number(result.rowCount || 0);
+}
+
 export async function replaceDailyAnalyzed(
   date: string,
   rows: Array<{ articleId: string; qualityScoreSnapshot: number; rankScore: number }>,
@@ -915,6 +935,7 @@ export async function listHighQualityByDate(params: {
       FROM daily_high_quality_articles d
       INNER JOIN article_analysis aa ON aa.article_id = d.article_id
       WHERE d.date = $1::date
+        AND aa.quality_score >= $4::double precision
         AND ($2::text IS NULL OR aa.tag_groups ? $2::text)
         AND (
           $3::text IS NULL OR
@@ -933,7 +954,7 @@ export async function listHighQualityByDate(params: {
           END
         )
     `,
-      [date, tagGroupOrNull, tagOrNull],
+      [date, tagGroupOrNull, tagOrNull, qualityThreshold],
     );
 
     const result = await pool.query(
@@ -963,6 +984,7 @@ export async function listHighQualityByDate(params: {
       INNER JOIN sources s ON s.id = a.source_id
       INNER JOIN article_analysis aa ON aa.article_id = a.id
       WHERE d.date = $1::date
+        AND aa.quality_score >= $6::double precision
         AND ($4::text IS NULL OR aa.tag_groups ? $4::text)
         AND (
           $5::text IS NULL OR
@@ -983,7 +1005,7 @@ export async function listHighQualityByDate(params: {
       ORDER BY d.rank_score DESC, d.selected_at DESC
       LIMIT $2 OFFSET $3
     `,
-      [date, limit, offset, tagGroupOrNull, tagOrNull],
+      [date, limit, offset, tagGroupOrNull, tagOrNull, qualityThreshold],
     );
 
     return {
@@ -1142,6 +1164,7 @@ export async function listHighQualityRange(params: {
             INNER JOIN sources s ON s.id = a.source_id
             INNER JOIN article_analysis aa ON aa.article_id = a.id
             WHERE d.date BETWEEN $1::date AND $2::date
+              AND aa.quality_score >= $6::double precision
               AND ($4::text IS NULL OR aa.tag_groups ? $4::text)
               AND (
                 $5::text IS NULL OR
@@ -1165,7 +1188,7 @@ export async function listHighQualityRange(params: {
           WHERE rn <= $3
           ORDER BY date DESC, rank_score DESC, selected_at DESC
         `,
-          [fromDate, toDate, limitPerDay, tagGroupOrNull, tagOrNull],
+          [fromDate, toDate, limitPerDay, tagGroupOrNull, tagOrNull, qualityThreshold],
         )
       : await pool.query(
           `

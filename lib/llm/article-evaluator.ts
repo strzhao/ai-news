@@ -10,6 +10,7 @@ import {
 import { DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
 
 const VALID_WORTH = new Set([WORTH_MUST_READ, WORTH_WORTH_READING, WORTH_SKIP]);
+const ASSESSMENT_SCHEMA_VERSION = "assessment_r2";
 
 function coerceScore(value: unknown): number {
   let score = Number(value);
@@ -54,22 +55,60 @@ function normalizeTagValue(value: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
+function normalizeTypeToken(value: string): string {
+  return normalizeTagValue(value).replace(/-/g, "_");
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+      }
+    } catch {
+      // treat as plain text
+    }
+    if (raw.includes(",")) {
+      return raw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [raw];
+  }
+  return [];
+}
+
 function parseTagGroups(raw: unknown): Record<string, string[]> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+  let payload = raw;
+  if (typeof raw === "string") {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return {};
   }
 
-  const input = raw as Record<string, unknown>;
+  const input = payload as Record<string, unknown>;
   const output: Record<string, string[]> = {};
 
   Object.entries(input).forEach(([groupKey, tags]) => {
     const normalizedGroup = normalizeTagKey(groupKey);
     if (!normalizedGroup) return;
-    if (!Array.isArray(tags)) return;
 
     const normalizedTags = Array.from(
       new Set(
-        tags
+        parseStringArray(tags)
           .map((tag) => normalizeTagValue(String(tag || "")))
           .filter(Boolean),
       ),
@@ -80,6 +119,56 @@ function parseTagGroups(raw: unknown): Record<string, string[]> {
   });
 
   return output;
+}
+
+function buildTypeMap(articleTypes: string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  articleTypes.forEach((rawType) => {
+    const canonical = String(rawType || "").trim();
+    if (!canonical) return;
+    map.set(canonical, canonical);
+    const normalized = normalizeTypeToken(canonical);
+    if (normalized) {
+      map.set(normalized, canonical);
+    }
+  });
+  return map;
+}
+
+function resolveType(typeMap: Map<string, string>, raw: unknown): string | null {
+  const direct = String(raw || "").trim();
+  if (!direct) return null;
+  if (typeMap.has(direct)) {
+    return typeMap.get(direct) || null;
+  }
+  const normalized = normalizeTypeToken(direct);
+  return normalized ? typeMap.get(normalized) || null : null;
+}
+
+function calibrateConfidence(params: {
+  rawConfidence: unknown;
+  qualityScore: number;
+  executionClarity: number;
+  primaryType: string;
+  secondaryTypes: string[];
+  evidenceSignals: string[];
+  actionHint: string;
+  tagGroups: Record<string, string[]>;
+}): number {
+  let confidence = coerceConfidence(params.rawConfidence);
+  const hasEvidence = params.evidenceSignals.some((item) => item && item !== "none");
+  const hasActionHint = Boolean(params.actionHint.trim());
+  const hasSpecificType = params.primaryType !== "other" || params.secondaryTypes.some((item) => item !== "other");
+  const hasTagGroups = Object.keys(params.tagGroups).length > 0;
+
+  if (!hasEvidence) confidence = Math.min(confidence, 0.75);
+  if (!hasActionHint && params.executionClarity < 40) confidence = Math.min(confidence, 0.8);
+  if (!hasSpecificType) confidence = Math.min(confidence, 0.85);
+  if (!hasTagGroups) confidence = Math.min(confidence, 0.85);
+  if (params.qualityScore <= 20) confidence = Math.min(confidence, 0.8);
+  if (params.qualityScore <= 10) confidence = Math.min(confidence, 0.7);
+
+  return Math.max(0, Math.min(1, confidence));
 }
 
 export function computeArticleContentHash(article: Article): string {
@@ -108,7 +197,8 @@ export class ArticleEvaluator {
     public readonly cache: ArticleEvalCache,
     private readonly articleTypes: string[] = ["other"],
   ) {
-    this.promptVersion = String(process.env.AI_EVAL_PROMPT_VERSION || "v7");
+    const basePromptVersion = String(process.env.AI_EVAL_PROMPT_VERSION || "v7").trim() || "v7";
+    this.promptVersion = `${basePromptVersion}:${ASSESSMENT_SCHEMA_VERSION}`;
     this.maxRetries = Math.max(0, Number.parseInt(String(process.env.AI_EVAL_MAX_RETRIES || "2"), 10) || 0);
 
     const deduped = Array.from(new Set(this.articleTypes.map((item) => String(item || "").trim()).filter(Boolean)));
@@ -185,21 +275,32 @@ export class ArticleEvaluator {
       "你是互联网公司 AI 主编，目标是判断文章是否对公司、团队和个人在 AI 发展上有实质帮助。" +
       "核心是阅读 ROI：未来 7-30 天是否能带来更好的决策、执行或能力升级。" +
       "优先考虑：company_impact、team_impact、personal_impact、execution_clarity、novelty。" +
-      "允许高杠杆认知框架和决策方法进入必读，不要求必须有代码；但空泛观点和营销宣传要降级。" +
-      "你必须只输出 JSON，不能输出解释文本。" +
+      "允许高杠杆认知框架和决策方法进入必读，不要求必须有代码；但空泛观点和营销宣传要降级，非 AI 内容应显著降分。" +
+      "你必须只输出 JSON 对象，不能输出解释文本、Markdown 或代码块。" +
       "输出字段：article_id, worth, reading_roi_score, company_impact, team_impact, personal_impact, " +
       "execution_clarity, novelty, clarity_score, one_line_summary, reason_short, action_hint, " +
       "best_for_roles, evidence_signals, confidence, primary_type, secondary_types, tag_groups。" +
       "worth 仅允许：必读/可读/跳过。" +
       `primary_type 必须从以下枚举中选择：${allowedTypes}。` +
-      "tag_groups 为对象，键是标签组（如 topic/tech/role/scenario/impact），值为标签数组（snake_case）。";
+      "若 primary_type 为 other，请在 secondary_types 给出 1-2 个更具体类型（若存在）。" +
+      "tag_groups 为对象，键建议使用 topic/tech/role/scenario/impact/evidence/type/source，值是 snake_case 标签数组；至少输出一个非空标签组。" +
+      "confidence 含义是“你对评分与类型判断的证据充分度”，只有证据非常充分且结论稳定时才可 >0.9。";
 
     const payload = {
       article_id: article.id,
+      source_id: article.sourceId,
+      source_name: article.sourceName,
+      url: article.url,
+      info_url: article.infoUrl,
       title: article.title,
       published_at: article.publishedAt ? article.publishedAt.toISOString() : "",
       summary: article.summaryRaw,
       lead_paragraph: article.leadParagraph,
+      content_text: article.contentText,
+      type_hints: {
+        primary_type_hint: article.primaryType || "",
+        secondary_type_hints: article.secondaryTypes || [],
+      },
     };
 
     const result = await this.client.chatJson(
@@ -234,21 +335,27 @@ export class ArticleEvaluator {
     if (!oneLineSummary) throw new DeepSeekError("DeepSeek returned empty one_line_summary");
     if (!reasonShort) throw new DeepSeekError("DeepSeek returned empty reason_short");
 
-    const rolesRaw = Array.isArray(row.best_for_roles) ? row.best_for_roles : [];
-    const bestForRoles = Array.from(new Set(rolesRaw.map((item) => String(item || "").trim()).filter(Boolean)));
+    const bestForRoles = Array.from(new Set(parseStringArray(row.best_for_roles).map((item) => item.trim()).filter(Boolean)));
 
-    const allowedTypes = new Set(this.articleTypes);
-    const rawPrimaryType = String(row.primary_type || "").trim() || "other";
-    const primaryType = allowedTypes.has(rawPrimaryType) ? rawPrimaryType : "other";
-    const rawSecondaryTypes = Array.isArray(row.secondary_types) ? row.secondary_types : [];
-
-    const secondaryTypes = Array.from(
+    const typeMap = buildTypeMap(this.articleTypes);
+    let primaryType = resolveType(typeMap, row.primary_type) || "other";
+    const rawSecondaryTypes = parseStringArray(row.secondary_types);
+    let secondaryTypes = Array.from(
       new Set(
         rawSecondaryTypes
-          .map((item) => String(item || "").trim())
-          .filter((value) => value && value !== primaryType && allowedTypes.has(value)),
+          .map((item) => resolveType(typeMap, item))
+          .filter((item): item is string => Boolean(item && item !== primaryType)),
       ),
-    ).slice(0, 2);
+    );
+
+    if (primaryType === "other") {
+      const promotable = secondaryTypes.find((item) => item !== "other");
+      if (promotable) {
+        primaryType = promotable;
+        secondaryTypes = secondaryTypes.filter((item) => item !== promotable);
+      }
+    }
+    secondaryTypes = secondaryTypes.slice(0, 2);
 
     const qualityScore = pickScore(row, ["reading_roi_score", "quality_score"], 0);
     const companyImpact = pickScore(row, ["company_impact"], qualityScore);
@@ -280,6 +387,18 @@ export class ArticleEvaluator {
       inferredTagGroups.evidence = evidenceTags.slice(0, 12);
     }
 
+    const actionHint = String(row.action_hint || "").trim();
+    const confidence = calibrateConfidence({
+      rawConfidence: row.confidence,
+      qualityScore,
+      executionClarity,
+      primaryType,
+      secondaryTypes,
+      evidenceSignals,
+      actionHint,
+      tagGroups: inferredTagGroups,
+    });
+
     return {
       articleId: String(row.article_id || articleId).trim() || articleId,
       worth: worth as ArticleAssessment["worth"],
@@ -294,10 +413,10 @@ export class ArticleEvaluator {
       teamImpact,
       personalImpact,
       executionClarity,
-      actionHint: String(row.action_hint || "").trim(),
+      actionHint,
       bestForRoles,
       evidenceSignals,
-      confidence: coerceConfidence(row.confidence),
+      confidence,
       primaryType,
       secondaryTypes,
       tagGroups: inferredTagGroups,

@@ -11,12 +11,141 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function normalizeTagKey(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeTagValue(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+      }
+    } catch {
+      // ignore JSON parse errors
+    }
+    if (raw.includes(",")) {
+      return raw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [raw];
+  }
+  return [];
+}
+
+function parseTagGroups(value: unknown): Record<string, string[]> {
+  let payload = value;
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return {};
+    }
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {};
+  }
+
+  const result: Record<string, string[]> = {};
+  Object.entries(payload as Record<string, unknown>).forEach(([groupKey, tags]) => {
+    const normalizedGroup = normalizeTagKey(groupKey);
+    if (!normalizedGroup) return;
+    const normalizedTags = Array.from(new Set(parseStringArray(tags).map((item) => normalizeTagValue(item)).filter(Boolean)));
+    if (!normalizedTags.length) return;
+    result[normalizedGroup] = normalizedTags.slice(0, 24);
+  });
+  return result;
+}
+
+function coerceConfidence(value: unknown): number {
+  const confidence = Number(value);
+  if (!Number.isFinite(confidence)) return 0;
+  return Math.max(0, Math.min(1, confidence));
+}
+
 function parseAssessment(cacheKey: string, payloadText: string): ArticleAssessment {
   const payload = JSON.parse(payloadText || "{}");
+  const bestForRoles = Array.from(new Set(parseStringArray(payload.best_for_roles)));
+  const evidenceSignals = Array.from(new Set(parseStringArray(payload.evidence_signals)));
+  if (!evidenceSignals.length) {
+    evidenceSignals.push("none");
+  }
+
+  const primaryType = normalizeTagValue(String(payload.primary_type || "other")) || "other";
+  const secondaryTypes = Array.from(
+    new Set(
+      parseStringArray(payload.secondary_types)
+        .map((item) => normalizeTagValue(item))
+        .filter((item) => item && item !== primaryType),
+    ),
+  );
+
+  const tagGroups = parseTagGroups(payload.tag_groups);
+  if (!tagGroups.type) {
+    const typeTags = Array.from(new Set([primaryType, ...secondaryTypes].map((item) => normalizeTagValue(item)).filter(Boolean)));
+    if (typeTags.length) {
+      tagGroups.type = typeTags.slice(0, 12);
+    }
+  }
+  if (!tagGroups.role && bestForRoles.length) {
+    const roleTags = Array.from(new Set(bestForRoles.map((item) => normalizeTagValue(item)).filter(Boolean)));
+    if (roleTags.length) {
+      tagGroups.role = roleTags.slice(0, 12);
+    }
+  }
+  if (!tagGroups.evidence) {
+    const evidenceTags = Array.from(
+      new Set(
+        evidenceSignals
+          .filter((item) => item !== "none")
+          .map((item) => normalizeTagValue(item))
+          .filter(Boolean),
+      ),
+    );
+    if (evidenceTags.length) {
+      tagGroups.evidence = evidenceTags.slice(0, 12);
+    }
+  }
+
+  const qualityScore = Number(payload.quality_score || 0);
+  let confidence = coerceConfidence(payload.confidence);
+  if (!Object.keys(tagGroups).length) {
+    confidence = Math.min(confidence, 0.85);
+  }
+  if (qualityScore <= 20) {
+    confidence = Math.min(confidence, 0.8);
+  }
+  if (!evidenceSignals.some((item) => item && item !== "none")) {
+    confidence = Math.min(confidence, 0.75);
+  }
+
   return {
     articleId: String(payload.article_id || ""),
     worth: String(payload.worth || "跳过") as ArticleAssessment["worth"],
-    qualityScore: Number(payload.quality_score || 0),
+    qualityScore,
     practicalityScore: Number(payload.practicality_score || 0),
     actionabilityScore: Number(payload.actionability_score || 0),
     noveltyScore: Number(payload.novelty_score || 0),
@@ -28,24 +157,12 @@ function parseAssessment(cacheKey: string, payloadText: string): ArticleAssessme
     personalImpact: Number(payload.personal_impact || 0),
     executionClarity: Number(payload.execution_clarity || 0),
     actionHint: String(payload.action_hint || ""),
-    bestForRoles: Array.isArray(payload.best_for_roles) ? payload.best_for_roles.map((item: unknown) => String(item)) : [],
-    evidenceSignals: Array.isArray(payload.evidence_signals)
-      ? payload.evidence_signals.map((item: unknown) => String(item))
-      : [],
-    confidence: Number(payload.confidence || 0),
-    primaryType: String(payload.primary_type || "other"),
-    secondaryTypes: Array.isArray(payload.secondary_types)
-      ? payload.secondary_types.map((item: unknown) => String(item)).filter(Boolean)
-      : [],
-    tagGroups:
-      payload.tag_groups && typeof payload.tag_groups === "object" && !Array.isArray(payload.tag_groups)
-        ? Object.fromEntries(
-            Object.entries(payload.tag_groups as Record<string, unknown>).map(([groupKey, tags]) => [
-              String(groupKey || "").trim(),
-              Array.isArray(tags) ? tags.map((item: unknown) => String(item || "").trim()).filter(Boolean) : [],
-            ]),
-          )
-        : {},
+    bestForRoles,
+    evidenceSignals,
+    confidence,
+    primaryType,
+    secondaryTypes,
+    tagGroups,
     cacheKey,
   };
 }

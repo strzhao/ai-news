@@ -12,6 +12,7 @@ import {
   createIngestionRun,
   failStaleIngestionRuns,
   finishIngestionRun,
+  removeDailyHighQualityByArticleIds,
   replaceDailyAnalyzed,
   replaceDailyHighQuality,
   touchIngestionRun,
@@ -267,9 +268,15 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
             rankScore: Number((1000000 - index * 1000 + item.quality).toFixed(4)),
           }));
 
+        let demotedCount = 0;
         if (mergeDailySnapshot) {
           await upsertDailyHighQuality(reportDate, selectedRows);
           await upsertDailyAnalyzed(reportDate, analyzedRows);
+          const selectedIdSet = new Set(selectedRows.map((item) => item.articleId));
+          const demotedArticleIds = analyzedRows
+            .map((item) => item.articleId)
+            .filter((articleId) => !selectedIdSet.has(articleId));
+          demotedCount = await removeDailyHighQualityByArticleIds(reportDate, demotedArticleIds);
         } else {
           await replaceDailyHighQuality(reportDate, selectedRows);
           await replaceDailyAnalyzed(reportDate, analyzedRows);
@@ -292,6 +299,7 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
           analyzed_count_total: analyzedTotal,
           selected_count_new: selectedRows.length,
           selected_count_total: selectedTotal,
+          selected_count_demoted: demotedCount,
           daily_snapshot_merge_mode: mergeDailySnapshot,
           quality_threshold: qualityThreshold,
           max_eval_articles: maxEvalArticles,
