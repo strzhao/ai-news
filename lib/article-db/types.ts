@@ -38,6 +38,16 @@ export interface HighQualityArticleDetail {
   summary_raw: string;
   lead_paragraph: string;
   content_text: string;
+  content_full_text: string;
+  content_full_html: string;
+  content_full_source_url: string;
+  content_full_updated_at: string;
+  content_full_error: string;
+  related_images: Array<{
+    image_index: number;
+    image_url: string;
+    alt_text: string;
+  }>;
   source_host: string;
   quality_score: number;
   confidence: number;
@@ -58,6 +68,22 @@ export interface HighQualityArticleDetail {
   tag_groups: Record<string, string[]>;
   analyzed_at: string;
   selected_dates: string[];
+}
+
+export interface PersistedArticleImage {
+  image_index: number;
+  image_url: string;
+  alt_text: string;
+}
+
+export interface ArticleContentSnapshot {
+  article_id: string;
+  source_url: string;
+  resolved_url: string;
+  content_text: string;
+  content_html: string;
+  content_error?: string;
+  images: PersistedArticleImage[];
 }
 
 export interface ArchivedArticleRow {

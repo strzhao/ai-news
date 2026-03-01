@@ -4,6 +4,7 @@ import { Article, ArticleAssessment, SourceConfig } from "@/lib/domain/models";
 import { normalizeUrl } from "@/lib/domain/tracker-common";
 import { getPgPool } from "@/lib/infra/postgres";
 import {
+  ArticleContentSnapshot,
   ArchivedArticleRow,
   ArticleQualityFeedback,
   ArticleQualityFeedbackEvent,
@@ -12,6 +13,7 @@ import {
   HighQualityArticleGroup,
   HighQualityArticleItem,
   IngestionRunRow,
+  PersistedArticleImage,
   QualityTier,
   TagDefinition,
   TagGovernanceFeedbackEvent,
@@ -23,6 +25,9 @@ import {
 } from "@/lib/article-db/types";
 
 let schemaReady: Promise<void> | null = null;
+const MAX_FULL_CONTENT_TEXT_CHARS = 500_000;
+const MAX_FULL_CONTENT_HTML_CHARS = 2_000_000;
+const MAX_RELATED_IMAGES_PER_ARTICLE = 120;
 
 function toHost(rawUrl: string): string {
   try {
@@ -165,6 +170,35 @@ function parseTagGroups(value: unknown): Record<string, string[]> {
     output[normalizedGroup] = Array.from(new Set(normalizedTags)).slice(0, 24);
   });
   return output;
+}
+
+function parsePersistedArticleImages(value: unknown): PersistedArticleImage[] {
+  let parsed: unknown = value;
+  if (!parsed) return [];
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed
+    .map((item, index) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const imageUrl = String(row.image_url || "").trim();
+      if (!imageUrl) return null;
+      return {
+        image_index: Math.max(0, Number.parseInt(String(row.image_index ?? index), 10) || 0),
+        image_url: imageUrl,
+        alt_text: String(row.alt_text || "").trim(),
+      };
+    })
+    .filter((item): item is PersistedArticleImage => Boolean(item))
+    .sort((left, right) => left.image_index - right.image_index);
 }
 
 function parseRunRow(row: Record<string, unknown>): IngestionRunRow {
@@ -344,9 +378,24 @@ export async function ensureArticleDbSchema(): Promise<void> {
         summary_raw TEXT NOT NULL DEFAULT '',
         lead_paragraph TEXT NOT NULL DEFAULT '',
         content_text TEXT NOT NULL DEFAULT '',
+        content_full_text TEXT NOT NULL DEFAULT '',
+        content_full_html TEXT NOT NULL DEFAULT '',
+        content_full_source_url TEXT NOT NULL DEFAULT '',
+        content_full_updated_at TIMESTAMPTZ,
+        content_full_error TEXT NOT NULL DEFAULT '',
         source_host TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS article_related_images (
+        article_id TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+        image_index INTEGER NOT NULL,
+        image_url TEXT NOT NULL,
+        alt_text TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (article_id, image_index)
       );
 
       CREATE TABLE IF NOT EXISTS article_analysis (
@@ -476,13 +525,22 @@ export async function ensureArticleDbSchema(): Promise<void> {
 
       ALTER TABLE article_analysis ADD COLUMN IF NOT EXISTS tag_groups JSONB NOT NULL DEFAULT '{}'::jsonb;
       ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_full_text TEXT NOT NULL DEFAULT '';
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_full_html TEXT NOT NULL DEFAULT '';
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_full_source_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_full_updated_at TIMESTAMPTZ;
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_full_error TEXT NOT NULL DEFAULT '';
 
       CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles (published_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_articles_content_full_updated_at ON articles (content_full_updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_analysis_quality_score ON article_analysis (quality_score DESC, analyzed_at DESC);
       CREATE INDEX IF NOT EXISTS idx_analysis_tag_groups_gin ON article_analysis USING GIN (tag_groups jsonb_path_ops);
       CREATE INDEX IF NOT EXISTS idx_daily_high_quality_date ON daily_high_quality_articles (date DESC, rank_score DESC);
       CREATE INDEX IF NOT EXISTS idx_daily_analyzed_date ON daily_analyzed_articles (date DESC, rank_score DESC);
       CREATE INDEX IF NOT EXISTS idx_ingestion_runs_date ON ingestion_runs (run_date DESC, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_article_related_images_article ON article_related_images (article_id, image_index);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_article_related_images_article_url
+        ON article_related_images (article_id, image_url);
       CREATE INDEX IF NOT EXISTS idx_tag_registry_group_key ON tag_registry (group_key, is_active, updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tag_governance_runs_started_at ON tag_governance_runs (started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tag_governance_feedback_created_at ON tag_governance_feedback (created_at DESC);
@@ -621,6 +679,136 @@ export async function upsertArticles(articles: Article[]): Promise<Record<string
   });
 
   return idMap;
+}
+
+export async function listArticleContentTargets(
+  articleIds: string[],
+): Promise<Array<{ articleId: string; sourceUrl: string }>> {
+  await ensureArticleDbSchema();
+  const normalizedIds = Array.from(new Set(articleIds.map((id) => String(id || "").trim()).filter(Boolean)));
+  if (!normalizedIds.length) return [];
+
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    SELECT
+      id AS article_id,
+      info_url,
+      original_url,
+      canonical_url
+    FROM articles
+    WHERE id = ANY($1::text[])
+  `,
+    [normalizedIds],
+  );
+
+  return result.rows
+    .map((raw) => {
+      const row = raw as Record<string, unknown>;
+      const articleId = String(row.article_id || "").trim();
+      if (!articleId) return null;
+      const sourceUrl =
+        String(row.info_url || "").trim() || String(row.original_url || "").trim() || String(row.canonical_url || "").trim();
+      if (!sourceUrl) return null;
+      return {
+        articleId,
+        sourceUrl,
+      };
+    })
+    .filter((item): item is { articleId: string; sourceUrl: string } => Boolean(item));
+}
+
+export async function upsertArticleContentSnapshots(snapshots: ArticleContentSnapshot[]): Promise<void> {
+  if (!snapshots.length) return;
+  await ensureArticleDbSchema();
+
+  const deduped = new Map<string, ArticleContentSnapshot>();
+  snapshots.forEach((snapshot) => {
+    const articleId = String(snapshot.article_id || "").trim();
+    if (!articleId) return;
+    deduped.set(articleId, snapshot);
+  });
+
+  if (!deduped.size) return;
+
+  await withTx(async (client) => {
+    for (const [articleId, snapshot] of deduped.entries()) {
+      const fullTextRaw = String(snapshot.content_text || "").trim();
+      const fullHtmlRaw = String(snapshot.content_html || "").trim();
+      const sourceUrl = String(snapshot.resolved_url || snapshot.source_url || "").trim();
+      const contentError = String(snapshot.content_error || "").trim();
+
+      const fullText =
+        fullTextRaw.length > MAX_FULL_CONTENT_TEXT_CHARS
+          ? `${fullTextRaw.slice(0, MAX_FULL_CONTENT_TEXT_CHARS).trimEnd()}…`
+          : fullTextRaw;
+      const fullHtml =
+        fullHtmlRaw.length > MAX_FULL_CONTENT_HTML_CHARS
+          ? `${fullHtmlRaw.slice(0, MAX_FULL_CONTENT_HTML_CHARS).trimEnd()}…`
+          : fullHtmlRaw;
+
+      const updated = await client.query(
+        `
+        UPDATE articles
+        SET
+          content_full_text = $2,
+          content_full_html = $3,
+          content_full_source_url = $4,
+          content_full_updated_at = NOW(),
+          content_full_error = $5,
+          updated_at = NOW()
+        WHERE id = $1
+      `,
+        [articleId, fullText, fullHtml, sourceUrl, contentError],
+      );
+      if (Number(updated.rowCount || 0) <= 0) {
+        continue;
+      }
+
+      await client.query(`DELETE FROM article_related_images WHERE article_id = $1`, [articleId]);
+
+      const imageRows = new Map<string, PersistedArticleImage>();
+      (snapshot.images || []).forEach((image, index) => {
+        const imageUrl = String(image.image_url || "").trim();
+        if (!imageUrl) return;
+        if (imageRows.has(imageUrl)) return;
+        imageRows.set(imageUrl, {
+          image_index: Math.max(0, Number.parseInt(String(image.image_index ?? index), 10) || 0),
+          image_url: imageUrl,
+          alt_text: String(image.alt_text || "").trim(),
+        });
+      });
+
+      const sortedImages = Array.from(imageRows.values())
+        .sort((left, right) => left.image_index - right.image_index)
+        .slice(0, MAX_RELATED_IMAGES_PER_ARTICLE)
+        .map((image, index) => ({
+          ...image,
+          image_index: index,
+        }));
+
+      for (const image of sortedImages) {
+        await client.query(
+          `
+          INSERT INTO article_related_images (
+            article_id,
+            image_index,
+            image_url,
+            alt_text,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, NOW())
+          ON CONFLICT (article_id, image_index)
+          DO UPDATE SET
+            image_url = EXCLUDED.image_url,
+            alt_text = EXCLUDED.alt_text,
+            updated_at = NOW()
+        `,
+          [articleId, image.image_index, image.image_url, image.alt_text],
+        );
+      }
+    }
+  });
 }
 
 export async function upsertArticleAnalyses(params: {
@@ -1012,7 +1200,7 @@ function rowToHighQualityItem(row: Record<string, unknown>, qualityTier: Quality
     title: String(row.title || ""),
     url: String(row.info_url || row.original_url || ""),
     summary: String(row.one_line_summary || row.lead_paragraph || row.summary_raw || "").trim(),
-    image_url: "",
+    image_url: String(row.image_url || ""),
     source_host: String(row.source_host || ""),
     source_id: String(row.source_id || ""),
     source_name: String(row.source_name || ""),
@@ -1102,11 +1290,19 @@ export async function listHighQualityByDate(params: {
         aa.one_line_summary,
         aa.primary_type,
         aa.secondary_types,
-        aa.tag_groups
+        aa.tag_groups,
+        COALESCE(img.image_url, '') AS image_url
       FROM daily_high_quality_articles d
       INNER JOIN articles a ON a.id = d.article_id
       INNER JOIN sources s ON s.id = a.source_id
       INNER JOIN article_analysis aa ON aa.article_id = a.id
+      LEFT JOIN LATERAL (
+        SELECT image_url
+        FROM article_related_images
+        WHERE article_id = a.id
+        ORDER BY image_index ASC
+        LIMIT 1
+      ) img ON TRUE
       WHERE d.date = $1::date
         AND aa.quality_score >= $6::double precision
         AND ($4::text IS NULL OR aa.tag_groups ? $4::text)
@@ -1190,11 +1386,19 @@ export async function listHighQualityByDate(params: {
       aa.one_line_summary,
       aa.primary_type,
       aa.secondary_types,
-      aa.tag_groups
+      aa.tag_groups,
+      COALESCE(img.image_url, '') AS image_url
     FROM daily_analyzed_articles d
     INNER JOIN articles a ON a.id = d.article_id
     INNER JOIN sources s ON s.id = a.source_id
     INNER JOIN article_analysis aa ON aa.article_id = a.id
+    LEFT JOIN LATERAL (
+      SELECT image_url
+      FROM article_related_images
+      WHERE article_id = a.id
+      ORDER BY image_index ASC
+      LIMIT 1
+    ) img ON TRUE
     WHERE d.date = $1::date
       AND (
         $4::text = 'all'
@@ -1282,11 +1486,19 @@ export async function listHighQualityRange(params: {
               aa.primary_type,
               aa.secondary_types,
               aa.tag_groups,
+              COALESCE(img.image_url, '') AS image_url,
               ROW_NUMBER() OVER (PARTITION BY d.date ORDER BY d.rank_score DESC, d.selected_at DESC) AS rn
             FROM daily_high_quality_articles d
             INNER JOIN articles a ON a.id = d.article_id
             INNER JOIN sources s ON s.id = a.source_id
             INNER JOIN article_analysis aa ON aa.article_id = a.id
+            LEFT JOIN LATERAL (
+              SELECT image_url
+              FROM article_related_images
+              WHERE article_id = a.id
+              ORDER BY image_index ASC
+              LIMIT 1
+            ) img ON TRUE
             WHERE d.date BETWEEN $1::date AND $2::date
               AND aa.quality_score >= $6::double precision
               AND ($4::text IS NULL OR aa.tag_groups ? $4::text)
@@ -1337,11 +1549,19 @@ export async function listHighQualityRange(params: {
               aa.primary_type,
               aa.secondary_types,
               aa.tag_groups,
+              COALESCE(img.image_url, '') AS image_url,
               ROW_NUMBER() OVER (PARTITION BY d.date ORDER BY d.rank_score DESC, d.analyzed_at DESC) AS rn
             FROM daily_analyzed_articles d
             INNER JOIN articles a ON a.id = d.article_id
             INNER JOIN sources s ON s.id = a.source_id
             INNER JOIN article_analysis aa ON aa.article_id = a.id
+            LEFT JOIN LATERAL (
+              SELECT image_url
+              FROM article_related_images
+              WHERE article_id = a.id
+              ORDER BY image_index ASC
+              LIMIT 1
+            ) img ON TRUE
             WHERE d.date BETWEEN $1::date AND $2::date
               AND (
                 $6::text = 'all'
@@ -1797,6 +2017,11 @@ export async function getHighQualityArticleDetail(articleId: string): Promise<Hi
       a.summary_raw,
       a.lead_paragraph,
       a.content_text,
+      a.content_full_text,
+      a.content_full_html,
+      a.content_full_source_url,
+      a.content_full_updated_at,
+      a.content_full_error,
       a.source_host,
       aa.quality_score,
       aa.confidence,
@@ -1815,10 +2040,23 @@ export async function getHighQualityArticleDetail(articleId: string): Promise<Hi
       aa.primary_type,
       aa.secondary_types,
       aa.tag_groups,
-      aa.analyzed_at
+      aa.analyzed_at,
+      COALESCE(img.related_images, '[]'::json) AS related_images
     FROM articles a
     INNER JOIN sources s ON s.id = a.source_id
     INNER JOIN article_analysis aa ON aa.article_id = a.id
+    LEFT JOIN LATERAL (
+      SELECT json_agg(
+        json_build_object(
+          'image_index', ari.image_index,
+          'image_url', ari.image_url,
+          'alt_text', ari.alt_text
+        )
+        ORDER BY ari.image_index ASC
+      ) AS related_images
+      FROM article_related_images ari
+      WHERE ari.article_id = a.id
+    ) img ON TRUE
     WHERE a.id = $1
     LIMIT 1
   `,
@@ -1852,6 +2090,12 @@ export async function getHighQualityArticleDetail(articleId: string): Promise<Hi
     summary_raw: String(row.summary_raw || ""),
     lead_paragraph: String(row.lead_paragraph || ""),
     content_text: String(row.content_text || ""),
+    content_full_text: String(row.content_full_text || ""),
+    content_full_html: String(row.content_full_html || ""),
+    content_full_source_url: String(row.content_full_source_url || ""),
+    content_full_updated_at: toIso(row.content_full_updated_at),
+    content_full_error: String(row.content_full_error || ""),
+    related_images: parsePersistedArticleImages(row.related_images),
     source_host: String(row.source_host || ""),
     quality_score: Number(row.quality_score || 0),
     confidence: Number(row.confidence || 0),

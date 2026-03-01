@@ -23,9 +23,24 @@ CREATE TABLE IF NOT EXISTS articles (
   summary_raw TEXT NOT NULL DEFAULT '',
   lead_paragraph TEXT NOT NULL DEFAULT '',
   content_text TEXT NOT NULL DEFAULT '',
+  content_full_text TEXT NOT NULL DEFAULT '',
+  content_full_html TEXT NOT NULL DEFAULT '',
+  content_full_source_url TEXT NOT NULL DEFAULT '',
+  content_full_updated_at TIMESTAMPTZ,
+  content_full_error TEXT NOT NULL DEFAULT '',
   source_host TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS article_related_images (
+  article_id TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  image_index INTEGER NOT NULL,
+  image_url TEXT NOT NULL,
+  alt_text TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (article_id, image_index)
 );
 
 CREATE TABLE IF NOT EXISTS article_analysis (
@@ -121,10 +136,13 @@ CREATE TABLE IF NOT EXISTS tag_governance_feedback (
 );
 
 CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles (published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_articles_content_full_updated_at ON articles (content_full_updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_analysis_quality_score ON article_analysis (quality_score DESC, analyzed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_daily_high_quality_date ON daily_high_quality_articles (date DESC, rank_score DESC);
 CREATE INDEX IF NOT EXISTS idx_daily_analyzed_date ON daily_analyzed_articles (date DESC, rank_score DESC);
 CREATE INDEX IF NOT EXISTS idx_ingestion_runs_date ON ingestion_runs (run_date DESC, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_article_related_images_article ON article_related_images (article_id, image_index);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_article_related_images_article_url ON article_related_images (article_id, image_url);
 CREATE INDEX IF NOT EXISTS idx_tag_governance_runs_started_at ON tag_governance_runs (started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tag_governance_feedback_created_at ON tag_governance_feedback (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tag_governance_feedback_objective ON tag_governance_feedback (objective_id, event_type, created_at DESC);

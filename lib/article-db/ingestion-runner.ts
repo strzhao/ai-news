@@ -1,5 +1,6 @@
 import { loadArticleTypes, loadSources } from "@/lib/config-loader";
 import { Article, DedupeStats } from "@/lib/domain/models";
+import { fetchArticleContent } from "@/lib/fetch/article-content-fetcher";
 import { fetchArticles } from "@/lib/fetch/rss-fetcher";
 import { DeepSeekClient } from "@/lib/llm/deepseek-client";
 import { ArticleEvaluator } from "@/lib/llm/article-evaluator";
@@ -12,6 +13,7 @@ import {
   createIngestionRun,
   failStaleIngestionRuns,
   finishIngestionRun,
+  listArticleContentTargets,
   loadFeedbackAdjustmentMap,
   pruneDailyHighQualityByCurrentScore,
   removeDailyHighQualityByArticleIds,
@@ -19,6 +21,7 @@ import {
   replaceDailyHighQuality,
   touchIngestionRun,
   upsertArticleAnalyses,
+  upsertArticleContentSnapshots,
   upsertArticles,
   upsertDailyAnalyzed,
   upsertDailyHighQuality,
@@ -93,6 +96,103 @@ async function withTimeout<T>(label: string, timeoutMs: number, task: Promise<T>
   }
 }
 
+interface HighQualityContentCrawlStats {
+  attempted: number;
+  fetched: number;
+  failed: number;
+  persisted: number;
+}
+
+async function crawlAndPersistHighQualityContent(params: {
+  articleIds: string[];
+  limit: number;
+  concurrency: number;
+  timeoutMs: number;
+  maxHtmlBytes: number;
+  maxTextChars: number;
+  maxImages: number;
+}): Promise<HighQualityContentCrawlStats> {
+  const stats: HighQualityContentCrawlStats = {
+    attempted: 0,
+    fetched: 0,
+    failed: 0,
+    persisted: 0,
+  };
+  if (!params.articleIds.length) {
+    return stats;
+  }
+
+  const targets = await listArticleContentTargets(params.articleIds);
+  const queue = params.limit > 0 ? targets.slice(0, params.limit) : targets;
+  if (!queue.length) {
+    return stats;
+  }
+
+  const snapshots: Array<{
+    article_id: string;
+    source_url: string;
+    resolved_url: string;
+    content_text: string;
+    content_html: string;
+    content_error: string;
+    images: Array<{ image_index: number; image_url: string; alt_text: string }>;
+  }> = [];
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(queue.length, params.concurrency));
+
+  async function runWorker(): Promise<void> {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= queue.length) return;
+      const target = queue[index];
+      stats.attempted += 1;
+
+      try {
+        const content = await fetchArticleContent(target.sourceUrl, {
+          timeoutMs: params.timeoutMs,
+          maxHtmlBytes: params.maxHtmlBytes,
+          maxTextChars: params.maxTextChars,
+          maxImages: params.maxImages,
+        });
+
+        snapshots.push({
+          article_id: target.articleId,
+          source_url: target.sourceUrl,
+          resolved_url: content.resolvedUrl,
+          content_text: content.text,
+          content_html: content.html,
+          content_error: "",
+          images: content.images.map((image, imageIndex) => ({
+            image_index: imageIndex,
+            image_url: image.url,
+            alt_text: image.alt,
+          })),
+        });
+        stats.fetched += 1;
+      } catch (error) {
+        snapshots.push({
+          article_id: target.articleId,
+          source_url: target.sourceUrl,
+          resolved_url: target.sourceUrl,
+          content_text: "",
+          content_html: "",
+          content_error: error instanceof Error ? error.message : String(error),
+          images: [],
+        });
+        stats.failed += 1;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  if (snapshots.length) {
+    await upsertArticleContentSnapshots(snapshots);
+    stats.persisted = snapshots.length;
+  }
+  return stats;
+}
+
 export interface RunIngestionOptions {
   date?: string;
   tz?: string;
@@ -150,6 +250,38 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
     12,
     0,
     30,
+  );
+  const crawlHighQualityContentEnabled = isEnabled("HQ_CONTENT_CRAWL_ENABLED", "true");
+  const crawlHighQualityContentLimit = boundedInt(String(process.env.HQ_CONTENT_CRAWL_LIMIT || "20"), 20, 0, 200);
+  const crawlHighQualityContentConcurrency = boundedInt(
+    String(process.env.HQ_CONTENT_CRAWL_CONCURRENCY || "3"),
+    3,
+    1,
+    8,
+  );
+  const crawlHighQualityContentTimeoutMs = boundedInt(
+    String(process.env.HQ_CONTENT_CRAWL_TIMEOUT_MS || "8000"),
+    8_000,
+    500,
+    30_000,
+  );
+  const crawlHighQualityContentMaxHtmlBytes = boundedInt(
+    String(process.env.HQ_CONTENT_CRAWL_MAX_HTML_BYTES || "1500000"),
+    1_500_000,
+    8_192,
+    4_000_000,
+  );
+  const crawlHighQualityContentMaxTextChars = boundedInt(
+    String(process.env.HQ_CONTENT_CRAWL_MAX_TEXT_CHARS || "120000"),
+    120_000,
+    1_000,
+    800_000,
+  );
+  const crawlHighQualityContentMaxImages = boundedInt(
+    String(process.env.HQ_CONTENT_CRAWL_MAX_IMAGES || "24"),
+    24,
+    1,
+    200,
   );
   const evalBudgetCap = Math.max(1, Math.floor(evalStageTimeoutMs / evalPerArticleEstimateMs));
   const maxEvalArticles = Math.max(1, Math.min(maxEvalArticlesConfig, evalBudgetCap));
@@ -234,6 +366,12 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
             selected_count_pruned_by_current_score: prunedByCurrentScore,
             daily_snapshot_merge_mode: mergeDailySnapshot,
             max_eval_articles: maxEvalArticles,
+            hq_content_crawl_enabled: crawlHighQualityContentEnabled,
+            hq_content_crawl_limit: crawlHighQualityContentLimit,
+            hq_content_crawl_attempted: 0,
+            hq_content_crawl_fetched: 0,
+            hq_content_crawl_failed: 0,
+            hq_content_crawl_persisted: 0,
           };
 
           await finishIngestionRun({
@@ -344,6 +482,24 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
             rankScore: Number((1000000 - index * 1000 + item.quality).toFixed(4)),
           }));
 
+        const contentCrawlStats =
+          crawlHighQualityContentEnabled && selectedRows.length
+            ? await crawlAndPersistHighQualityContent({
+                articleIds: selectedRows.map((item) => item.articleId),
+                limit: crawlHighQualityContentLimit,
+                concurrency: crawlHighQualityContentConcurrency,
+                timeoutMs: crawlHighQualityContentTimeoutMs,
+                maxHtmlBytes: crawlHighQualityContentMaxHtmlBytes,
+                maxTextChars: crawlHighQualityContentMaxTextChars,
+                maxImages: crawlHighQualityContentMaxImages,
+              })
+            : {
+                attempted: 0,
+                fetched: 0,
+                failed: 0,
+                persisted: 0,
+              };
+
         const adjustedRows = scoredRows.filter((item) => item.feedbackAdjustment !== 0);
         const feedbackAdjustmentTotal = adjustedRows.reduce((sum, item) => sum + item.feedbackAdjustment, 0);
         const feedbackAdjustmentPositive = adjustedRows.filter((item) => item.feedbackAdjustment > 0).length;
@@ -406,6 +562,17 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
           feedback_adjustment_positive_count: feedbackAdjustmentPositive,
           feedback_adjustment_negative_count: feedbackAdjustmentNegative,
           feedback_adjustment_max_per_article: feedbackMaxPerArticle,
+          hq_content_crawl_enabled: crawlHighQualityContentEnabled,
+          hq_content_crawl_limit: crawlHighQualityContentLimit,
+          hq_content_crawl_concurrency: crawlHighQualityContentConcurrency,
+          hq_content_crawl_timeout_ms: crawlHighQualityContentTimeoutMs,
+          hq_content_crawl_max_html_bytes: crawlHighQualityContentMaxHtmlBytes,
+          hq_content_crawl_max_text_chars: crawlHighQualityContentMaxTextChars,
+          hq_content_crawl_max_images: crawlHighQualityContentMaxImages,
+          hq_content_crawl_attempted: contentCrawlStats.attempted,
+          hq_content_crawl_fetched: contentCrawlStats.fetched,
+          hq_content_crawl_failed: contentCrawlStats.failed,
+          hq_content_crawl_persisted: contentCrawlStats.persisted,
         };
 
         await finishIngestionRun({
