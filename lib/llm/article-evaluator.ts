@@ -35,6 +35,53 @@ function pickScore(row: Record<string, unknown>, keys: string[], fallback = 0): 
   return fallback;
 }
 
+function normalizeTagKey(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeTagValue(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function parseTagGroups(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+
+  const input = raw as Record<string, unknown>;
+  const output: Record<string, string[]> = {};
+
+  Object.entries(input).forEach(([groupKey, tags]) => {
+    const normalizedGroup = normalizeTagKey(groupKey);
+    if (!normalizedGroup) return;
+    if (!Array.isArray(tags)) return;
+
+    const normalizedTags = Array.from(
+      new Set(
+        tags
+          .map((tag) => normalizeTagValue(String(tag || "")))
+          .filter(Boolean),
+      ),
+    ).slice(0, 24);
+
+    if (!normalizedTags.length) return;
+    output[normalizedGroup] = normalizedTags;
+  });
+
+  return output;
+}
+
 export function computeArticleContentHash(article: Article): string {
   const base = `${article.title.trim()}|${article.summaryRaw.trim()}|${article.leadParagraph.trim()}`;
   return crypto.createHash("sha256").update(base).digest("hex");
@@ -132,9 +179,10 @@ export class ArticleEvaluator {
       "你必须只输出 JSON，不能输出解释文本。" +
       "输出字段：article_id, worth, reading_roi_score, company_impact, team_impact, personal_impact, " +
       "execution_clarity, novelty, clarity_score, one_line_summary, reason_short, action_hint, " +
-      "best_for_roles, evidence_signals, confidence, primary_type, secondary_types。" +
+      "best_for_roles, evidence_signals, confidence, primary_type, secondary_types, tag_groups。" +
       "worth 仅允许：必读/可读/跳过。" +
-      `primary_type 必须从以下枚举中选择：${allowedTypes}。`;
+      `primary_type 必须从以下枚举中选择：${allowedTypes}。` +
+      "tag_groups 为对象，键是标签组（如 topic/tech/role/scenario/impact），值为标签数组（snake_case）。";
 
     const payload = {
       article_id: article.id,
@@ -199,6 +247,28 @@ export class ArticleEvaluator {
     const executionClarity = pickScore(row, ["execution_clarity", "actionability_score"], qualityScore);
     const novelty = pickScore(row, ["novelty", "novelty_score"], 0);
     const clarity = pickScore(row, ["clarity_score"], 0);
+    const parsedTagGroups = parseTagGroups(row.tag_groups);
+
+    const inferredTagGroups: Record<string, string[]> = { ...parsedTagGroups };
+    const typeTags = Array.from(new Set([primaryType, ...secondaryTypes].filter(Boolean).map((item) => normalizeTagValue(item))));
+    if (typeTags.length && !inferredTagGroups.type) {
+      inferredTagGroups.type = typeTags;
+    }
+    const roleTags = Array.from(new Set(bestForRoles.map((item) => normalizeTagValue(item)).filter(Boolean)));
+    if (roleTags.length && !inferredTagGroups.role) {
+      inferredTagGroups.role = roleTags.slice(0, 12);
+    }
+    const evidenceTags = Array.from(
+      new Set(
+        evidenceSignals
+          .filter((item) => item !== "none")
+          .map((item) => normalizeTagValue(item))
+          .filter(Boolean),
+      ),
+    );
+    if (evidenceTags.length && !inferredTagGroups.evidence) {
+      inferredTagGroups.evidence = evidenceTags.slice(0, 12);
+    }
 
     return {
       articleId: String(row.article_id || articleId).trim() || articleId,
@@ -220,6 +290,7 @@ export class ArticleEvaluator {
       confidence: coerceConfidence(row.confidence),
       primaryType,
       secondaryTypes,
+      tagGroups: inferredTagGroups,
       cacheKey: "",
     };
   }

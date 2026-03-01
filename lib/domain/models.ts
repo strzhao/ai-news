@@ -55,6 +55,7 @@ export interface ArticleAssessment {
   confidence: number;
   primaryType: string;
   secondaryTypes: string[];
+  tagGroups: Record<string, string[]>;
   cacheKey: string;
 }
 

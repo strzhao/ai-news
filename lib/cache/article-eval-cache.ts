@@ -37,6 +37,15 @@ function parseAssessment(cacheKey: string, payloadText: string): ArticleAssessme
     secondaryTypes: Array.isArray(payload.secondary_types)
       ? payload.secondary_types.map((item: unknown) => String(item)).filter(Boolean)
       : [],
+    tagGroups:
+      payload.tag_groups && typeof payload.tag_groups === "object" && !Array.isArray(payload.tag_groups)
+        ? Object.fromEntries(
+            Object.entries(payload.tag_groups as Record<string, unknown>).map(([groupKey, tags]) => [
+              String(groupKey || "").trim(),
+              Array.isArray(tags) ? tags.map((item: unknown) => String(item || "").trim()).filter(Boolean) : [],
+            ]),
+          )
+        : {},
     cacheKey,
   };
 }
@@ -100,6 +109,7 @@ export class ArticleEvalCache {
       confidence: params.assessment.confidence,
       primary_type: params.assessment.primaryType,
       secondary_types: params.assessment.secondaryTypes,
+      tag_groups: params.assessment.tagGroups,
     };
 
     this.memory.set(params.cacheKey, {

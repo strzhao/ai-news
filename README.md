@@ -2,6 +2,22 @@
 
 每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（重点文章 + 一句话总结 + 日报技术标签），并可同步到 flomo。当前主实现为 Next.js App Router + Route Handlers。
 
+## Architecture (2026 Upgrade)
+
+- 生产层（Article DB）：
+  - `GET /api/v1/ingestion/run`：抓取 + AI 分析 + Postgres 归档（建议部署在 `sin1`）
+  - `GET /api/v1/migration/import-legacy`：将旧 Upstash 归档导入 Postgres（一次性迁移用）
+  - `GET /api/v1/articles/high-quality`
+  - `GET /api/v1/articles/high-quality/range`
+  - `GET /api/v1/articles/:article_id`
+  - `GET /api/v1/runs/:date`
+  - `GET /api/v1/tags/groups`
+  - `PUT /api/v1/tags/groups/:group_key/:tag_key`
+  - `DELETE /api/v1/tags/groups/:group_key/:tag_key`
+- 消费层（AI-news）：
+  - `GET /api/archive_articles` 对前端保持兼容，内部优先消费 `ARTICLE_DB_BASE_URL`
+- 旧入口 `GET /api/cron_digest` 已废弃，返回 `410`。
+
 ## Quick Start
 
 ```bash
@@ -10,9 +26,27 @@ npm run dev
 ```
 
 本地访问：`http://localhost:3000`  
-手动触发日报：`GET /api/cron_digest`（支持原有参数与鉴权方式）
+手动触发入库：`GET /api/v1/ingestion/run`（支持 `Authorization: Bearer $CRON_SECRET` 或 `?token=`）
 
 ## Environment Variables
+
+### Article DB (Postgres + Internal API)
+
+- `DATABASE_URL` (required for `/api/v1/*` article-db endpoints)
+- `ARTICLE_DB_API_TOKEN` (recommended；设置后 `/api/v1/*` 要求 `Authorization: Bearer <token>`)
+- `QUALITY_SCORE_THRESHOLD` (default: `62`，仅按综合分决定是否进入高质量归档)
+- `INGESTION_DAILY_MERGE_MODE` (default: `true`，同一天重跑时合并快照并按 `(date, article_id)` 去重；设为 `false` 时恢复覆盖模式)
+- `ARTICLE_DB_MAX_PER_SOURCE` (default: `25`)
+- `PG_POOL_MAX` (default: `10`)
+- `PG_IDLE_TIMEOUT_MS` (default: `30000`)
+- `PG_STATEMENT_TIMEOUT_MS` (default: `20000`)
+- `PG_CONNECT_TIMEOUT_MS` (default: `10000`)
+- `PG_SSL_DISABLE` (`1` 表示禁用 SSL)
+
+### AI-news Consumer
+
+- `ARTICLE_DB_BASE_URL` (optional；配置后 `/api/archive_articles` 将优先从 article-db 拉取)
+- `ARTICLE_DB_API_TOKEN` (optional；消费端调用 article-db 时的 Bearer Token)
 
 ### DeepSeek
 
@@ -97,13 +131,15 @@ npm run build
 npm run start
 
 # manual trigger
-curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron_digest"
+curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/ingestion/run"
+# import legacy archive (optional)
+curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/migration/import-legacy?days=30&limit_per_day=10&article_limit_per_day=1000&overwrite=0"
 ```
 
 ## Vercel Cron Deployment
 
 - Cron 配置在 `vercel.json`：`0 23 * * *` (UTC) = `07:00 Asia/Shanghai`
-- 生产环境会定时调用 `GET /api/cron_digest`
+- 生产环境会定时调用 `GET /api/v1/ingestion/run`
 - 内置 tracker 接口：
   - `GET /api/healthz`
   - `GET /api/r`
@@ -116,9 +152,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron_dig
 - 首页：
   - `GET /`（H5 页面，主体优先展示“今日文档”，页面末尾展示历史归档）
 - 建议在 Vercel 项目中设置 `CRON_SECRET`，平台会自动在 cron 请求里注入 `Authorization: Bearer <CRON_SECRET>`
-- `GET /api/cron_digest` 默认将运行时写目录设为：
-  - `AI_EVAL_CACHE_DB=/tmp/ai-news/article_eval.sqlite3`
-  - `DIGEST_OUTPUT_DIR=/tmp/reports`
+- 新服务建议部署在新加坡区域（`sin1`），并将 Postgres 主库放在新加坡。
 
 部署命令：
 
@@ -130,11 +164,10 @@ npx vercel deploy --prod
 手动触发（用于验收）：
 
 ```bash
-curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest"
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/v1/ingestion/run"
 # 如果调用链路会剥离 Authorization，可改用：
-curl "https://<your-domain>/api/cron_digest?token=$CRON_SECRET"
-# 临时忽略“最多出现 2 次”阈值（仅本次运行）：
-curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest?ignore_repeat_limit=1"
-# 临时开启“分析报告归档入库”（默认关闭）：
-curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron_digest?archive_analysis=1"
+curl "https://<your-domain>/api/v1/ingestion/run?token=$CRON_SECRET"
+
+# 导入旧归档（默认追加 upsert，不覆盖；overwrite=1 表示按天覆盖）
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/v1/migration/import-legacy?days=30&limit_per_day=10&article_limit_per_day=1000&overwrite=0&quality_score=62"
 ```

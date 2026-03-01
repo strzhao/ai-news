@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { getArchiveMarkdownMap, listArchives } from "@/lib/domain/archive-store";
 import { normalizeUrl } from "@/lib/domain/tracker-common";
 import { resolveFirstImageUrl } from "@/lib/domain/article-image";
+import { articleDbClientEnabled, fetchHighQualityRange } from "@/lib/integrations/article-db-client";
 
 const MULTISPACE_RE = /\s+/g;
 const HEADING_RE = /^###\s+\d+\.\s*(.+)$/;
@@ -14,6 +15,7 @@ const DEFAULT_DAYS = 30;
 const DEFAULT_LIMIT_PER_DAY = 10;
 const DEFAULT_ARTICLE_LIMIT_PER_DAY = 0;
 const DEFAULT_IMAGE_PROBE_LIMIT = 0;
+const DEFAULT_QUALITY_TIER = "high";
 
 export interface ArchiveArticleSummary {
   article_id: string;
@@ -68,6 +70,13 @@ function boundedIntAllowZero(value: number | undefined, max: number, fallback: n
   if (!Number.isFinite(normalized)) return fallback;
   if (normalized <= 0) return 0;
   return Math.max(1, Math.min(max, normalized));
+}
+
+function normalizeQualityTier(value: string | undefined): "high" | "general" | "all" {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["general", "normal", "common", "non_high"].includes(raw)) return "general";
+  if (["all", "any"].includes(raw)) return "all";
+  return "high";
 }
 
 function normalizeText(value: string, maxLen = 280): string {
@@ -411,11 +420,77 @@ export async function listArchiveArticles(options: {
   limitPerDay?: number;
   articleLimitPerDay?: number;
   imageProbeLimit?: number;
+  qualityTier?: string;
 } = {}): Promise<ListArchiveArticlesResult> {
   const days = boundedInt(options.days, 1, 180, DEFAULT_DAYS);
   const limitPerDay = boundedInt(options.limitPerDay, 1, 50, DEFAULT_LIMIT_PER_DAY);
   const articleLimitPerDay = boundedIntAllowZero(options.articleLimitPerDay, 5000, DEFAULT_ARTICLE_LIMIT_PER_DAY);
   const imageProbeLimit = boundedInt(options.imageProbeLimit, 0, 100, DEFAULT_IMAGE_PROBE_LIMIT);
+  const qualityTier = normalizeQualityTier(options.qualityTier || DEFAULT_QUALITY_TIER);
+
+  if (articleDbClientEnabled()) {
+    const timezoneName = String(process.env.DIGEST_TIMEZONE || "Asia/Shanghai").trim() || "Asia/Shanghai";
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezoneName,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+
+    const [{ value: toYear }, , { value: toMonth }, , { value: toDay }] = formatter.formatToParts(now);
+    const toDate = `${toYear}-${toMonth}-${toDay}`;
+
+    const fromDateObj = new Date(now.getTime() - Math.max(0, days - 1) * 86_400_000);
+    const [{ value: fromYear }, , { value: fromMonth }, , { value: fromDay }] = formatter.formatToParts(fromDateObj);
+    const fromDate = `${fromYear}-${fromMonth}-${fromDay}`;
+
+    const remote = await fetchHighQualityRange({
+      fromDate: fromDate <= toDate ? fromDate : toDate,
+      toDate: fromDate <= toDate ? toDate : fromDate,
+      limitPerDay: articleLimitPerDay > 0 ? Math.min(limitPerDay, articleLimitPerDay) : limitPerDay,
+      qualityTier,
+    });
+
+    const groups = remote.groups
+      .slice(0, days)
+      .map((group) => ({
+        date: group.date,
+        items: group.items.map((item) => ({
+          article_id: item.article_id,
+          title: item.title,
+          url: item.url,
+          summary: item.summary,
+          image_url: item.image_url || "",
+          source_host: item.source_host,
+          date: item.date || group.date,
+          digest_id: item.digest_id || `article_db_${group.date}`,
+          generated_at: item.generated_at,
+        })),
+      }))
+      .map((group) => ({
+        ...group,
+        items: articleLimitPerDay > 0 ? group.items.slice(0, articleLimitPerDay) : group.items,
+      }));
+
+    if (imageProbeLimit > 0) {
+      const imageProbeConcurrency = boundedInt(
+        Number.parseInt(String(process.env.ARTICLE_IMAGE_PROBE_CONCURRENCY || "4"), 10),
+        1,
+        8,
+        4,
+      );
+      await enrichFirstImages(groups, {
+        imageProbeLimit,
+        concurrency: imageProbeConcurrency,
+      });
+    }
+
+    return {
+      groups,
+      totalArticles: groups.reduce((sum, group) => sum + group.items.length, 0),
+    };
+  }
 
   const archiveGroups = await listArchives(days, limitPerDay);
   if (!archiveGroups.length) {

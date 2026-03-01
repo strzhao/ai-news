@@ -2,7 +2,7 @@ import { listArchiveArticles } from "@/lib/domain/archive-articles";
 import { jsonResponse } from "@/lib/infra/route-utils";
 
 export const runtime = "nodejs";
-export const preferredRegion = ["hkg1", "sin1"];
+export const preferredRegion = ["sin1"];
 
 function boundedInt(raw: string | null, fallback: number, min: number, max: number): number {
   const parsed = Number.parseInt(String(raw || fallback), 10);
@@ -21,6 +21,13 @@ function boundedIntAllowZero(raw: string | null, fallback: number, max: number):
     return 0;
   }
   return Math.max(1, Math.min(parsed, max));
+}
+
+function normalizeQualityTier(raw: string | null): "high" | "general" | "all" {
+  const value = String(raw || "").trim().toLowerCase();
+  if (["general", "normal", "common", "non_high"].includes(value)) return "general";
+  if (["all", "any"].includes(value)) return "all";
+  return "high";
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -44,6 +51,7 @@ export async function GET(request: Request): Promise<Response> {
     0,
     100,
   );
+  const qualityTier = normalizeQualityTier(url.searchParams.get("quality_tier"));
 
   try {
     const result = await listArchiveArticles({
@@ -51,6 +59,7 @@ export async function GET(request: Request): Promise<Response> {
       limitPerDay,
       articleLimitPerDay,
       imageProbeLimit,
+      qualityTier,
     });
 
     return jsonResponse(
@@ -62,6 +71,7 @@ export async function GET(request: Request): Promise<Response> {
         limit_per_day: limitPerDay,
         article_limit_per_day: articleLimitPerDay,
         image_probe_limit: imageProbeLimit,
+        quality_tier: qualityTier,
         total_articles: result.totalArticles,
         groups: result.groups,
       },

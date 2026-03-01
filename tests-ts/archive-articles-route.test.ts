@@ -51,6 +51,7 @@ describe("archive_articles route", () => {
       limitPerDay: 12,
       articleLimitPerDay: 30,
       imageProbeLimit: 5,
+      qualityTier: "high",
     });
   });
 
@@ -71,6 +72,29 @@ describe("archive_articles route", () => {
       limitPerDay: 10,
       articleLimitPerDay: 0,
       imageProbeLimit: 0,
+      qualityTier: "high",
+    });
+  });
+
+  it("passes quality_tier through to archive query", async () => {
+    vi.mocked(listArchiveArticles).mockResolvedValue({
+      totalArticles: 0,
+      groups: [],
+    });
+
+    const request = new Request("https://example.com/api/archive_articles?quality_tier=general");
+    const response = await GET(request);
+    const payload = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.quality_tier).toBe("general");
+    expect(listArchiveArticles).toHaveBeenCalledWith({
+      days: 30,
+      limitPerDay: 10,
+      articleLimitPerDay: 0,
+      imageProbeLimit: 0,
+      qualityTier: "general",
     });
   });
 
