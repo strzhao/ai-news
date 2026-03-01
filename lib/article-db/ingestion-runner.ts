@@ -118,8 +118,8 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
   const evalStageTimeoutMs = boundedInt(String(process.env.INGESTION_EVAL_STAGE_TIMEOUT_MS || "150000"), 150_000, 10_000, 260_000);
   const runHardTimeoutMs = boundedInt(String(process.env.INGESTION_RUN_TIMEOUT_MS || "270000"), 270_000, 30_000, 295_000);
   const evalPerArticleEstimateMs = boundedInt(
-    String(process.env.INGESTION_EVAL_ESTIMATE_PER_ARTICLE_MS || "9000"),
-    9_000,
+    String(process.env.INGESTION_EVAL_ESTIMATE_PER_ARTICLE_MS || "12000"),
+    12_000,
     1_000,
     30_000,
   );
@@ -219,13 +219,9 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
         const articleTypes = loadArticleTypes(process.env.ARTICLE_TYPES_CONFIG || undefined);
         const evaluator = new ArticleEvaluator(client, new ArticleEvalCache(), articleTypes);
 
-        const assessments = await withTimeout(
-          "ai_evaluation_stage",
-          evalStageTimeoutMs,
-          evaluator.evaluateArticles(evaluationPool, {
-            maxWallTimeMs: evalStageTimeoutMs,
-          }),
-        );
+        const assessments = await evaluator.evaluateArticles(evaluationPool, {
+          maxWallTimeMs: evalStageTimeoutMs,
+        });
         result.evaluatedCount = Object.keys(assessments).length;
 
         const inputToStoredId = await upsertArticles(evaluationPool);
