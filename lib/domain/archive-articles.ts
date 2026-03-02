@@ -291,17 +291,17 @@ export function aggregateArchiveArticlesFromDigests(
   const orderedDigests = [...digests].sort((left, right) => {
     const leftTs = generatedAtMs(left.generated_at);
     const rightTs = generatedAtMs(right.generated_at);
-    if (rightTs !== leftTs) {
-      return rightTs - leftTs;
+    if (leftTs !== rightTs) {
+      return leftTs - rightTs;
     }
 
     const leftDate = normalizeDateScore(left.date);
     const rightDate = normalizeDateScore(right.date);
-    if (rightDate !== leftDate) {
-      return rightDate - leftDate;
+    if (leftDate !== rightDate) {
+      return leftDate - rightDate;
     }
 
-    return String(right.digest_id || "").localeCompare(String(left.digest_id || ""));
+    return String(left.digest_id || "").localeCompare(String(right.digest_id || ""));
   });
 
   const seen = new Set<string>();

@@ -537,6 +537,8 @@ export async function ensureArticleDbSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_analysis_tag_groups_gin ON article_analysis USING GIN (tag_groups jsonb_path_ops);
       CREATE INDEX IF NOT EXISTS idx_daily_high_quality_date ON daily_high_quality_articles (date DESC, rank_score DESC);
       CREATE INDEX IF NOT EXISTS idx_daily_analyzed_date ON daily_analyzed_articles (date DESC, rank_score DESC);
+      CREATE INDEX IF NOT EXISTS idx_daily_high_quality_article_date ON daily_high_quality_articles (article_id, date);
+      CREATE INDEX IF NOT EXISTS idx_daily_analyzed_article_date ON daily_analyzed_articles (article_id, date);
       CREATE INDEX IF NOT EXISTS idx_ingestion_runs_date ON ingestion_runs (run_date DESC, started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_article_related_images_article ON article_related_images (article_id, image_index);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_article_related_images_article_url
@@ -1216,6 +1218,79 @@ function rowToHighQualityItem(row: Record<string, unknown>, qualityTier: Quality
   };
 }
 
+export function buildFirstSeenUniqueHighQualityGroups(params: {
+  rows: Array<Record<string, unknown>>;
+  firstSeenByArticleId: Map<string, string>;
+  limitPerDay: number;
+  qualityTier: QualityTier;
+  qualityThreshold: number;
+}): { groups: HighQualityArticleGroup[]; totalArticles: number } {
+  const limitPerDay = Math.max(1, Math.min(Math.trunc(params.limitPerDay), 200));
+  const byDate = new Map<
+    string,
+    Array<{ row: Record<string, unknown>; rankScore: number; generatedAtMs: number; articleId: string }>
+  >();
+
+  for (const raw of params.rows) {
+    const row = raw as Record<string, unknown>;
+    const articleId = String(row.article_id || "").trim();
+    const date = toDateString(row.date);
+    if (!articleId || !date) {
+      continue;
+    }
+
+    const firstSeenDate = params.firstSeenByArticleId.get(articleId);
+    if (!firstSeenDate || firstSeenDate !== date) {
+      continue;
+    }
+
+    const generatedAtMs = new Date(String(row.selected_at || row.analyzed_at || "")).getTime();
+    const bucket = byDate.get(date) || [];
+    bucket.push({
+      row,
+      rankScore: Number(row.rank_score || 0),
+      generatedAtMs: Number.isNaN(generatedAtMs) ? 0 : generatedAtMs,
+      articleId,
+    });
+    byDate.set(date, bucket);
+  }
+
+  const groups = Array.from(byDate.entries())
+    .sort(([left], [right]) => right.localeCompare(left))
+    .map(([date, candidates]) => {
+      const items = candidates
+        .sort((left, right) => {
+          if (right.rankScore !== left.rankScore) {
+            return right.rankScore - left.rankScore;
+          }
+          if (right.generatedAtMs !== left.generatedAtMs) {
+            return right.generatedAtMs - left.generatedAtMs;
+          }
+          return left.articleId.localeCompare(right.articleId);
+        })
+        .slice(0, limitPerDay)
+        .map((entry) => {
+          const tier =
+            params.qualityTier === "all"
+              ? tierByScore(Number(entry.row.quality_score_snapshot || 0), params.qualityThreshold)
+              : params.qualityTier;
+          return rowToHighQualityItem(entry.row, tier);
+        });
+
+      return {
+        date,
+        items,
+      };
+    })
+    .filter((group) => group.items.length > 0);
+
+  const totalArticles = groups.reduce((sum, group) => sum + group.items.length, 0);
+  return {
+    groups,
+    totalArticles,
+  };
+}
+
 export async function listHighQualityByDate(params: {
   date: string;
   limit: number;
@@ -1461,161 +1536,229 @@ export async function listHighQualityRange(params: {
   const tagGroupOrNull = tagGroup || null;
   const tagOrNull = tag || null;
 
-  const result =
+  const candidates =
     qualityTier === "high"
       ? await pool.query(
           `
-          WITH ranked AS (
-            SELECT
-              d.date,
-              d.selected_at,
-              d.quality_score_snapshot,
-              d.rank_score,
-              a.id AS article_id,
-              a.source_id,
-              s.name AS source_name,
-              a.title,
-              a.original_url,
-              a.info_url,
-              a.summary_raw,
-              a.lead_paragraph,
-              a.source_host,
-              aa.quality_score,
-              aa.confidence,
-              aa.one_line_summary,
-              aa.primary_type,
-              aa.secondary_types,
-              aa.tag_groups,
-              COALESCE(img.image_url, '') AS image_url,
-              ROW_NUMBER() OVER (PARTITION BY d.date ORDER BY d.rank_score DESC, d.selected_at DESC) AS rn
-            FROM daily_high_quality_articles d
-            INNER JOIN articles a ON a.id = d.article_id
-            INNER JOIN sources s ON s.id = a.source_id
-            INNER JOIN article_analysis aa ON aa.article_id = a.id
-            LEFT JOIN LATERAL (
-              SELECT image_url
-              FROM article_related_images
-              WHERE article_id = a.id
-              ORDER BY image_index ASC
-              LIMIT 1
-            ) img ON TRUE
-            WHERE d.date BETWEEN $1::date AND $2::date
-              AND aa.quality_score >= $6::double precision
-              AND ($4::text IS NULL OR aa.tag_groups ? $4::text)
-              AND (
-                $5::text IS NULL OR
-                CASE
-                  WHEN $4::text IS NOT NULL THEN EXISTS (
-                    SELECT 1
-                    FROM jsonb_array_elements_text(COALESCE(aa.tag_groups -> $4::text, '[]'::jsonb)) AS tag_item(tag)
-                    WHERE tag_item.tag = $5::text
-                  )
-                  ELSE EXISTS (
-                    SELECT 1
-                    FROM jsonb_each(aa.tag_groups) AS kv
-                    CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(kv.value, '[]'::jsonb)) AS tag_item(tag)
-                    WHERE tag_item.tag = $5::text
-                  )
-                END
-              )
-          )
-          SELECT *
-          FROM ranked
-          WHERE rn <= $3
-          ORDER BY date DESC, rank_score DESC, selected_at DESC
+          SELECT
+            d.date,
+            d.selected_at,
+            d.quality_score_snapshot,
+            d.rank_score,
+            a.id AS article_id,
+            a.source_id,
+            s.name AS source_name,
+            a.title,
+            a.original_url,
+            a.info_url,
+            a.summary_raw,
+            a.lead_paragraph,
+            a.source_host,
+            aa.quality_score,
+            aa.confidence,
+            aa.one_line_summary,
+            aa.primary_type,
+            aa.secondary_types,
+            aa.tag_groups,
+            COALESCE(img.image_url, '') AS image_url
+          FROM daily_high_quality_articles d
+          INNER JOIN articles a ON a.id = d.article_id
+          INNER JOIN sources s ON s.id = a.source_id
+          INNER JOIN article_analysis aa ON aa.article_id = a.id
+          LEFT JOIN LATERAL (
+            SELECT image_url
+            FROM article_related_images
+            WHERE article_id = a.id
+            ORDER BY image_index ASC
+            LIMIT 1
+          ) img ON TRUE
+          WHERE d.date BETWEEN $1::date AND $2::date
+            AND aa.quality_score >= $5::double precision
+            AND ($3::text IS NULL OR aa.tag_groups ? $3::text)
+            AND (
+              $4::text IS NULL OR
+              CASE
+                WHEN $3::text IS NOT NULL THEN EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(COALESCE(aa.tag_groups -> $3::text, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $4::text
+                )
+                ELSE EXISTS (
+                  SELECT 1
+                  FROM jsonb_each(aa.tag_groups) AS kv
+                  CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(kv.value, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $4::text
+                )
+              END
+            )
+          ORDER BY d.date DESC, d.rank_score DESC, d.selected_at DESC
         `,
-          [fromDate, toDate, limitPerDay, tagGroupOrNull, tagOrNull, qualityThreshold],
+          [fromDate, toDate, tagGroupOrNull, tagOrNull, qualityThreshold],
         )
       : await pool.query(
           `
-          WITH ranked AS (
-            SELECT
-              d.date,
-              d.analyzed_at,
-              d.quality_score_snapshot,
-              d.rank_score,
-              a.id AS article_id,
-              a.source_id,
-              s.name AS source_name,
-              a.title,
-              a.original_url,
-              a.info_url,
-              a.summary_raw,
-              a.lead_paragraph,
-              a.source_host,
-              aa.quality_score,
-              aa.confidence,
-              aa.one_line_summary,
-              aa.primary_type,
-              aa.secondary_types,
-              aa.tag_groups,
-              COALESCE(img.image_url, '') AS image_url,
-              ROW_NUMBER() OVER (PARTITION BY d.date ORDER BY d.rank_score DESC, d.analyzed_at DESC) AS rn
-            FROM daily_analyzed_articles d
-            INNER JOIN articles a ON a.id = d.article_id
-            INNER JOIN sources s ON s.id = a.source_id
-            INNER JOIN article_analysis aa ON aa.article_id = a.id
-            LEFT JOIN LATERAL (
-              SELECT image_url
-              FROM article_related_images
-              WHERE article_id = a.id
-              ORDER BY image_index ASC
-              LIMIT 1
-            ) img ON TRUE
-            WHERE d.date BETWEEN $1::date AND $2::date
-              AND (
-                $6::text = 'all'
-                OR ($6::text = 'general' AND d.quality_score_snapshot < $7::double precision)
-              )
-              AND ($4::text IS NULL OR aa.tag_groups ? $4::text)
-              AND (
-                $5::text IS NULL OR
-                CASE
-                  WHEN $4::text IS NOT NULL THEN EXISTS (
-                    SELECT 1
-                    FROM jsonb_array_elements_text(COALESCE(aa.tag_groups -> $4::text, '[]'::jsonb)) AS tag_item(tag)
-                    WHERE tag_item.tag = $5::text
-                  )
-                  ELSE EXISTS (
-                    SELECT 1
-                    FROM jsonb_each(aa.tag_groups) AS kv
-                    CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(kv.value, '[]'::jsonb)) AS tag_item(tag)
-                    WHERE tag_item.tag = $5::text
-                  )
-                END
-              )
-          )
-          SELECT *
-          FROM ranked
-          WHERE rn <= $3
-          ORDER BY date DESC, rank_score DESC, analyzed_at DESC
+          SELECT
+            d.date,
+            d.analyzed_at,
+            d.quality_score_snapshot,
+            d.rank_score,
+            a.id AS article_id,
+            a.source_id,
+            s.name AS source_name,
+            a.title,
+            a.original_url,
+            a.info_url,
+            a.summary_raw,
+            a.lead_paragraph,
+            a.source_host,
+            aa.quality_score,
+            aa.confidence,
+            aa.one_line_summary,
+            aa.primary_type,
+            aa.secondary_types,
+            aa.tag_groups,
+            COALESCE(img.image_url, '') AS image_url
+          FROM daily_analyzed_articles d
+          INNER JOIN articles a ON a.id = d.article_id
+          INNER JOIN sources s ON s.id = a.source_id
+          INNER JOIN article_analysis aa ON aa.article_id = a.id
+          LEFT JOIN LATERAL (
+            SELECT image_url
+            FROM article_related_images
+            WHERE article_id = a.id
+            ORDER BY image_index ASC
+            LIMIT 1
+          ) img ON TRUE
+          WHERE d.date BETWEEN $1::date AND $2::date
+            AND (
+              $5::text = 'all'
+              OR ($5::text = 'general' AND d.quality_score_snapshot < $6::double precision)
+            )
+            AND ($3::text IS NULL OR aa.tag_groups ? $3::text)
+            AND (
+              $4::text IS NULL OR
+              CASE
+                WHEN $3::text IS NOT NULL THEN EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(COALESCE(aa.tag_groups -> $3::text, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $4::text
+                )
+                ELSE EXISTS (
+                  SELECT 1
+                  FROM jsonb_each(aa.tag_groups) AS kv
+                  CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(kv.value, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $4::text
+                )
+              END
+            )
+          ORDER BY d.date DESC, d.rank_score DESC, d.analyzed_at DESC
         `,
-          [fromDate, toDate, limitPerDay, tagGroupOrNull, tagOrNull, qualityTier, qualityThreshold],
+          [fromDate, toDate, tagGroupOrNull, tagOrNull, qualityTier, qualityThreshold],
         );
 
-  const byDate = new Map<string, HighQualityArticleItem[]>();
-
-  for (const raw of result.rows) {
-    const row = raw as Record<string, unknown>;
-    const date = toDateString(row.date);
-    const bucket = byDate.get(date) || [];
-    const tier = qualityTier === "all" ? tierByScore(Number(row.quality_score_snapshot || 0), qualityThreshold) : qualityTier;
-    bucket.push(rowToHighQualityItem(row, tier));
-    byDate.set(date, bucket);
+  const rows = candidates.rows.map((row) => row as Record<string, unknown>);
+  if (!rows.length) {
+    return {
+      groups: [],
+      totalArticles: 0,
+    };
   }
 
-  const groups = Array.from(byDate.entries())
-    .sort(([left], [right]) => right.localeCompare(left))
-    .map(([date, items]) => ({
-      date,
-      items,
-    }));
+  const articleIds = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row.article_id || "").trim())
+        .filter(Boolean),
+    ),
+  );
 
-  const totalArticles = groups.reduce((sum, group) => sum + group.items.length, 0);
-  return {
-    groups,
-    totalArticles,
-  };
+  if (!articleIds.length) {
+    return {
+      groups: [],
+      totalArticles: 0,
+    };
+  }
+
+  const firstSeenRows =
+    qualityTier === "high"
+      ? await pool.query(
+          `
+          SELECT d.article_id, MIN(d.date) AS first_date
+          FROM daily_high_quality_articles d
+          INNER JOIN article_analysis aa ON aa.article_id = d.article_id
+          WHERE d.article_id = ANY($1::text[])
+            AND aa.quality_score >= $4::double precision
+            AND ($2::text IS NULL OR aa.tag_groups ? $2::text)
+            AND (
+              $3::text IS NULL OR
+              CASE
+                WHEN $2::text IS NOT NULL THEN EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(COALESCE(aa.tag_groups -> $2::text, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $3::text
+                )
+                ELSE EXISTS (
+                  SELECT 1
+                  FROM jsonb_each(aa.tag_groups) AS kv
+                  CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(kv.value, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $3::text
+                )
+              END
+            )
+          GROUP BY d.article_id
+        `,
+          [articleIds, tagGroupOrNull, tagOrNull, qualityThreshold],
+        )
+      : await pool.query(
+          `
+          SELECT d.article_id, MIN(d.date) AS first_date
+          FROM daily_analyzed_articles d
+          INNER JOIN article_analysis aa ON aa.article_id = d.article_id
+          WHERE d.article_id = ANY($1::text[])
+            AND (
+              $4::text = 'all'
+              OR ($4::text = 'general' AND d.quality_score_snapshot < $5::double precision)
+            )
+            AND ($2::text IS NULL OR aa.tag_groups ? $2::text)
+            AND (
+              $3::text IS NULL OR
+              CASE
+                WHEN $2::text IS NOT NULL THEN EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(COALESCE(aa.tag_groups -> $2::text, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $3::text
+                )
+                ELSE EXISTS (
+                  SELECT 1
+                  FROM jsonb_each(aa.tag_groups) AS kv
+                  CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(kv.value, '[]'::jsonb)) AS tag_item(tag)
+                  WHERE tag_item.tag = $3::text
+                )
+              END
+            )
+          GROUP BY d.article_id
+        `,
+          [articleIds, tagGroupOrNull, tagOrNull, qualityTier, qualityThreshold],
+        );
+
+  const firstSeenByArticleId = new Map<string, string>();
+  firstSeenRows.rows.forEach((raw) => {
+    const row = raw as Record<string, unknown>;
+    const articleId = String(row.article_id || "").trim();
+    const firstDate = toDateString(row.first_date);
+    if (!articleId || !firstDate) {
+      return;
+    }
+    firstSeenByArticleId.set(articleId, firstDate);
+  });
+
+  return buildFirstSeenUniqueHighQualityGroups({
+    rows,
+    firstSeenByArticleId,
+    limitPerDay,
+    qualityTier,
+    qualityThreshold,
+  });
 }
 
 export async function listArchivedArticles(params: {

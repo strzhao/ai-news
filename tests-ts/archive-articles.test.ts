@@ -56,7 +56,7 @@ describe("archive articles", () => {
     expect(resolveArchiveArticleUrl(tracked)).toBe("https://origin.example.com/post?id=7");
   });
 
-  it("aggregateArchiveArticlesFromDigests applies global dedupe and keeps latest item", () => {
+  it("aggregateArchiveArticlesFromDigests applies global dedupe and keeps earliest item", () => {
     const latestMarkdown = [
       "## 重点文章",
       "### 1. [Same Story](https://example.com/same?utm_source=x)",
@@ -98,13 +98,13 @@ describe("archive articles", () => {
     expect(result.totalArticles).toBe(3);
     expect(result.groups).toHaveLength(2);
 
-    const latestGroup = result.groups.find((group) => group.date === "2026-02-28");
-    expect(latestGroup?.items).toHaveLength(2);
-    expect(latestGroup?.items.map((item) => item.title)).toEqual(["Same Story", "Only New"]);
-
     const olderGroup = result.groups.find((group) => group.date === "2026-02-27");
-    expect(olderGroup?.items).toHaveLength(1);
-    expect(olderGroup?.items[0].title).toBe("Only Old");
+    expect(olderGroup?.items).toHaveLength(2);
+    expect(olderGroup?.items.map((item) => item.title)).toEqual(["Same Story", "Only Old"]);
+
+    const latestGroup = result.groups.find((group) => group.date === "2026-02-28");
+    expect(latestGroup?.items).toHaveLength(1);
+    expect(latestGroup?.items[0].title).toBe("Only New");
 
     expect(latestGroup?.items[0].article_id).toHaveLength(16);
   });
