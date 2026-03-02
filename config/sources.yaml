@@ -125,3 +125,95 @@ sources:
     source_type: twitter
     only_external_links: true
     source_weight: 1.08
+
+  # Added on 2026-03-02: related and high-link X sources (incremental expansion)
+  - id: x_hitw93
+    name: Tw93（X）
+    rsshub_route: /twitter/user/HiTw93
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_oran_ge
+    name: Orange AI（X）
+    rsshub_route: /twitter/user/oran_ge
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_ruanyf
+    name: ruanyf（X）
+    rsshub_route: /twitter/user/ruanyf
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.12
+  - id: x_mattprd
+    name: MattPRD（X）
+    rsshub_route: /twitter/user/MattPRD
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_moltbook
+    name: moltbook（X）
+    rsshub_route: /twitter/user/moltbook
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_yesnoerror
+    name: yesnoerror（X）
+    rsshub_route: /twitter/user/yesnoerror
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.12
+  - id: x_anthropicai
+    name: Anthropic（X）
+    rsshub_route: /twitter/user/AnthropicAI
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.12
+  - id: x_openai
+    name: OpenAI（X）
+    rsshub_route: /twitter/user/OpenAI
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.12
+  - id: x_googledeepmind
+    name: Google DeepMind（X）
+    rsshub_route: /twitter/user/GoogleDeepMind
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_kimi_moonshot
+    name: Kimi.ai（X）
+    rsshub_route: /twitter/user/Kimi_Moonshot
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.12
+  - id: x_claudeai
+    name: Claude（X）
+    rsshub_route: /twitter/user/ClaudeAI
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_minimax_ai
+    name: MiniMax（X）
+    rsshub_route: /twitter/user/MiniMax_AI
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_openclaw
+    name: OpenClaw（X）
+    rsshub_route: /twitter/user/openclaw
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_cursor_ai
+    name: Cursor（X）
+    rsshub_route: /twitter/user/cursor_ai
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
+  - id: x_voidzerodev
+    name: VoidZero（X）
+    rsshub_route: /twitter/user/voidzerodev
+    source_type: twitter
+    only_external_links: true
+    source_weight: 1.08
