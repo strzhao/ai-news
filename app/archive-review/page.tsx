@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { buildAiEvalObservabilitySnapshot } from "@/lib/article-db/ai-observability";
+import { listRecentIngestionRuns } from "@/lib/article-db/ingestion-runs";
 import { listArchivedArticles, recordArticleQualityFeedback } from "@/lib/article-db/repository";
 import styles from "./page.module.css";
 
@@ -55,6 +57,12 @@ function formatDateTime(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(parsed);
+}
+
+function formatPercent(value: number): string {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return "0.00%";
+  return `${(normalized * 100).toFixed(2)}%`;
 }
 
 function compactJson(value: Record<string, string[]>): string {
@@ -140,16 +148,25 @@ export default async function ArchiveReviewPage(props: {
     offset,
   });
 
-  const result = await listArchivedArticles({
-    fromDate: normalizedFrom,
-    toDate: normalizedTo,
-    limit,
-    offset,
-    qualityTier,
-    search: q || undefined,
-    sourceId: sourceId || undefined,
-    primaryType: primaryType || undefined,
-  });
+  const [result, recentRuns] = await Promise.all([
+    listArchivedArticles({
+      fromDate: normalizedFrom,
+      toDate: normalizedTo,
+      limit,
+      offset,
+      qualityTier,
+      search: q || undefined,
+      sourceId: sourceId || undefined,
+      primaryType: primaryType || undefined,
+    }),
+    listRecentIngestionRuns({
+      days: 2,
+      limit: 24,
+    }),
+  ]);
+  const aiObs = buildAiEvalObservabilitySnapshot(recentRuns);
+  const latestRun = aiObs.runs[0] || null;
+  const samplePreview = aiObs.latest_failed_samples.slice(0, 3);
 
   const total = result.total;
   const start = total ? offset + 1 : 0;
@@ -189,6 +206,63 @@ export default async function ArchiveReviewPage(props: {
           返回首页
         </Link>
       </header>
+
+      <section className={styles.aiPanel}>
+        <div className={styles.aiPanelHead}>
+          <h2>AI 分析可观测</h2>
+          <p>最近 48 小时运行窗口</p>
+        </div>
+        <div className={styles.aiStatsGrid}>
+          <div className={styles.aiStat}>
+            <span>运行数</span>
+            <strong>{aiObs.summary.run_count}</strong>
+          </div>
+          <div className={styles.aiStat}>
+            <span>运行成功率</span>
+            <strong>{formatPercent(aiObs.summary.run_success_rate)}</strong>
+          </div>
+          <div className={styles.aiStat}>
+            <span>AI 失败率(均值)</span>
+            <strong>{formatPercent(aiObs.summary.ai_eval_failed_rate_avg)}</strong>
+          </div>
+          <div className={styles.aiStat}>
+            <span>缓存命中率(均值)</span>
+            <strong>{formatPercent(aiObs.summary.ai_eval_cache_hit_rate_avg)}</strong>
+          </div>
+          <div className={styles.aiStat}>
+            <span>AI p90 延迟</span>
+            <strong>{aiObs.summary.ai_eval_latency_p90_ms_avg}ms</strong>
+          </div>
+          <div className={styles.aiStat}>
+            <span>AI 评估成功/失败</span>
+            <strong>
+              {aiObs.summary.ai_eval_total_success}/{aiObs.summary.ai_eval_total_failed}
+            </strong>
+          </div>
+        </div>
+        {latestRun ? (
+          <p className={styles.aiLatest}>
+            最近运行：{formatDateTime(latestRun.started_at)} · 状态 {latestRun.status} · 候选 {latestRun.ai_eval_total_candidates} ·
+            失败率 {formatPercent(latestRun.ai_eval_failed_rate)} · 缓存命中率 {formatPercent(latestRun.ai_eval_cache_hit_rate)}
+          </p>
+        ) : (
+          <p className={styles.aiLatest}>暂无 ingestion 运行记录。</p>
+        )}
+        {samplePreview.length ? (
+          <div className={styles.aiSamples}>
+            {samplePreview.map((sample) => (
+              <article key={`${sample.article_id}:${sample.error_type}`} className={styles.aiSample}>
+                <p>
+                  <strong>{sample.error_type}</strong> · {sample.article_id} · {sample.source_id || "-"}
+                </p>
+                <p>{sample.error_message || "-"}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className={styles.aiNoSample}>最近窗口内没有失败样本。</p>
+        )}
+      </section>
 
       <form className={styles.filters} method="GET">
         <label>

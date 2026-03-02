@@ -3,7 +3,7 @@ import { Article, DedupeStats } from "@/lib/domain/models";
 import { fetchArticleContent } from "@/lib/fetch/article-content-fetcher";
 import { fetchArticles } from "@/lib/fetch/rss-fetcher";
 import { DeepSeekClient } from "@/lib/llm/deepseek-client";
-import { ArticleEvaluator } from "@/lib/llm/article-evaluator";
+import { ArticleEvaluator, type ArticleEvalTelemetry } from "@/lib/llm/article-evaluator";
 import { ArticleEvalCache } from "@/lib/cache/article-eval-cache";
 import { dedupeArticles } from "@/lib/process/dedupe";
 import { normalizeArticles } from "@/lib/process/normalize";
@@ -94,6 +94,51 @@ async function withTimeout<T>(label: string, timeoutMs: number, task: Promise<T>
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+function boundedRate(numerator: number, denominator: number): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+    return 0;
+  }
+  return Number((numerator / denominator).toFixed(4));
+}
+
+function aiTelemetryStats(telemetry: ArticleEvalTelemetry | null, modelName: string, promptVersion: string): Record<string, unknown> {
+  const base = telemetry || {
+    total_candidates: 0,
+    evaluated_success: 0,
+    evaluated_failed: 0,
+    skipped_due_wall_time: 0,
+    cache_hit: 0,
+    cache_miss: 0,
+    retry_count_total: 0,
+    latency_ms_p50: 0,
+    latency_ms_p90: 0,
+    latency_ms_max: 0,
+    error_type_counts: {},
+    failed_samples: [],
+  };
+  const attempted = Math.max(0, Number(base.evaluated_success || 0) + Number(base.evaluated_failed || 0));
+  const cacheTotal = Math.max(0, Number(base.cache_hit || 0) + Number(base.cache_miss || 0));
+  return {
+    ai_eval_model_name: String(modelName || ""),
+    ai_eval_prompt_version: String(promptVersion || ""),
+    ai_eval_total_candidates: Number(base.total_candidates || 0),
+    ai_eval_evaluated_success: Number(base.evaluated_success || 0),
+    ai_eval_evaluated_failed: Number(base.evaluated_failed || 0),
+    ai_eval_skipped_due_wall_time: Number(base.skipped_due_wall_time || 0),
+    ai_eval_failed_rate: boundedRate(Number(base.evaluated_failed || 0), attempted),
+    ai_eval_cache_hit: Number(base.cache_hit || 0),
+    ai_eval_cache_miss: Number(base.cache_miss || 0),
+    ai_eval_cache_hit_rate: boundedRate(Number(base.cache_hit || 0), cacheTotal),
+    ai_eval_retry_count_total: Number(base.retry_count_total || 0),
+    ai_eval_latency_ms_p50: Number(base.latency_ms_p50 || 0),
+    ai_eval_latency_ms_p90: Number(base.latency_ms_p90 || 0),
+    ai_eval_latency_ms_max: Number(base.latency_ms_max || 0),
+    ai_eval_error_type_counts: base.error_type_counts || {},
+    ai_eval_failed_samples_count: Array.isArray(base.failed_samples) ? base.failed_samples.length : 0,
+    ai_eval_failed_samples: Array.isArray(base.failed_samples) ? base.failed_samples : [],
+  };
 }
 
 interface HighQualityContentCrawlStats {
@@ -366,6 +411,7 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
             selected_count_pruned_by_current_score: prunedByCurrentScore,
             daily_snapshot_merge_mode: mergeDailySnapshot,
             max_eval_articles: maxEvalArticles,
+            ...aiTelemetryStats(null, "", ""),
             hq_content_crawl_enabled: crawlHighQualityContentEnabled,
             hq_content_crawl_limit: crawlHighQualityContentLimit,
             hq_content_crawl_attempted: 0,
@@ -390,10 +436,12 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
         const articleTypes = loadArticleTypes(process.env.ARTICLE_TYPES_CONFIG || undefined);
         const evaluator = new ArticleEvaluator(client, new ArticleEvalCache(), articleTypes);
 
-        const assessments = await evaluator.evaluateArticles(evaluationPool, {
+        const evalResult = await evaluator.evaluateArticlesWithTelemetry(evaluationPool, {
           maxWallTimeMs: evalStageTimeoutMs,
         });
-        result.evaluatedCount = Object.keys(assessments).length;
+        const assessments = evalResult.assessments;
+        const aiEvalTelemetry = evalResult.telemetry;
+        result.evaluatedCount = Number(aiEvalTelemetry.evaluated_success || 0);
 
         const inputToStoredId = await upsertArticles(evaluationPool);
         await upsertArticleAnalyses({
@@ -533,6 +581,7 @@ export async function runIngestionWithResult(options: RunIngestionOptions = {}):
           dedupe_url_duplicates: dedupeStats.urlDuplicates,
           dedupe_title_duplicates: dedupeStats.titleDuplicates,
           evaluation_pool_count: evaluationPool.length,
+          ...aiTelemetryStats(aiEvalTelemetry, client.model, evaluator.promptVersion),
           evaluated_count: result.evaluatedCount,
           analyzed_count_new: analyzedRows.length,
           analyzed_count_total: analyzedTotal,

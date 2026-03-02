@@ -12,6 +12,34 @@ import { DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
 const VALID_WORTH = new Set([WORTH_MUST_READ, WORTH_WORTH_READING, WORTH_SKIP]);
 const ASSESSMENT_SCHEMA_VERSION = "assessment_r3";
 
+export interface ArticleEvalFailureSample {
+  article_id: string;
+  source_id: string;
+  error_type: string;
+  error_message: string;
+  truncated_model_output: string;
+}
+
+export interface ArticleEvalTelemetry {
+  total_candidates: number;
+  evaluated_success: number;
+  evaluated_failed: number;
+  skipped_due_wall_time: number;
+  cache_hit: number;
+  cache_miss: number;
+  retry_count_total: number;
+  latency_ms_p50: number;
+  latency_ms_p90: number;
+  latency_ms_max: number;
+  error_type_counts: Record<string, number>;
+  failed_samples: ArticleEvalFailureSample[];
+}
+
+export interface ArticleEvalBatchResult {
+  assessments: Record<string, ArticleAssessment>;
+  telemetry: ArticleEvalTelemetry;
+}
+
 function coerceScore(value: unknown): number {
   let score = Number(value);
   if (!Number.isFinite(score)) score = 0;
@@ -171,6 +199,70 @@ function calibrateConfidence(params: {
   return Math.max(0, Math.min(1, confidence));
 }
 
+function boundedInt(raw: string, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(String(raw || fallback), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(parsed, max));
+}
+
+function compactText(value: string): string {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function truncateText(value: string, maxChars: number): string {
+  if (maxChars <= 0) return "";
+  const normalized = compactText(value);
+  if (!normalized) return "";
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxChars - 3))}...`;
+}
+
+function extractModelOutput(error: unknown, maxChars: number): string {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const marker = "Model output is not valid JSON:";
+  const index = message.indexOf(marker);
+  if (index < 0) return "";
+  return truncateText(message.slice(index + marker.length), maxChars);
+}
+
+function simplifyErrorMessage(error: unknown, maxChars: number): string {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (message.includes("Model output is not valid JSON:")) {
+    return truncateText("Model output is not valid JSON", maxChars);
+  }
+  return truncateText(message, maxChars);
+}
+
+function classifyError(error: unknown): string {
+  const message = String(error instanceof Error ? error.message : error || "")
+    .trim()
+    .toLowerCase();
+  if (!message) return "unknown_error";
+  if (message.includes("missing deepseek_api_key")) return "missing_api_key";
+  if (message.includes("timed out")) return "timeout";
+  if (message.includes("not valid json")) return "invalid_json";
+  if (message.includes("request failed")) return "http_error";
+  if (message.includes("invalid worth label")) return "invalid_worth";
+  if (message.includes("empty one_line_summary")) return "missing_summary";
+  if (message.includes("empty reason_short")) return "missing_reason";
+  if (message.includes("invalid article assessment payload")) return "invalid_payload";
+  return "unknown_error";
+}
+
+function percentileMs(values: number[], quantile: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const bounded = Math.max(0, Math.min(1, quantile));
+  const position = (sorted.length - 1) * bounded;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  const weight = position - lower;
+  const estimated = sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
+  return Math.max(0, Math.round(estimated));
+}
+
 export function computeArticleContentHash(article: Article): string {
   const base = `${article.title.trim()}|${article.summaryRaw.trim()}|${article.leadParagraph.trim()}`;
   return crypto.createHash("sha256").update(base).digest("hex");
@@ -212,14 +304,45 @@ export class ArticleEvaluator {
       maxWallTimeMs?: number;
     } = {},
   ): Promise<Record<string, ArticleAssessment>> {
+    const batchResult = await this.evaluateArticlesWithTelemetry(articles, options);
+    return batchResult.assessments;
+  }
+
+  async evaluateArticlesWithTelemetry(
+    articles: Article[],
+    options: {
+      maxWallTimeMs?: number;
+    } = {},
+  ): Promise<ArticleEvalBatchResult> {
     const assessments: Record<string, ArticleAssessment> = {};
     const startedAt = Date.now();
     const maxWallTimeMs = Math.max(10_000, Number.parseInt(String(options.maxWallTimeMs || 180_000), 10) || 180_000);
+    const failedSampleLimit = boundedInt(String(process.env.AI_OBS_FAILED_SAMPLE_LIMIT || "20"), 20, 0, 120);
+    const errorMaxChars = boundedInt(String(process.env.AI_OBS_ERROR_MSG_MAX_CHARS || "240"), 240, 40, 2000);
+    const modelOutputMaxChars = boundedInt(String(process.env.AI_OBS_MODEL_OUTPUT_MAX_CHARS || "320"), 320, 40, 4000);
+    const successLatenciesMs: number[] = [];
+    const telemetry: ArticleEvalTelemetry = {
+      total_candidates: articles.length,
+      evaluated_success: 0,
+      evaluated_failed: 0,
+      skipped_due_wall_time: 0,
+      cache_hit: 0,
+      cache_miss: 0,
+      retry_count_total: 0,
+      latency_ms_p50: 0,
+      latency_ms_p90: 0,
+      latency_ms_max: 0,
+      error_type_counts: {},
+      failed_samples: [],
+    };
 
-    for (const article of articles) {
+    for (let index = 0; index < articles.length; index += 1) {
+      const article = articles[index];
       if (Date.now() - startedAt >= maxWallTimeMs) {
+        telemetry.skipped_due_wall_time = Math.max(0, articles.length - index);
         break;
       }
+      const articleStartedAt = Date.now();
       const cacheKey = buildArticleCacheKey({
         article,
         modelName: this.client.model,
@@ -229,10 +352,15 @@ export class ArticleEvaluator {
       const cached = await this.cache.getAssessment(cacheKey);
       if (cached) {
         assessments[article.id] = { ...cached, cacheKey };
+        telemetry.cache_hit += 1;
+        telemetry.evaluated_success += 1;
+        successLatenciesMs.push(Math.max(0, Date.now() - articleStartedAt));
         continue;
       }
+      telemetry.cache_miss += 1;
 
       let lastError: unknown;
+      let retriesUsed = 0;
       for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
         try {
           const assessment = await this.evaluateArticle(article);
@@ -249,24 +377,47 @@ export class ArticleEvaluator {
           });
 
           assessments[article.id] = assessment;
+          telemetry.evaluated_success += 1;
+          telemetry.retry_count_total += retriesUsed;
+          successLatenciesMs.push(Math.max(0, Date.now() - articleStartedAt));
           lastError = undefined;
           break;
         } catch (error) {
           lastError = error;
           if (attempt < this.maxRetries) {
+            retriesUsed += 1;
             await new Promise((resolve) => setTimeout(resolve, Math.round(350 * (attempt + 1))));
           }
         }
       }
 
       if (lastError) {
-        // keep the pipeline running
+        telemetry.evaluated_failed += 1;
+        telemetry.retry_count_total += retriesUsed;
+        const errorType = classifyError(lastError);
+        telemetry.error_type_counts[errorType] = Number(telemetry.error_type_counts[errorType] || 0) + 1;
+        if (telemetry.failed_samples.length < failedSampleLimit) {
+          telemetry.failed_samples.push({
+            article_id: article.id,
+            source_id: String(article.sourceId || "").trim(),
+            error_type: errorType,
+            error_message: simplifyErrorMessage(lastError, errorMaxChars),
+            truncated_model_output: extractModelOutput(lastError, modelOutputMaxChars),
+          });
+        }
         continue;
       }
     }
 
+    telemetry.latency_ms_p50 = percentileMs(successLatenciesMs, 0.5);
+    telemetry.latency_ms_p90 = percentileMs(successLatenciesMs, 0.9);
+    telemetry.latency_ms_max = successLatenciesMs.length ? Math.max(...successLatenciesMs.map((value) => Math.round(value))) : 0;
+
     await this.cache.prune(5000);
-    return assessments;
+    return {
+      assessments,
+      telemetry,
+    };
   }
 
   async evaluateArticle(article: Article): Promise<ArticleAssessment> {

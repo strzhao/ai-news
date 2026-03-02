@@ -12,7 +12,7 @@
   "crons": [
     {
       "path": "/api/v1/ingestion/run",
-      "schedule": "0 23 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/v1/flomo/push-from-archive-articles",

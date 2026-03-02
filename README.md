@@ -1,6 +1,6 @@
 # AI News Daily Digest (Next.js)
 
-每天北京时间 07:00 自动抓取优质 AI RSS，使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（重点文章 + 一句话总结 + 日报技术标签），并可同步到 flomo。当前主实现为 Next.js App Router + Route Handlers。
+每小时自动抓取优质 AI RSS（支持 cron 抖动），使用 DeepSeek 进行「单篇评估 + 汇总编排」生成中文日报（重点文章 + 一句话总结 + 日报技术标签），并可同步到 flomo（默认每日推送）。当前主实现为 Next.js App Router + Route Handlers。
 
 ## Architecture (2026 Upgrade)
 
@@ -11,6 +11,7 @@
   - `GET /api/v1/articles/high-quality/range`
   - `GET /api/v1/articles/:article_id`
   - `GET /api/v1/runs/:date`
+  - `GET /api/v1/observability/ai`
   - `GET /api/v1/tags/groups`
   - `PUT /api/v1/tags/groups/:group_key/:tag_key`
   - `DELETE /api/v1/tags/groups/:group_key/:tag_key`
@@ -36,6 +37,7 @@ npm run dev
 - `DATABASE_URL` (required for `/api/v1/*` article-db endpoints)
 - `ARTICLE_DB_API_TOKEN` (recommended；设置后 `/api/v1/*` 要求 `Authorization: Bearer <token>`)
 - `QUALITY_SCORE_THRESHOLD` (default: `62`，仅按综合分决定是否进入高质量归档)
+- `INGESTION_CRON_JITTER_MAX_SECONDS` (default: `120`，cron 触发时随机延迟 0~N 秒，`0` 表示关闭)
 - `INGESTION_DAILY_MERGE_MODE` (default: `true`，同一天重跑时合并快照并按 `(date, article_id)` 去重；设为 `false` 时恢复覆盖模式)
 - `ARTICLE_DB_MAX_PER_SOURCE` (default: `25`)
 - `HQ_CONTENT_CRAWL_ENABLED` (default: `true`，是否为高质量文章抓取并持久化原文全文 + 相关图片)
@@ -69,6 +71,9 @@ npm run dev
 
 - `AI_EVAL_CACHE_DB` (default: `.cache/ai-news/article_eval.sqlite3`)
 - `AI_EVAL_MAX_RETRIES` (default: `2`)
+- `AI_OBS_FAILED_SAMPLE_LIMIT` (default: `20`，每次 ingestion 最多保留的 AI 失败样本数量)
+- `AI_OBS_ERROR_MSG_MAX_CHARS` (default: `240`，失败样本里错误信息最大长度)
+- `AI_OBS_MODEL_OUTPUT_MAX_CHARS` (default: `320`，失败样本里模型输出片段最大长度)
 - `SOURCE_FETCH_BUDGET` (default: `60`, `0` 表示不限制)
 - `MIN_FETCH_PER_SOURCE` (default: `3`, 保证每个源最少抓取量)
 - `EXPANDED_DISCOVERY_MODE` (default: `true`，临时开关；`true` 时默认 `top_n=32` 且 `MAX_EVAL_ARTICLES=120`，`false` 时恢复 `top_n=16` 且 `MAX_EVAL_ARTICLES=60`)
@@ -143,6 +148,8 @@ npm run start
 
 # manual trigger
 curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/ingestion/run"
+# view recent AI observability
+curl -H "Authorization: Bearer $ARTICLE_DB_API_TOKEN" "http://localhost:3000/api/v1/observability/ai?limit=24&days=3"
 # manual flomo push (from /api/archive_articles data source)
 curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/flomo/push-from-archive-articles"
 # import legacy archive (optional)
@@ -152,17 +159,21 @@ curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/v1/migra
 ## Vercel Cron Deployment
 
 - Cron 配置在 `vercel.json`：
-  - `0 23 * * *` (UTC) = `07:00 Asia/Shanghai` -> `GET /api/v1/ingestion/run`
+  - `0 * * * *` (UTC) -> `GET /api/v1/ingestion/run`（每小时一次，接口内默认随机抖动 0~120 秒）
   - `10 23 * * *` (UTC) = `07:10 Asia/Shanghai` -> `GET /api/v1/flomo/push-from-archive-articles`
 - 内置 tracker 接口：
   - `GET /api/healthz`
   - `GET /api/r`
   - `GET /api/stats/sources?days=90`
   - `GET /api/stats/types?days=90`
+- AI 可观测接口：
+  - `GET /api/v1/observability/ai?limit=24&days=3`
 - 归档接口（首页 H5 使用）：
   - `GET /api/archive_articles?days=30&limit_per_day=10`
 - 首页：
   - `GET /`（H5 页面，主体优先展示“今日文档”，页面末尾展示历史归档）
+- 归档审查页：
+  - `GET /archive-review`（顶部提供 AI 分析可观测卡片）
 - 建议在 Vercel 项目中设置 `CRON_SECRET`，平台会自动在 cron 请求里注入 `Authorization: Bearer <CRON_SECRET>`
 - 新服务建议部署在新加坡区域（`sin1`），并将 Postgres 主库放在新加坡。
 
