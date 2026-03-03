@@ -11,8 +11,6 @@ import {
 } from "@/lib/domain/models";
 import { buildAnalysisJson, renderAnalysisMarkdown } from "@/lib/output/analysis-writer";
 import { renderDigestMarkdown } from "@/lib/output/markdown-writer";
-import { buildFlomoPayload } from "@/lib/output/flomo-formatter";
-import { FlomoClient, FlomoSyncError } from "@/lib/integrations/flomo-client";
 import { DeepSeekClient } from "@/lib/llm/deepseek-client";
 import { ArticleEvaluator } from "@/lib/llm/article-evaluator";
 import { DigestSummarizer } from "@/lib/llm/summarizer";
@@ -62,12 +60,6 @@ function highlightCap(totalAssessed: number, topN: number): number {
   const minimum = Math.max(1, Number.parseInt(String(process.env.HIGHLIGHT_MIN_COUNT || defaultMinimum), 10) || 1);
   const capped = Math.max(minimum, Math.round(totalAssessed * ratio));
   return Math.max(1, Math.min(topN, capped));
-}
-
-function shouldSyncFlomo(options: RunDigestOptions): boolean {
-  if (options.noSyncFlomo) return false;
-  if (options.syncFlomo) return true;
-  return Boolean(process.env.FLOMO_API_URL);
 }
 
 function targetDate(dateValue: string | undefined, timezoneName: string): string {
@@ -204,8 +196,6 @@ export interface RunDigestOptions {
   topN?: number;
   outputDir?: string;
   sourcesConfig?: string;
-  syncFlomo?: boolean;
-  noSyncFlomo?: boolean;
   ignoreRepeatLimit?: boolean;
 }
 
@@ -668,24 +658,6 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
     analysisJson = buildAnalysisJson(analysisContext);
     analysisMarkdown = renderAnalysisMarkdown(analysisJson);
     analysisPath = await writeOutput(analysisMarkdown, reportDate, outputDir, "analysis.md");
-  }
-
-  if (shouldSyncFlomo(options)) {
-    const payload = buildFlomoPayload(digest, (article) =>
-      tracker.buildTrackingUrl(article, {
-        digestDate: reportDate,
-        channel: "flomo",
-      }),
-    );
-
-    try {
-      const flomo = new FlomoClient();
-      await flomo.send(payload);
-    } catch (error) {
-      if (!(error instanceof FlomoSyncError)) {
-        throw error;
-      }
-    }
   }
 
   result.exitCode = 0;

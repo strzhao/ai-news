@@ -24,6 +24,7 @@ export interface ArchiveArticleSummary {
   summary: string;
   image_url: string;
   source_host: string;
+  tag_groups: Record<string, string[]>;
   date: string;
   digest_id: string;
   generated_at: string;
@@ -328,6 +329,7 @@ export function aggregateArchiveArticlesFromDigests(
         summary: normalizeSummary(article.summary),
         image_url: "",
         source_host: host,
+        tag_groups: {},
         date: String(digest.date || "").trim(),
         digest_id: String(digest.digest_id || "").trim(),
         generated_at: String(digest.generated_at || "").trim(),
@@ -463,6 +465,7 @@ export async function listArchiveArticles(options: {
           summary: item.summary,
           image_url: item.image_url || "",
           source_host: item.source_host,
+          tag_groups: item.tag_groups || {},
           date: item.date || group.date,
           digest_id: item.digest_id || `article_db_${group.date}`,
           generated_at: item.generated_at,

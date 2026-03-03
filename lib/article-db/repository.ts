@@ -2577,6 +2577,46 @@ export async function listTagGroups(): Promise<TagGroupRow[]> {
     }));
 }
 
+export async function listActiveTagDefinitions(): Promise<TagDefinition[]> {
+  await ensureArticleDbSchema();
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    SELECT
+      group_key,
+      tag_key,
+      display_name,
+      description,
+      aliases,
+      is_active,
+      managed_by,
+      updated_at
+    FROM tag_registry
+    WHERE is_active = TRUE
+    ORDER BY group_key ASC, tag_key ASC
+  `,
+  );
+
+  const items: TagDefinition[] = [];
+  result.rows.forEach((raw) => {
+    const row = raw as Record<string, unknown>;
+    const groupKey = normalizeTagKey(String(row.group_key || ""));
+    const tagKey = normalizeTagKey(String(row.tag_key || ""));
+    if (!groupKey || !tagKey) return;
+    items.push({
+      group_key: groupKey,
+      tag_key: tagKey,
+      display_name: String(row.display_name || tagKey),
+      description: String(row.description || ""),
+      aliases: parseStringArray(row.aliases),
+      is_active: Boolean(row.is_active),
+      managed_by: String(row.managed_by || "ai"),
+      updated_at: toIso(row.updated_at),
+    });
+  });
+  return items;
+}
+
 export async function getTagDefinition(groupKeyRaw: string, tagKeyRaw: string): Promise<TagDefinition | null> {
   await ensureArticleDbSchema();
   const groupKey = normalizeTagKey(groupKeyRaw);

@@ -131,10 +131,11 @@ npm run dev
 
 ### flomo Sync (optional)
 
-- `FLOMO_API_URL` (enable sync when provided)
+- `FLOMO_API_URL` (用于 `/api/v1/flomo/push-from-archive-articles` 推送)
 - `FLOMO_ARCHIVE_DAYS` (default: `30`)
 - `FLOMO_ARCHIVE_LIMIT_PER_DAY` (default: `30`)
 - `FLOMO_ARCHIVE_ARTICLE_LIMIT_PER_DAY` (default: `30`)
+- flomo 内容末尾会追加 AI 标签体系标签，格式为 `#tag`，标签文本会自动标准化为无空格（snake_case）以确保可识别
 
 ## Run Modes
 

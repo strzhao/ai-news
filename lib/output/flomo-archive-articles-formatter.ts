@@ -1,5 +1,5 @@
 import { ArchiveArticleSummary } from "@/lib/domain/archive-articles";
-import { resolveFlomoHomePageUrl } from "@/lib/output/flomo-formatter";
+import type { TagDefinition } from "@/lib/article-db/types";
 import { buildSignedTrackingUrl } from "@/lib/tracking/signed-url";
 
 export interface FlomoArchiveArticlesPayload {
@@ -26,6 +26,15 @@ function normalizeDate(value: string): string {
   return "unknown";
 }
 
+function normalizeTagKey(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function normalizeUrl(value: string): string {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -38,6 +47,107 @@ function normalizeUrl(value: string): string {
   } catch {
     return "";
   }
+}
+
+function normalizeHomePageUrl(raw: string): string {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  try {
+    const parsed = new URL(candidate);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return "";
+    }
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function resolveFlomoHomePageUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const candidates = [
+    String(env.FLOMO_H5_URL || ""),
+    String(env.DIGEST_H5_URL || ""),
+    String(env.TRACKER_BASE_URL || ""),
+    String(env.AI_NEWS_BASE_URL || ""),
+    String(env.NEXT_PUBLIC_APP_URL || ""),
+    String(env.VERCEL_URL || ""),
+  ];
+
+  for (const raw of candidates) {
+    const normalized = normalizeHomePageUrl(raw);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return "";
+}
+
+function buildCanonicalTagMap(
+  activeTagDefinitions: TagDefinition[],
+): Record<string, Record<string, string>> {
+  const byGroup: Record<string, Record<string, string>> = {};
+
+  (activeTagDefinitions || []).forEach((definition) => {
+    const groupKey = normalizeTagKey(definition.group_key);
+    const canonicalTag = normalizeTagKey(definition.tag_key);
+    if (!groupKey || !canonicalTag || !definition.is_active) {
+      return;
+    }
+
+    const bucket = byGroup[groupKey] || {};
+    bucket[canonicalTag] = canonicalTag;
+    (definition.aliases || []).forEach((alias) => {
+      const normalizedAlias = normalizeTagKey(alias);
+      if (normalizedAlias) {
+        bucket[normalizedAlias] = canonicalTag;
+      }
+    });
+    byGroup[groupKey] = bucket;
+  });
+
+  return byGroup;
+}
+
+function collectFlomoTags(params: {
+  articles: ArchiveArticleSummary[];
+  activeTagDefinitions?: TagDefinition[];
+  tagLimit?: number;
+}): string[] {
+  const articles = Array.isArray(params.articles) ? params.articles : [];
+  const tagLimit = Math.max(1, Math.min(Number(params.tagLimit || 20), 200));
+  const canonicalByGroup = buildCanonicalTagMap(params.activeTagDefinitions || []);
+  const countByTag = new Map<string, number>();
+
+  articles.forEach((article) => {
+    const tagGroups = article.tag_groups && typeof article.tag_groups === "object" ? article.tag_groups : {};
+    Object.entries(tagGroups)
+      .sort(([left], [right]) => String(left).localeCompare(String(right)))
+      .forEach(([groupKey, tags]) => {
+        const normalizedGroupKey = normalizeTagKey(groupKey);
+        if (!normalizedGroupKey || !Array.isArray(tags)) return;
+        const canonicalMap = canonicalByGroup[normalizedGroupKey] || {};
+
+        tags.forEach((rawTag) => {
+          const normalizedTag = normalizeTagKey(String(rawTag || ""));
+          if (!normalizedTag) return;
+          const canonicalTag = normalizeTagKey(canonicalMap[normalizedTag] || normalizedTag);
+          if (!canonicalTag) return;
+          countByTag.set(canonicalTag, (countByTag.get(canonicalTag) || 0) + 1);
+        });
+      });
+  });
+
+  return Array.from(countByTag.entries())
+    .sort((left, right) => {
+      if (right[1] !== left[1]) return right[1] - left[1];
+      return left[0].localeCompare(right[0]);
+    })
+    .slice(0, tagLimit)
+    .map(([tag]) => `#${tag}`);
 }
 
 function trackerBaseUrl(): string {
@@ -76,6 +186,8 @@ export function renderFlomoArchiveArticlesContent(params: {
   articles: ArchiveArticleSummary[];
   homePageUrl?: string;
   overviewLimit?: number;
+  activeTagDefinitions?: TagDefinition[];
+  tagLimit?: number;
 }): string {
   const reportDate = normalizeDate(params.reportDate);
   const articles = Array.isArray(params.articles) ? params.articles : [];
@@ -123,6 +235,18 @@ export function renderFlomoArchiveArticlesContent(params: {
     lines.push("");
   }
 
+  const tags = collectFlomoTags({
+    articles,
+    activeTagDefinitions: params.activeTagDefinitions || [],
+    tagLimit: params.tagLimit || 20,
+  });
+  if (tags.length) {
+    if (!homePageUrl) {
+      lines.push("");
+    }
+    lines.push(tags.join(" "));
+  }
+
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
@@ -130,6 +254,8 @@ export function buildFlomoArchiveArticlesPayload(params: {
   reportDate: string;
   articles: ArchiveArticleSummary[];
   dedupeKey?: string;
+  activeTagDefinitions?: TagDefinition[];
+  tagLimit?: number;
 }): FlomoArchiveArticlesPayload {
   const reportDate = normalizeDate(params.reportDate);
   const homePageUrl = resolveFlomoHomePageUrl();
@@ -139,6 +265,8 @@ export function buildFlomoArchiveArticlesPayload(params: {
       reportDate,
       articles: params.articles,
       homePageUrl,
+      activeTagDefinitions: params.activeTagDefinitions || [],
+      tagLimit: params.tagLimit || 20,
     }),
     dedupeKey,
   };

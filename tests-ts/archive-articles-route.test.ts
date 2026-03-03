@@ -27,6 +27,7 @@ describe("archive_articles route", () => {
               summary: "summary",
               image_url: "",
               source_host: "example.com",
+              tag_groups: {},
               date: "2026-02-28",
               digest_id: "digest_1",
               generated_at: "2026-02-28T10:00:00.000Z",

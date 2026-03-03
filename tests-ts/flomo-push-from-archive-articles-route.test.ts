@@ -7,6 +7,7 @@ const {
   tryAcquireFlomoArchivePushLockMock,
   releaseFlomoArchivePushLockMock,
   getNextRetryableFlomoArchivePushBatchMock,
+  listActiveTagDefinitionsMock,
   listConsumedFlomoArchiveArticleIdsMock,
   createFlomoArchivePushBatchMock,
   markFlomoArchivePushBatchSentMock,
@@ -17,6 +18,7 @@ const {
     tryAcquireFlomoArchivePushLockMock: vi.fn(),
     releaseFlomoArchivePushLockMock: vi.fn(),
     getNextRetryableFlomoArchivePushBatchMock: vi.fn(),
+    listActiveTagDefinitionsMock: vi.fn(),
     listConsumedFlomoArchiveArticleIdsMock: vi.fn(),
     createFlomoArchivePushBatchMock: vi.fn(),
     markFlomoArchivePushBatchSentMock: vi.fn(),
@@ -35,6 +37,7 @@ vi.mock("@/lib/article-db/repository", () => {
     tryAcquireFlomoArchivePushLock: (...args: unknown[]) => tryAcquireFlomoArchivePushLockMock(...args),
     releaseFlomoArchivePushLock: (...args: unknown[]) => releaseFlomoArchivePushLockMock(...args),
     getNextRetryableFlomoArchivePushBatch: (...args: unknown[]) => getNextRetryableFlomoArchivePushBatchMock(...args),
+    listActiveTagDefinitions: (...args: unknown[]) => listActiveTagDefinitionsMock(...args),
     listConsumedFlomoArchiveArticleIds: (...args: unknown[]) => listConsumedFlomoArchiveArticleIdsMock(...args),
     createFlomoArchivePushBatch: (...args: unknown[]) => createFlomoArchivePushBatchMock(...args),
     markFlomoArchivePushBatchSent: (...args: unknown[]) => markFlomoArchivePushBatchSentMock(...args),
@@ -58,6 +61,7 @@ describe("flomo push from archive_articles route", () => {
     tryAcquireFlomoArchivePushLockMock.mockResolvedValue(true);
     releaseFlomoArchivePushLockMock.mockResolvedValue(undefined);
     getNextRetryableFlomoArchivePushBatchMock.mockResolvedValue(null);
+    listActiveTagDefinitionsMock.mockResolvedValue([]);
     listConsumedFlomoArchiveArticleIdsMock.mockResolvedValue(new Set<string>());
     createFlomoArchivePushBatchMock.mockResolvedValue(undefined);
     markFlomoArchivePushBatchSentMock.mockResolvedValue(0);
@@ -127,6 +131,9 @@ describe("flomo push from archive_articles route", () => {
               summary: "第二篇摘要",
               image_url: "",
               source_host: "example.com",
+              tag_groups: {
+                topic: ["rag"],
+              },
               date: "2026-03-02",
               digest_id: "d2",
               generated_at: "2026-03-02T00:00:00.000Z",
@@ -143,6 +150,9 @@ describe("flomo push from archive_articles route", () => {
               summary: "第一篇摘要",
               image_url: "",
               source_host: "example.com",
+              tag_groups: {
+                topic: ["multi agent"],
+              },
               date: "2026-03-01",
               digest_id: "d1",
               generated_at: "2026-03-01T00:00:00.000Z",
@@ -152,6 +162,18 @@ describe("flomo push from archive_articles route", () => {
       ],
     });
     listConsumedFlomoArchiveArticleIdsMock.mockResolvedValue(new Set(["a2"]));
+    listActiveTagDefinitionsMock.mockResolvedValue([
+      {
+        group_key: "topic",
+        tag_key: "multi_agent",
+        display_name: "multi_agent",
+        description: "",
+        aliases: ["multi agent"],
+        is_active: true,
+        managed_by: "ai",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
     markFlomoArchivePushBatchSentMock.mockResolvedValue(1);
 
     const response = await GET(
@@ -163,6 +185,7 @@ describe("flomo push from archive_articles route", () => {
     expect(payload.ok).toBe(true);
     expect(payload.sent).toBe(true);
     expect(payload.article_count).toBe(1);
+    expect(payload.tag_count).toBe(1);
     expect(payload.source_date).toBe("2026-03-01");
     expect(payload.retrying_batch).toBe(false);
     expect(payload.consumed_count).toBe(1);
@@ -193,6 +216,7 @@ describe("flomo push from archive_articles route", () => {
     expect(sentPayload.content).toContain("ch=flomo");
     expect(sentPayload.content).toContain("sig=");
     expect(sentPayload.content).toContain("查看更多：https://ai-news.example.com/");
+    expect(sentPayload.content).toContain("#multi_agent");
   });
 
   it("uses explicit date when provided", async () => {
@@ -210,6 +234,7 @@ describe("flomo push from archive_articles route", () => {
               summary: "latest",
               image_url: "",
               source_host: "example.com",
+              tag_groups: {},
               date: "2026-03-02",
               digest_id: "d2",
               generated_at: "2026-03-02T00:00:00.000Z",
@@ -226,6 +251,7 @@ describe("flomo push from archive_articles route", () => {
               summary: "target",
               image_url: "",
               source_host: "example.com",
+              tag_groups: {},
               date: "2026-03-01",
               digest_id: "d1",
               generated_at: "2026-03-01T00:00:00.000Z",
@@ -316,6 +342,7 @@ describe("flomo push from archive_articles route", () => {
               summary: "摘要",
               image_url: "",
               source_host: "example.com",
+              tag_groups: {},
               date: "2026-03-01",
               digest_id: "d1",
               generated_at: "2026-03-01T00:00:00.000Z",

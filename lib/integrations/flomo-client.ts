@@ -1,4 +1,7 @@
-import { FlomoPayload } from "@/lib/output/flomo-formatter";
+export interface FlomoPayload {
+  content: string;
+  dedupeKey: string;
+}
 
 export class FlomoSyncError extends Error {}
 

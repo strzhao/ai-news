@@ -3,6 +3,7 @@ import { listArchiveArticles, type ArchiveArticleSummary } from "@/lib/domain/ar
 import {
   createFlomoArchivePushBatch,
   getNextRetryableFlomoArchivePushBatch,
+  listActiveTagDefinitions,
   listConsumedFlomoArchiveArticleIds,
   markFlomoArchivePushBatchFailed,
   markFlomoArchivePushBatchSent,
@@ -113,6 +114,7 @@ async function buildRetryPayloadFromArchives(params: {
   batchKey: string;
   sourceDate: string;
   articleIds: string[];
+  activeTagDefinitions: Awaited<ReturnType<typeof listActiveTagDefinitions>>;
   archiveOptions: {
     days: number;
     limitPerDay: number;
@@ -152,6 +154,8 @@ async function buildRetryPayloadFromArchives(params: {
     reportDate: params.sourceDate,
     articles: selectedArticles,
     dedupeKey: params.batchKey,
+    activeTagDefinitions: params.activeTagDefinitions,
+    tagLimit: 20,
   });
   return {
     content: payload.content,
@@ -213,6 +217,7 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const retryBatch = await getNextRetryableFlomoArchivePushBatch();
+    const activeTagDefinitions = await listActiveTagDefinitions();
     if (retryBatch) {
       const batchKey = String(retryBatch.batchKey || "").trim();
       if (!batchKey) {
@@ -227,6 +232,7 @@ export async function GET(request: Request): Promise<Response> {
           batchKey,
           sourceDate: retryBatch.sourceDate || reportDate,
           articleIds: retryBatch.articleIds,
+          activeTagDefinitions,
           archiveOptions,
         });
         content = rebuilt.content;
@@ -244,6 +250,7 @@ export async function GET(request: Request): Promise<Response> {
             timezone: timezoneName,
             quality_tier: qualityTier,
             article_count: 0,
+            tag_count: 0,
             consumed_count: 0,
             retrying_batch: true,
             batch_key: batchKey,
@@ -271,6 +278,12 @@ export async function GET(request: Request): Promise<Response> {
           timezone: timezoneName,
           quality_tier: qualityTier,
           article_count: articleCount,
+          tag_count: content
+            .split(/\r?\n/)
+            .filter((line) => line.includes("#"))
+            .join(" ")
+            .split(/\s+/)
+            .filter((token) => /^#[^\s]+$/.test(token)).length,
           consumed_count: consumedCount,
           retrying_batch: true,
           batch_key: batchKey,
@@ -308,6 +321,7 @@ export async function GET(request: Request): Promise<Response> {
           timezone: timezoneName,
           quality_tier: qualityTier,
           article_count: 0,
+          tag_count: 0,
           consumed_count: 0,
           retrying_batch: false,
           sent: false,
@@ -322,6 +336,8 @@ export async function GET(request: Request): Promise<Response> {
       reportDate: sourceDate,
       articles,
       dedupeKey: batchKey,
+      activeTagDefinitions,
+      tagLimit: 20,
     });
     batchKeyForFailure = batchKey;
 
@@ -346,6 +362,12 @@ export async function GET(request: Request): Promise<Response> {
         timezone: timezoneName,
         quality_tier: qualityTier,
         article_count: articles.length,
+        tag_count: payload.content
+          .split(/\r?\n/)
+          .filter((line) => line.includes("#"))
+          .join(" ")
+          .split(/\s+/)
+          .filter((token) => /^#[^\s]+$/.test(token)).length,
         consumed_count: consumedCount,
         retrying_batch: false,
         batch_key: batchKey,
