@@ -1,5 +1,29 @@
 import { fetchJson } from "@/lib/infra/http";
-import { HighQualityArticleGroup } from "@/lib/article-db/types";
+
+export interface HighQualityArticleItem {
+  article_id: string;
+  title: string;
+  url: string;
+  summary: string;
+  image_url: string;
+  source_host: string;
+  source_id: string;
+  source_name: string;
+  date: string;
+  digest_id: string;
+  generated_at: string;
+  quality_score: number;
+  quality_tier: "high" | "general" | "all";
+  confidence: number;
+  primary_type: string;
+  secondary_types: string[];
+  tag_groups: Record<string, string[]>;
+}
+
+export interface HighQualityArticleGroup {
+  date: string;
+  items: HighQualityArticleItem[];
+}
 
 function baseUrl(): string {
   return String(process.env.ARTICLE_DB_BASE_URL || "").trim().replace(/\/$/, "");
@@ -22,6 +46,31 @@ export interface FetchHighQualityRangeParams {
   toDate: string;
   limitPerDay: number;
   qualityTier?: string;
+}
+
+export interface FetchFlomoNextBatchParams {
+  date?: string;
+  tz?: string;
+  days?: number;
+  limitPerDay?: number;
+  articleLimitPerDay?: number;
+  qualityTier?: string;
+}
+
+export interface FetchFlomoNextBatchResult {
+  ok: boolean;
+  generatedAt: string;
+  reportDate: string;
+  sourceDate: string;
+  timezone: string;
+  qualityTier: "high" | "general" | "all";
+  hasBatch: boolean;
+  retryingBatch: boolean;
+  batchKey: string;
+  articleCount: number;
+  tagCount: number;
+  content: string;
+  reason: string;
 }
 
 export async function fetchHighQualityRange(
@@ -103,4 +152,93 @@ export async function fetchHighQualityRange(
     groups,
     totalArticles: Number(raw.total_articles || 0),
   };
+}
+
+export async function fetchFlomoNextPushBatch(params: FetchFlomoNextBatchParams): Promise<FetchFlomoNextBatchResult> {
+  const root = baseUrl();
+  if (!root) {
+    throw new Error("ARTICLE_DB_BASE_URL is not configured");
+  }
+
+  const raw = (await fetchJson(`${root}/api/v1/flomo/push-batches/next`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      date: params.date,
+      tz: params.tz,
+      days: params.days,
+      limit_per_day: params.limitPerDay,
+      article_limit_per_day: params.articleLimitPerDay,
+      quality_tier: params.qualityTier,
+    }),
+    timeoutMs: 20_000,
+  })) as Record<string, unknown>;
+
+  return {
+    ok: Boolean(raw.ok),
+    generatedAt: String(raw.generated_at || ""),
+    reportDate: String(raw.report_date || ""),
+    sourceDate: String(raw.source_date || ""),
+    timezone: String(raw.timezone || ""),
+    qualityTier: String(raw.quality_tier || "high") as "high" | "general" | "all",
+    hasBatch: Boolean(raw.has_batch),
+    retryingBatch: Boolean(raw.retrying_batch),
+    batchKey: String(raw.batch_key || ""),
+    articleCount: Number(raw.article_count || 0),
+    tagCount: Number(raw.tag_count || 0),
+    content: String(raw.content || ""),
+    reason: String(raw.reason || ""),
+  };
+}
+
+export async function markFlomoPushBatchSent(batchKey: string): Promise<{ consumedCount: number }> {
+  const root = baseUrl();
+  if (!root) {
+    throw new Error("ARTICLE_DB_BASE_URL is not configured");
+  }
+  const normalizedBatchKey = String(batchKey || "").trim();
+  if (!normalizedBatchKey) {
+    throw new Error("Missing batchKey");
+  }
+
+  const raw = (await fetchJson(`${root}/api/v1/flomo/push-batches/${encodeURIComponent(normalizedBatchKey)}/sent`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      ...authHeaders(),
+    },
+    timeoutMs: 20_000,
+  })) as Record<string, unknown>;
+
+  return {
+    consumedCount: Number(raw.consumed_count || 0),
+  };
+}
+
+export async function markFlomoPushBatchFailed(batchKey: string, errorMessage: string): Promise<void> {
+  const root = baseUrl();
+  if (!root) {
+    throw new Error("ARTICLE_DB_BASE_URL is not configured");
+  }
+  const normalizedBatchKey = String(batchKey || "").trim();
+  if (!normalizedBatchKey) {
+    throw new Error("Missing batchKey");
+  }
+
+  await fetchJson(`${root}/api/v1/flomo/push-batches/${encodeURIComponent(normalizedBatchKey)}/failed`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      error_message: String(errorMessage || "").slice(0, 2000),
+    }),
+    timeoutMs: 20_000,
+  });
 }

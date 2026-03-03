@@ -1,47 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/v1/flomo/push-from-archive-articles/route";
-import { listArchiveArticles } from "@/lib/domain/archive-articles";
 
 const {
   sendMock,
-  tryAcquireFlomoArchivePushLockMock,
-  releaseFlomoArchivePushLockMock,
-  getNextRetryableFlomoArchivePushBatchMock,
-  listActiveTagDefinitionsMock,
-  listConsumedFlomoArchiveArticleIdsMock,
-  createFlomoArchivePushBatchMock,
-  markFlomoArchivePushBatchSentMock,
-  markFlomoArchivePushBatchFailedMock,
+  fetchFlomoNextPushBatchMock,
+  markFlomoPushBatchSentMock,
+  markFlomoPushBatchFailedMock,
 } = vi.hoisted(() => {
   return {
     sendMock: vi.fn(),
-    tryAcquireFlomoArchivePushLockMock: vi.fn(),
-    releaseFlomoArchivePushLockMock: vi.fn(),
-    getNextRetryableFlomoArchivePushBatchMock: vi.fn(),
-    listActiveTagDefinitionsMock: vi.fn(),
-    listConsumedFlomoArchiveArticleIdsMock: vi.fn(),
-    createFlomoArchivePushBatchMock: vi.fn(),
-    markFlomoArchivePushBatchSentMock: vi.fn(),
-    markFlomoArchivePushBatchFailedMock: vi.fn(),
+    fetchFlomoNextPushBatchMock: vi.fn(),
+    markFlomoPushBatchSentMock: vi.fn(),
+    markFlomoPushBatchFailedMock: vi.fn(),
   };
 });
 
-vi.mock("@/lib/domain/archive-articles", () => {
+vi.mock("@/lib/integrations/article-db-client", () => {
   return {
-    listArchiveArticles: vi.fn(),
-  };
-});
-
-vi.mock("@/lib/article-db/repository", () => {
-  return {
-    tryAcquireFlomoArchivePushLock: (...args: unknown[]) => tryAcquireFlomoArchivePushLockMock(...args),
-    releaseFlomoArchivePushLock: (...args: unknown[]) => releaseFlomoArchivePushLockMock(...args),
-    getNextRetryableFlomoArchivePushBatch: (...args: unknown[]) => getNextRetryableFlomoArchivePushBatchMock(...args),
-    listActiveTagDefinitions: (...args: unknown[]) => listActiveTagDefinitionsMock(...args),
-    listConsumedFlomoArchiveArticleIds: (...args: unknown[]) => listConsumedFlomoArchiveArticleIdsMock(...args),
-    createFlomoArchivePushBatch: (...args: unknown[]) => createFlomoArchivePushBatchMock(...args),
-    markFlomoArchivePushBatchSent: (...args: unknown[]) => markFlomoArchivePushBatchSentMock(...args),
-    markFlomoArchivePushBatchFailed: (...args: unknown[]) => markFlomoArchivePushBatchFailedMock(...args),
+    fetchFlomoNextPushBatch: (...args: unknown[]) => fetchFlomoNextPushBatchMock(...args),
+    markFlomoPushBatchSent: (...args: unknown[]) => markFlomoPushBatchSentMock(...args),
+    markFlomoPushBatchFailed: (...args: unknown[]) => markFlomoPushBatchFailedMock(...args),
   };
 });
 
@@ -58,22 +36,31 @@ vi.mock("@/lib/integrations/flomo-client", () => {
 
 describe("flomo push from archive_articles route", () => {
   beforeEach(() => {
-    tryAcquireFlomoArchivePushLockMock.mockResolvedValue(true);
-    releaseFlomoArchivePushLockMock.mockResolvedValue(undefined);
-    getNextRetryableFlomoArchivePushBatchMock.mockResolvedValue(null);
-    listActiveTagDefinitionsMock.mockResolvedValue([]);
-    listConsumedFlomoArchiveArticleIdsMock.mockResolvedValue(new Set<string>());
-    createFlomoArchivePushBatchMock.mockResolvedValue(undefined);
-    markFlomoArchivePushBatchSentMock.mockResolvedValue(0);
-    markFlomoArchivePushBatchFailedMock.mockResolvedValue(undefined);
+    fetchFlomoNextPushBatchMock.mockResolvedValue({
+      ok: true,
+      generatedAt: "2026-03-01T00:00:00.000Z",
+      reportDate: "2026-03-01",
+      sourceDate: "2026-03-01",
+      timezone: "Asia/Shanghai",
+      qualityTier: "high",
+      hasBatch: true,
+      retryingBatch: false,
+      batchKey: "archive-articles-2026-03-01-batch",
+      articleCount: 2,
+      tagCount: 3,
+      content: "batch-content",
+      reason: "",
+    });
+    markFlomoPushBatchSentMock.mockResolvedValue({
+      consumedCount: 2,
+    });
+    markFlomoPushBatchFailedMock.mockResolvedValue(undefined);
+    sendMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
     delete process.env.CRON_SECRET;
-    delete process.env.FLOMO_H5_URL;
-    delete process.env.TRACKER_BASE_URL;
-    delete process.env.TRACKER_SIGNING_SECRET;
   });
 
   it("returns 401 when cron secret does not match", async () => {
@@ -84,15 +71,26 @@ describe("flomo push from archive_articles route", () => {
 
     expect(response.status).toBe(401);
     expect(payload.ok).toBe(false);
-    expect(listArchiveArticles).not.toHaveBeenCalled();
+    expect(fetchFlomoNextPushBatchMock).not.toHaveBeenCalled();
     expect(sendMock).not.toHaveBeenCalled();
   });
 
-  it("returns sent=false when no unconsumed article is available", async () => {
+  it("returns sent=false when no candidate batch is available", async () => {
     process.env.CRON_SECRET = "expected";
-    vi.mocked(listArchiveArticles).mockResolvedValue({
-      totalArticles: 0,
-      groups: [],
+    fetchFlomoNextPushBatchMock.mockResolvedValue({
+      ok: true,
+      generatedAt: "2026-03-01T00:00:00.000Z",
+      reportDate: "2026-03-01",
+      sourceDate: "2026-03-01",
+      timezone: "Asia/Shanghai",
+      qualityTier: "high",
+      hasBatch: false,
+      retryingBatch: false,
+      batchKey: "",
+      articleCount: 0,
+      tagCount: 0,
+      content: "",
+      reason: "No unconsumed high-quality archive articles found",
     });
 
     const response = await GET(
@@ -107,262 +105,59 @@ describe("flomo push from archive_articles route", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.sent).toBe(false);
-    expect(payload.article_count).toBe(0);
     expect(payload.reason).toBe("No unconsumed high-quality archive articles found");
     expect(sendMock).not.toHaveBeenCalled();
-    expect(createFlomoArchivePushBatchMock).not.toHaveBeenCalled();
+    expect(markFlomoPushBatchSentMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to older date when latest group is already consumed", async () => {
+  it("pushes flomo using analysis service batch and marks consumed on success", async () => {
     process.env.CRON_SECRET = "expected";
-    process.env.FLOMO_H5_URL = "https://ai-news.example.com";
-    process.env.TRACKER_BASE_URL = "https://tracker.example.com";
-    process.env.TRACKER_SIGNING_SECRET = "tracker-secret";
-    vi.mocked(listArchiveArticles).mockResolvedValue({
-      totalArticles: 2,
-      groups: [
-        {
-          date: "2026-03-02",
-          items: [
-            {
-              article_id: "a2",
-              title: "Second title",
-              url: "https://example.com/a2",
-              summary: "第二篇摘要",
-              image_url: "",
-              source_host: "example.com",
-              tag_groups: {
-                topic: ["rag"],
-              },
-              date: "2026-03-02",
-              digest_id: "d2",
-              generated_at: "2026-03-02T00:00:00.000Z",
-            },
-          ],
-        },
-        {
-          date: "2026-03-01",
-          items: [
-            {
-              article_id: "a1",
-              title: "First title",
-              url: "https://example.com/a1",
-              summary: "第一篇摘要",
-              image_url: "",
-              source_host: "example.com",
-              tag_groups: {
-                topic: ["multi agent"],
-              },
-              date: "2026-03-01",
-              digest_id: "d1",
-              generated_at: "2026-03-01T00:00:00.000Z",
-            },
-          ],
-        },
-      ],
-    });
-    listConsumedFlomoArchiveArticleIdsMock.mockResolvedValue(new Set(["a2"]));
-    listActiveTagDefinitionsMock.mockResolvedValue([
-      {
-        group_key: "topic",
-        tag_key: "multi_agent",
-        display_name: "multi_agent",
-        description: "",
-        aliases: ["multi agent"],
-        is_active: true,
-        managed_by: "ai",
-        updated_at: "2026-03-01T00:00:00.000Z",
-      },
-    ]);
-    markFlomoArchivePushBatchSentMock.mockResolvedValue(1);
 
     const response = await GET(
-      new Request("https://example.com/api/v1/flomo/push-from-archive-articles?token=expected"),
+      new Request(
+        "https://example.com/api/v1/flomo/push-from-archive-articles?token=expected&days=10&limit_per_day=12&article_limit_per_day=50&quality_tier=all&tz=UTC",
+      ),
     );
     const payload = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.sent).toBe(true);
-    expect(payload.article_count).toBe(1);
-    expect(payload.tag_count).toBe(1);
-    expect(payload.source_date).toBe("2026-03-01");
-    expect(payload.retrying_batch).toBe(false);
-    expect(payload.consumed_count).toBe(1);
-    expect(listArchiveArticles).toHaveBeenCalledWith({
-      days: 30,
-      limitPerDay: 30,
-      articleLimitPerDay: 30,
-      imageProbeLimit: 0,
-      qualityTier: "high",
+    expect(payload.batch_key).toBe("archive-articles-2026-03-01-batch");
+    expect(payload.article_count).toBe(2);
+    expect(payload.consumed_count).toBe(2);
+    expect(fetchFlomoNextPushBatchMock).toHaveBeenCalledWith({
+      date: undefined,
+      tz: "UTC",
+      days: 10,
+      limitPerDay: 12,
+      articleLimitPerDay: 50,
+      qualityTier: "all",
     });
-    expect(createFlomoArchivePushBatchMock).toHaveBeenCalledTimes(1);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(markFlomoArchivePushBatchSentMock).toHaveBeenCalledTimes(1);
-    expect(markFlomoArchivePushBatchFailedMock).not.toHaveBeenCalled();
-
-    const sentPayload = sendMock.mock.calls[0]?.[0] as { content: string; dedupeKey: string };
-    expect(String(sentPayload.dedupeKey || "")).toMatch(/^archive-articles-2026-03-01-/);
-    expect(sentPayload.dedupeKey).toBe(payload.batch_key);
-    expect(sentPayload.content).toContain("【重点文章】");
-    expect(sentPayload.content).toContain("1. First title");
-    expect(sentPayload.content).not.toContain("2. Second title");
-    expect(sentPayload.content).not.toContain("日期：");
-    expect(sentPayload.content).not.toContain("今日共");
-    expect(sentPayload.content).toContain("https://tracker.example.com/api/r?");
-    expect(sentPayload.content).toContain("sid=example.com");
-    expect(sentPayload.content).toContain("aid=a1");
-    expect(sentPayload.content).toContain("d=2026-03-01");
-    expect(sentPayload.content).toContain("ch=flomo");
-    expect(sentPayload.content).toContain("sig=");
-    expect(sentPayload.content).toContain("查看更多：https://ai-news.example.com/");
-    expect(sentPayload.content).toContain("#multi_agent");
-  });
-
-  it("uses explicit date when provided", async () => {
-    process.env.CRON_SECRET = "expected";
-    vi.mocked(listArchiveArticles).mockResolvedValue({
-      totalArticles: 2,
-      groups: [
-        {
-          date: "2026-03-02",
-          items: [
-            {
-              article_id: "a2",
-              title: "Latest",
-              url: "https://example.com/a2",
-              summary: "latest",
-              image_url: "",
-              source_host: "example.com",
-              tag_groups: {},
-              date: "2026-03-02",
-              digest_id: "d2",
-              generated_at: "2026-03-02T00:00:00.000Z",
-            },
-          ],
-        },
-        {
-          date: "2026-03-01",
-          items: [
-            {
-              article_id: "a1",
-              title: "Target",
-              url: "https://example.com/a1",
-              summary: "target",
-              image_url: "",
-              source_host: "example.com",
-              tag_groups: {},
-              date: "2026-03-01",
-              digest_id: "d1",
-              generated_at: "2026-03-01T00:00:00.000Z",
-            },
-          ],
-        },
-      ],
-    });
-    markFlomoArchivePushBatchSentMock.mockResolvedValue(1);
-
-    const response = await GET(
-      new Request("https://example.com/api/v1/flomo/push-from-archive-articles?token=expected&date=2026-03-01"),
-    );
-    const payload = (await response.json()) as Record<string, unknown>;
-
-    expect(response.status).toBe(200);
-    expect(payload.ok).toBe(true);
-    expect(payload.sent).toBe(true);
-    expect(payload.source_date).toBe("2026-03-01");
-
-    const sentPayload = sendMock.mock.calls[0]?.[0] as { content: string };
-    expect(sentPayload.content).toContain("1. Target");
-    expect(sentPayload.content).not.toContain("Latest");
-  });
-
-  it("retries pending/failed batch before selecting new group", async () => {
-    process.env.CRON_SECRET = "expected";
-    getNextRetryableFlomoArchivePushBatchMock.mockResolvedValue({
-      batchKey: "archive-articles-2026-03-01-fixed",
-      sourceDate: "2026-03-01",
-      status: "failed",
-      articleIds: ["a1"],
-      payloadContent: "retry content",
-      createdAt: "2026-03-01T00:00:00.000Z",
-      sentAt: "",
-      lastError: "temporary error",
-    });
-    markFlomoArchivePushBatchSentMock.mockResolvedValue(1);
-
-    const response = await GET(
-      new Request("https://example.com/api/v1/flomo/push-from-archive-articles?token=expected"),
-    );
-    const payload = (await response.json()) as Record<string, unknown>;
-
-    expect(response.status).toBe(200);
-    expect(payload.ok).toBe(true);
-    expect(payload.sent).toBe(true);
-    expect(payload.retrying_batch).toBe(true);
-    expect(payload.batch_key).toBe("archive-articles-2026-03-01-fixed");
-    expect(listArchiveArticles).not.toHaveBeenCalled();
-    expect(createFlomoArchivePushBatchMock).not.toHaveBeenCalled();
     expect(sendMock).toHaveBeenCalledWith({
-      content: "retry content",
-      dedupeKey: "archive-articles-2026-03-01-fixed",
+      content: "batch-content",
+      dedupeKey: "archive-articles-2026-03-01-batch",
     });
+    expect(markFlomoPushBatchSentMock).toHaveBeenCalledWith("archive-articles-2026-03-01-batch");
+    expect(markFlomoPushBatchFailedMock).not.toHaveBeenCalled();
   });
 
-  it("returns sent=false when lock is not acquired", async () => {
+  it("marks batch as failed when flomo delivery fails", async () => {
     process.env.CRON_SECRET = "expected";
-    tryAcquireFlomoArchivePushLockMock.mockResolvedValue(false);
+    sendMock.mockRejectedValue(new Error("flomo timeout"));
 
     const response = await GET(
       new Request("https://example.com/api/v1/flomo/push-from-archive-articles?token=expected"),
-    );
-    const payload = (await response.json()) as Record<string, unknown>;
-
-    expect(response.status).toBe(200);
-    expect(payload.ok).toBe(true);
-    expect(payload.sent).toBe(false);
-    expect(payload.reason).toBe("Another flomo push is in progress");
-    expect(listArchiveArticles).not.toHaveBeenCalled();
-    expect(sendMock).not.toHaveBeenCalled();
-    expect(releaseFlomoArchivePushLockMock).not.toHaveBeenCalled();
-  });
-
-  it("returns 500 when flomo send fails", async () => {
-    process.env.CRON_SECRET = "expected";
-    vi.mocked(listArchiveArticles).mockResolvedValue({
-      totalArticles: 1,
-      groups: [
-        {
-          date: "2026-03-01",
-          items: [
-            {
-              article_id: "a1",
-              title: "First",
-              url: "https://example.com/a1",
-              summary: "摘要",
-              image_url: "",
-              source_host: "example.com",
-              tag_groups: {},
-              date: "2026-03-01",
-              digest_id: "d1",
-              generated_at: "2026-03-01T00:00:00.000Z",
-            },
-          ],
-        },
-      ],
-    });
-    createFlomoArchivePushBatchMock.mockResolvedValue(undefined);
-    sendMock.mockRejectedValueOnce(new Error("flomo unavailable"));
-
-    const response = await GET(
-      new Request("https://example.com/api/v1/flomo/push-from-archive-articles?token=expected&date=2026-03-01"),
     );
     const payload = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(500);
     expect(payload.ok).toBe(false);
     expect(payload.sent).toBe(false);
-    expect(String(payload.error || "")).toContain("flomo unavailable");
-    expect(markFlomoArchivePushBatchFailedMock).toHaveBeenCalledTimes(1);
+    expect(markFlomoPushBatchSentMock).not.toHaveBeenCalled();
+    expect(markFlomoPushBatchFailedMock).toHaveBeenCalledWith(
+      "archive-articles-2026-03-01-batch",
+      "flomo timeout",
+    );
   });
 });

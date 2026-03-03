@@ -1,10 +1,32 @@
-import { ArchiveArticleSummary } from "@/lib/domain/archive-articles";
-import type { TagDefinition } from "@/lib/article-db/types";
 import { buildSignedTrackingUrl } from "@/lib/tracking/signed-url";
 
 export interface FlomoArchiveArticlesPayload {
   content: string;
   dedupeKey: string;
+}
+
+export interface FlomoArchiveArticleSummary {
+  article_id: string;
+  title: string;
+  url: string;
+  summary: string;
+  image_url: string;
+  source_host: string;
+  tag_groups: Record<string, string[]>;
+  date: string;
+  digest_id: string;
+  generated_at: string;
+}
+
+export interface FlomoTagDefinition {
+  group_key: string;
+  tag_key: string;
+  display_name: string;
+  description: string;
+  aliases: string[];
+  is_active: boolean;
+  managed_by: string;
+  updated_at: string;
 }
 
 function normalizeText(value: string, maxLen: number): string {
@@ -87,7 +109,7 @@ function resolveFlomoHomePageUrl(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 function buildCanonicalTagMap(
-  activeTagDefinitions: TagDefinition[],
+  activeTagDefinitions: FlomoTagDefinition[],
 ): Record<string, Record<string, string>> {
   const byGroup: Record<string, Record<string, string>> = {};
 
@@ -113,8 +135,8 @@ function buildCanonicalTagMap(
 }
 
 function collectFlomoTags(params: {
-  articles: ArchiveArticleSummary[];
-  activeTagDefinitions?: TagDefinition[];
+  articles: FlomoArchiveArticleSummary[];
+  activeTagDefinitions?: FlomoTagDefinition[];
   tagLimit?: number;
 }): string[] {
   const articles = Array.isArray(params.articles) ? params.articles : [];
@@ -158,7 +180,7 @@ function trackerSigningSecret(): string {
   return String(process.env.TRACKER_SIGNING_SECRET || "").trim();
 }
 
-function buildArchiveArticleLink(article: ArchiveArticleSummary, reportDate: string): string {
+function buildArchiveArticleLink(article: FlomoArchiveArticleSummary, reportDate: string): string {
   const targetUrl = normalizeUrl(article.url);
   if (!targetUrl) {
     return "";
@@ -183,10 +205,10 @@ function buildArchiveArticleLink(article: ArchiveArticleSummary, reportDate: str
 
 export function renderFlomoArchiveArticlesContent(params: {
   reportDate: string;
-  articles: ArchiveArticleSummary[];
+  articles: FlomoArchiveArticleSummary[];
   homePageUrl?: string;
   overviewLimit?: number;
-  activeTagDefinitions?: TagDefinition[];
+  activeTagDefinitions?: FlomoTagDefinition[];
   tagLimit?: number;
 }): string {
   const reportDate = normalizeDate(params.reportDate);
@@ -252,9 +274,9 @@ export function renderFlomoArchiveArticlesContent(params: {
 
 export function buildFlomoArchiveArticlesPayload(params: {
   reportDate: string;
-  articles: ArchiveArticleSummary[];
+  articles: FlomoArchiveArticleSummary[];
   dedupeKey?: string;
-  activeTagDefinitions?: TagDefinition[];
+  activeTagDefinitions?: FlomoTagDefinition[];
   tagLimit?: number;
 }): FlomoArchiveArticlesPayload {
   const reportDate = normalizeDate(params.reportDate);

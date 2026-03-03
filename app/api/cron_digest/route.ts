@@ -9,7 +9,7 @@ export async function GET(): Promise<Response> {
     {
       ok: false,
       error: "Deprecated endpoint: /api/cron_digest has been retired.",
-      replacement: "/api/v1/ingestion/run",
+      replacement: "article-db:/api/v1/ingestion/run",
       deprecated_since: "2026-03-01",
     },
     true,

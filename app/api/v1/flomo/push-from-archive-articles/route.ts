@@ -1,18 +1,10 @@
-import crypto from "node:crypto";
-import { listArchiveArticles, type ArchiveArticleSummary } from "@/lib/domain/archive-articles";
 import {
-  createFlomoArchivePushBatch,
-  getNextRetryableFlomoArchivePushBatch,
-  listActiveTagDefinitions,
-  listConsumedFlomoArchiveArticleIds,
-  markFlomoArchivePushBatchFailed,
-  markFlomoArchivePushBatchSent,
-  releaseFlomoArchivePushLock,
-  tryAcquireFlomoArchivePushLock,
-} from "@/lib/article-db/repository";
+  fetchFlomoNextPushBatch,
+  markFlomoPushBatchFailed,
+  markFlomoPushBatchSent,
+} from "@/lib/integrations/article-db-client";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { FlomoClient } from "@/lib/integrations/flomo-client";
-import { buildFlomoArchiveArticlesPayload } from "@/lib/output/flomo-archive-articles-formatter";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -80,102 +72,17 @@ function isAuthorized(request: Request, url: URL): boolean {
   return queryValue(url, "token") === cronSecret;
 }
 
-function buildBatchKey(sourceDate: string): string {
-  const nonce = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  const hash = crypto.createHash("sha256").update(`${sourceDate}:${nonce}`).digest("hex").slice(0, 12);
-  return `archive-articles-${sourceDate}-${hash}`;
-}
-
-function sortGroupsByDateDesc<T extends { date: string }>(groups: T[]): T[] {
-  return [...groups].sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")));
-}
-
-function flattenArticleIds(groups: Array<{ items: ArchiveArticleSummary[] }>): string[] {
-  const ids: string[] = [];
-  groups.forEach((group) => {
-    group.items.forEach((item) => {
-      const articleId = String(item.article_id || "").trim();
-      if (articleId) {
-        ids.push(articleId);
-      }
-    });
-  });
-  return ids;
-}
-
-function filterUnconsumedArticles(articles: ArchiveArticleSummary[], consumedIds: Set<string>): ArchiveArticleSummary[] {
-  return articles.filter((item) => {
-    const articleId = String(item.article_id || "").trim();
-    return articleId && !consumedIds.has(articleId);
-  });
-}
-
-async function buildRetryPayloadFromArchives(params: {
-  batchKey: string;
-  sourceDate: string;
-  articleIds: string[];
-  activeTagDefinitions: Awaited<ReturnType<typeof listActiveTagDefinitions>>;
-  archiveOptions: {
-    days: number;
-    limitPerDay: number;
-    articleLimitPerDay: number;
-    imageProbeLimit: number;
-    qualityTier: "high" | "general" | "all";
-  };
-}): Promise<{ content: string; articleCount: number }> {
-  const archive = await listArchiveArticles(params.archiveOptions);
-  const byArticleId = new Map<string, ArchiveArticleSummary>();
-  archive.groups.forEach((group) => {
-    group.items.forEach((item) => {
-      const articleId = String(item.article_id || "").trim();
-      if (!articleId || byArticleId.has(articleId)) {
-        return;
-      }
-      byArticleId.set(articleId, item);
-    });
-  });
-
-  const selectedArticles: ArchiveArticleSummary[] = [];
-  params.articleIds.forEach((articleId) => {
-    const article = byArticleId.get(articleId);
-    if (article) {
-      selectedArticles.push(article);
-    }
-  });
-
-  if (!selectedArticles.length) {
-    return {
-      content: "",
-      articleCount: 0,
-    };
-  }
-
-  const payload = buildFlomoArchiveArticlesPayload({
-    reportDate: params.sourceDate,
-    articles: selectedArticles,
-    dedupeKey: params.batchKey,
-    activeTagDefinitions: params.activeTagDefinitions,
-    tagLimit: 20,
-  });
-  return {
-    content: payload.content,
-    articleCount: selectedArticles.length,
-  };
-}
-
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (!isAuthorized(request, url)) {
     return jsonResponse(401, { ok: false, error: "Unauthorized" }, true);
   }
 
-  let lockAcquired = false;
   let batchKeyForFailure = "";
 
   try {
     const timezoneName = String(queryValue(url, "tz") || process.env.DIGEST_TIMEZONE || "Asia/Shanghai").trim() || "Asia/Shanghai";
     const rawDate = queryValue(url, "date");
-    const hasExplicitDate = Boolean(rawDate);
     const reportDate = normalizedDate(rawDate, dateShift(0, timezoneName));
     const days = boundedInt(queryValue(url, "days"), Number.parseInt(process.env.FLOMO_ARCHIVE_DAYS || "30", 10) || 30, 1, 30);
     const limitPerDay = boundedInt(
@@ -190,187 +97,59 @@ export async function GET(request: Request): Promise<Response> {
       5000,
     );
     const qualityTier = normalizeQualityTier(queryValue(url, "quality_tier") || "high");
-    const archiveOptions = {
+
+    const nextBatch = await fetchFlomoNextPushBatch({
+      date: rawDate || undefined,
+      tz: timezoneName,
       days,
       limitPerDay,
       articleLimitPerDay,
-      imageProbeLimit: 0,
       qualityTier,
-    };
+    });
 
-    lockAcquired = await tryAcquireFlomoArchivePushLock();
-    if (!lockAcquired) {
+    if (!nextBatch.hasBatch || !nextBatch.batchKey || !String(nextBatch.content || "").trim()) {
       return jsonResponse(
         200,
         {
           ok: true,
           generated_at: new Date().toISOString(),
-          report_date: reportDate,
-          timezone: timezoneName,
-          quality_tier: qualityTier,
-          article_count: 0,
-          sent: false,
-          reason: "Another flomo push is in progress",
-        },
-        true,
-      );
-    }
-
-    const retryBatch = await getNextRetryableFlomoArchivePushBatch();
-    const activeTagDefinitions = await listActiveTagDefinitions();
-    if (retryBatch) {
-      const batchKey = String(retryBatch.batchKey || "").trim();
-      if (!batchKey) {
-        throw new Error("Invalid retry batch: missing batch key");
-      }
-      batchKeyForFailure = batchKey;
-
-      let content = String(retryBatch.payloadContent || "");
-      let articleCount = retryBatch.articleIds.length;
-      if (!content.trim()) {
-        const rebuilt = await buildRetryPayloadFromArchives({
-          batchKey,
-          sourceDate: retryBatch.sourceDate || reportDate,
-          articleIds: retryBatch.articleIds,
-          activeTagDefinitions,
-          archiveOptions,
-        });
-        content = rebuilt.content;
-        articleCount = rebuilt.articleCount;
-      }
-
-      if (!content.trim()) {
-        return jsonResponse(
-          200,
-          {
-            ok: true,
-            generated_at: new Date().toISOString(),
-            report_date: reportDate,
-            source_date: retryBatch.sourceDate || reportDate,
-            timezone: timezoneName,
-            quality_tier: qualityTier,
-            article_count: 0,
-            tag_count: 0,
-            consumed_count: 0,
-            retrying_batch: true,
-            batch_key: batchKey,
-            sent: false,
-            reason: "Retry batch payload is empty",
-          },
-          true,
-        );
-      }
-
-      const flomo = new FlomoClient();
-      await flomo.send({
-        content,
-        dedupeKey: batchKey,
-      });
-      const consumedCount = await markFlomoArchivePushBatchSent(batchKey);
-
-      return jsonResponse(
-        200,
-        {
-          ok: true,
-          generated_at: new Date().toISOString(),
-          report_date: reportDate,
-          source_date: retryBatch.sourceDate || reportDate,
-          timezone: timezoneName,
-          quality_tier: qualityTier,
-          article_count: articleCount,
-          tag_count: content
-            .split(/\r?\n/)
-            .filter((line) => line.includes("#"))
-            .join(" ")
-            .split(/\s+/)
-            .filter((token) => /^#[^\s]+$/.test(token)).length,
-          consumed_count: consumedCount,
-          retrying_batch: true,
-          batch_key: batchKey,
-          sent: true,
-        },
-        true,
-      );
-    }
-
-    const result = await listArchiveArticles(archiveOptions);
-    const sortedGroups = sortGroupsByDateDesc(result.groups || []);
-    const candidateGroups = hasExplicitDate ? sortedGroups.filter((group) => group.date === reportDate) : sortedGroups;
-    const candidateArticleIds = flattenArticleIds(candidateGroups);
-    const consumedIds = await listConsumedFlomoArchiveArticleIds(candidateArticleIds);
-
-    const unconsumedGroups = candidateGroups
-      .map((group) => ({
-        ...group,
-        items: filterUnconsumedArticles(Array.isArray(group.items) ? group.items : [], consumedIds),
-      }))
-      .filter((group) => group.items.length > 0);
-
-    const targetGroup = unconsumedGroups[0] || { date: reportDate, items: [] };
-    const sourceDate = targetGroup.date || reportDate;
-    const articles = Array.isArray(targetGroup.items) ? targetGroup.items : [];
-
-    if (!articles.length) {
-      return jsonResponse(
-        200,
-        {
-          ok: true,
-          generated_at: new Date().toISOString(),
-          report_date: reportDate,
-          source_date: sourceDate,
-          timezone: timezoneName,
-          quality_tier: qualityTier,
+          report_date: nextBatch.reportDate || reportDate,
+          source_date: nextBatch.sourceDate || reportDate,
+          timezone: nextBatch.timezone || timezoneName,
+          quality_tier: nextBatch.qualityTier || qualityTier,
           article_count: 0,
           tag_count: 0,
           consumed_count: 0,
-          retrying_batch: false,
+          retrying_batch: Boolean(nextBatch.retryingBatch),
           sent: false,
-          reason: "No unconsumed high-quality archive articles found",
+          reason: nextBatch.reason || "No unconsumed high-quality archive articles found",
         },
         true,
       );
     }
 
-    const batchKey = buildBatchKey(sourceDate);
-    const payload = buildFlomoArchiveArticlesPayload({
-      reportDate: sourceDate,
-      articles,
-      dedupeKey: batchKey,
-      activeTagDefinitions,
-      tagLimit: 20,
-    });
-    batchKeyForFailure = batchKey;
-
-    await createFlomoArchivePushBatch({
-      batchKey,
-      sourceDate,
-      articleIds: articles.map((item) => item.article_id),
-      payloadContent: payload.content,
-    });
-
+    batchKeyForFailure = nextBatch.batchKey;
     const flomo = new FlomoClient();
-    await flomo.send(payload);
-    const consumedCount = await markFlomoArchivePushBatchSent(batchKey);
+    await flomo.send({
+      content: nextBatch.content,
+      dedupeKey: nextBatch.batchKey,
+    });
+    const sentResult = await markFlomoPushBatchSent(nextBatch.batchKey);
 
     return jsonResponse(
       200,
       {
         ok: true,
         generated_at: new Date().toISOString(),
-        report_date: reportDate,
-        source_date: sourceDate,
-        timezone: timezoneName,
-        quality_tier: qualityTier,
-        article_count: articles.length,
-        tag_count: payload.content
-          .split(/\r?\n/)
-          .filter((line) => line.includes("#"))
-          .join(" ")
-          .split(/\s+/)
-          .filter((token) => /^#[^\s]+$/.test(token)).length,
-        consumed_count: consumedCount,
-        retrying_batch: false,
-        batch_key: batchKey,
+        report_date: nextBatch.reportDate || reportDate,
+        source_date: nextBatch.sourceDate || reportDate,
+        timezone: nextBatch.timezone || timezoneName,
+        quality_tier: nextBatch.qualityTier || qualityTier,
+        article_count: nextBatch.articleCount,
+        tag_count: nextBatch.tagCount,
+        consumed_count: sentResult.consumedCount,
+        retrying_batch: Boolean(nextBatch.retryingBatch),
+        batch_key: nextBatch.batchKey,
         sent: true,
       },
       true,
@@ -378,10 +157,10 @@ export async function GET(request: Request): Promise<Response> {
   } catch (error) {
     if (batchKeyForFailure) {
       try {
-        await markFlomoArchivePushBatchFailed({
-          batchKey: batchKeyForFailure,
-          errorMessage: error instanceof Error ? error.message : String(error),
-        });
+        await markFlomoPushBatchFailed(
+          batchKeyForFailure,
+          error instanceof Error ? error.message : String(error),
+        );
       } catch {
         // no-op: keep original error
       }
@@ -395,13 +174,5 @@ export async function GET(request: Request): Promise<Response> {
       },
       true,
     );
-  } finally {
-    if (lockAcquired) {
-      try {
-        await releaseFlomoArchivePushLock();
-      } catch {
-        // no-op
-      }
-    }
   }
 }

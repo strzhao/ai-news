@@ -8,6 +8,6 @@ describe("cron_digest route", () => {
 
     expect(response.status).toBe(410);
     expect(payload.ok).toBe(false);
-    expect(payload.replacement).toBe("/api/v1/ingestion/run");
+    expect(payload.replacement).toBe("article-db:/api/v1/ingestion/run");
   });
 });
