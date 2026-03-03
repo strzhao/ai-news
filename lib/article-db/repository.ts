@@ -28,6 +28,20 @@ let schemaReady: Promise<void> | null = null;
 const MAX_FULL_CONTENT_TEXT_CHARS = 500_000;
 const MAX_FULL_CONTENT_HTML_CHARS = 2_000_000;
 const MAX_RELATED_IMAGES_PER_ARTICLE = 120;
+const FLOMO_ARCHIVE_PUSH_LOCK_ID = 781_002_901;
+
+export type FlomoArchivePushBatchStatus = "pending" | "sent" | "failed";
+
+export interface FlomoArchivePushBatchRow {
+  batchKey: string;
+  sourceDate: string;
+  status: FlomoArchivePushBatchStatus;
+  articleIds: string[];
+  payloadContent: string;
+  createdAt: string;
+  sentAt: string;
+  lastError: string;
+}
 
 function toHost(rawUrl: string): string {
   try {
@@ -113,6 +127,26 @@ function parseStringArray(value: unknown): string[] {
     }
   }
   return [];
+}
+
+function parseFlomoArchivePushStatus(value: unknown): FlomoArchivePushBatchStatus {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "sent") return "sent";
+  if (raw === "failed") return "failed";
+  return "pending";
+}
+
+function rowToFlomoArchivePushBatch(row: Record<string, unknown>): FlomoArchivePushBatchRow {
+  return {
+    batchKey: String(row.batch_key || ""),
+    sourceDate: toDateString(row.source_date),
+    status: parseFlomoArchivePushStatus(row.status),
+    articleIds: parseStringArray(row.article_ids_json),
+    payloadContent: String(row.payload_content || ""),
+    createdAt: toIso(row.created_at),
+    sentAt: toIso(row.sent_at),
+    lastError: String(row.last_error || ""),
+  };
 }
 
 function parseJsonObject(value: unknown): Record<string, unknown> {
@@ -523,6 +557,25 @@ export async function ensureArticleDbSchema(): Promise<void> {
         CONSTRAINT chk_article_quality_feedback_value CHECK (feedback IN ('good', 'bad'))
       );
 
+      CREATE TABLE IF NOT EXISTS flomo_archive_push_batches (
+        batch_key TEXT PRIMARY KEY,
+        source_date DATE NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        article_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+        payload_content TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        sent_at TIMESTAMPTZ,
+        last_error TEXT NOT NULL DEFAULT '',
+        CONSTRAINT chk_flomo_archive_push_batches_status CHECK (status IN ('pending', 'sent', 'failed'))
+      );
+
+      CREATE TABLE IF NOT EXISTS flomo_archive_article_consumption (
+        article_id TEXT PRIMARY KEY,
+        source_date DATE NOT NULL,
+        batch_key TEXT NOT NULL REFERENCES flomo_archive_push_batches(batch_key) ON UPDATE CASCADE ON DELETE RESTRICT,
+        consumed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       ALTER TABLE article_analysis ADD COLUMN IF NOT EXISTS tag_groups JSONB NOT NULL DEFAULT '{}'::jsonb;
       ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
       ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_full_text TEXT NOT NULL DEFAULT '';
@@ -553,6 +606,12 @@ export async function ensureArticleDbSchema(): Promise<void> {
         ON article_quality_feedback (source_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_article_quality_feedback_type_created
         ON article_quality_feedback (primary_type, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_flomo_archive_push_batches_status_created
+        ON flomo_archive_push_batches (status, created_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_flomo_archive_push_batches_source_date
+        ON flomo_archive_push_batches (source_date DESC, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_flomo_archive_article_consumption_source_date
+        ON flomo_archive_article_consumption (source_date DESC, consumed_at DESC);
 
       INSERT INTO daily_analyzed_articles (date, article_id, quality_score_snapshot, rank_score, analyzed_at)
       SELECT date, article_id, quality_score_snapshot, rank_score, selected_at
@@ -1191,6 +1250,193 @@ export async function finishIngestionRun(params: {
       String(params.errorMessage || ""),
       JSON.stringify(params.statsJson || {}),
     ],
+  );
+}
+
+export async function tryAcquireFlomoArchivePushLock(): Promise<boolean> {
+  await ensureArticleDbSchema();
+  const pool = getPgPool();
+  const result = await pool.query(`SELECT pg_try_advisory_lock($1::bigint) AS locked`, [FLOMO_ARCHIVE_PUSH_LOCK_ID]);
+  const row = (result.rows[0] || {}) as Record<string, unknown>;
+  return Boolean(row.locked);
+}
+
+export async function releaseFlomoArchivePushLock(): Promise<void> {
+  const pool = getPgPool();
+  await pool.query(`SELECT pg_advisory_unlock($1::bigint) AS unlocked`, [FLOMO_ARCHIVE_PUSH_LOCK_ID]);
+}
+
+export async function getNextRetryableFlomoArchivePushBatch(): Promise<FlomoArchivePushBatchRow | null> {
+  await ensureArticleDbSchema();
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    SELECT
+      batch_key,
+      source_date,
+      status,
+      article_ids_json,
+      payload_content,
+      created_at,
+      sent_at,
+      last_error
+    FROM flomo_archive_push_batches
+    WHERE status IN ('pending', 'failed')
+    ORDER BY
+      CASE WHEN status = 'pending' THEN 0 ELSE 1 END ASC,
+      created_at ASC
+    LIMIT 1
+  `,
+  );
+  if (!result.rows.length) {
+    return null;
+  }
+  return rowToFlomoArchivePushBatch(result.rows[0] as Record<string, unknown>);
+}
+
+export async function createFlomoArchivePushBatch(params: {
+  batchKey: string;
+  sourceDate: string;
+  articleIds: string[];
+  payloadContent: string;
+}): Promise<FlomoArchivePushBatchRow> {
+  await ensureArticleDbSchema();
+  const batchKey = String(params.batchKey || "").trim();
+  if (!batchKey) {
+    throw new Error("Missing batchKey");
+  }
+  const sourceDate = normalizeDate(params.sourceDate);
+  const articleIds = Array.from(new Set(params.articleIds.map((id) => String(id || "").trim()).filter(Boolean)));
+  if (!articleIds.length) {
+    throw new Error("Missing articleIds");
+  }
+  const payloadContent = String(params.payloadContent || "");
+
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    INSERT INTO flomo_archive_push_batches (
+      batch_key,
+      source_date,
+      status,
+      article_ids_json,
+      payload_content,
+      created_at,
+      sent_at,
+      last_error
+    )
+    VALUES ($1, $2::date, 'pending', $3::jsonb, $4, NOW(), NULL, '')
+    RETURNING
+      batch_key,
+      source_date,
+      status,
+      article_ids_json,
+      payload_content,
+      created_at,
+      sent_at,
+      last_error
+  `,
+    [batchKey, sourceDate, JSON.stringify(articleIds), payloadContent],
+  );
+
+  return rowToFlomoArchivePushBatch(result.rows[0] as Record<string, unknown>);
+}
+
+export async function markFlomoArchivePushBatchFailed(params: { batchKey: string; errorMessage: string }): Promise<void> {
+  await ensureArticleDbSchema();
+  const batchKey = String(params.batchKey || "").trim();
+  if (!batchKey) {
+    return;
+  }
+
+  const pool = getPgPool();
+  await pool.query(
+    `
+    UPDATE flomo_archive_push_batches
+    SET
+      status = 'failed',
+      last_error = $2
+    WHERE batch_key = $1
+      AND status <> 'sent'
+  `,
+    [batchKey, String(params.errorMessage || "").slice(0, 2000)],
+  );
+}
+
+export async function markFlomoArchivePushBatchSent(batchKeyInput: string): Promise<number> {
+  await ensureArticleDbSchema();
+  const batchKey = String(batchKeyInput || "").trim();
+  if (!batchKey) {
+    throw new Error("Missing batchKey");
+  }
+
+  return withTx(async (client) => {
+    const batchResult = await client.query(
+      `
+      SELECT batch_key, source_date, article_ids_json
+      FROM flomo_archive_push_batches
+      WHERE batch_key = $1
+      FOR UPDATE
+    `,
+      [batchKey],
+    );
+    if (!batchResult.rows.length) {
+      throw new Error(`Flomo push batch not found: ${batchKey}`);
+    }
+    const batchRow = batchResult.rows[0] as Record<string, unknown>;
+    const sourceDate = normalizeDate(toDateString(batchRow.source_date));
+    const articleIds = Array.from(new Set(parseStringArray(batchRow.article_ids_json)));
+
+    let consumedCount = 0;
+    for (const articleId of articleIds) {
+      const inserted = await client.query(
+        `
+        INSERT INTO flomo_archive_article_consumption (article_id, source_date, batch_key, consumed_at)
+        VALUES ($1, $2::date, $3, NOW())
+        ON CONFLICT (article_id) DO NOTHING
+      `,
+        [articleId, sourceDate, batchKey],
+      );
+      consumedCount += Number(inserted.rowCount || 0);
+    }
+
+    await client.query(
+      `
+      UPDATE flomo_archive_push_batches
+      SET
+        status = 'sent',
+        sent_at = NOW(),
+        last_error = ''
+      WHERE batch_key = $1
+    `,
+      [batchKey],
+    );
+
+    return consumedCount;
+  });
+}
+
+export async function listConsumedFlomoArchiveArticleIds(articleIds: string[]): Promise<Set<string>> {
+  await ensureArticleDbSchema();
+  const normalizedIds = Array.from(new Set(articleIds.map((id) => String(id || "").trim()).filter(Boolean)));
+  if (!normalizedIds.length) {
+    return new Set<string>();
+  }
+
+  const pool = getPgPool();
+  const result = await pool.query(
+    `
+    SELECT article_id
+    FROM flomo_archive_article_consumption
+    WHERE article_id = ANY($1::text[])
+  `,
+    [normalizedIds],
+  );
+
+  return new Set(
+    result.rows
+      .map((raw) => String((raw as Record<string, unknown>).article_id || "").trim())
+      .filter(Boolean),
   );
 }
 

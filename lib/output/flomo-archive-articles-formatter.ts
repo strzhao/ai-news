@@ -129,15 +129,17 @@ export function renderFlomoArchiveArticlesContent(params: {
 export function buildFlomoArchiveArticlesPayload(params: {
   reportDate: string;
   articles: ArchiveArticleSummary[];
+  dedupeKey?: string;
 }): FlomoArchiveArticlesPayload {
   const reportDate = normalizeDate(params.reportDate);
   const homePageUrl = resolveFlomoHomePageUrl();
+  const dedupeKey = String(params.dedupeKey || "").trim() || `archive-articles-${reportDate}`;
   return {
     content: renderFlomoArchiveArticlesContent({
       reportDate,
       articles: params.articles,
       homePageUrl,
     }),
-    dedupeKey: `archive-articles-${reportDate}`,
+    dedupeKey,
   };
 }

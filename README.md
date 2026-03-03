@@ -17,7 +17,7 @@
   - `DELETE /api/v1/tags/groups/:group_key/:tag_key`
 - 消费层（AI-news）：
   - `GET /api/archive_articles` 对前端保持兼容，内部优先消费 `ARTICLE_DB_BASE_URL`
-  - `GET /api/v1/flomo/push-from-archive-articles`：基于 `/api/archive_articles` 同源数据推送 flomo（支持 `Authorization: Bearer $CRON_SECRET` 或 `?token=`）
+  - `GET /api/v1/flomo/push-from-archive-articles`：基于 `/api/archive_articles` 同源数据推送 flomo（支持 `Authorization: Bearer $CRON_SECRET` 或 `?token=`），默认回溯最近 30 天并按“最新日期优先”选择未消费文章，`article_id` 全局只消费一次
 - 旧入口 `GET /api/cron_digest` 已废弃，返回 `410`。
 
 ## Quick Start
@@ -132,7 +132,7 @@ npm run dev
 ### flomo Sync (optional)
 
 - `FLOMO_API_URL` (enable sync when provided)
-- `FLOMO_ARCHIVE_DAYS` (default: `1`)
+- `FLOMO_ARCHIVE_DAYS` (default: `30`)
 - `FLOMO_ARCHIVE_LIMIT_PER_DAY` (default: `30`)
 - `FLOMO_ARCHIVE_ARTICLE_LIMIT_PER_DAY` (default: `30`)
 

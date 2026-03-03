@@ -18,6 +18,7 @@ describe("flomo archive articles formatter", () => {
 
     const payload = buildFlomoArchiveArticlesPayload({
       reportDate: "2026-03-01",
+      dedupeKey: "batch-123",
       articles: [
         {
           article_id: "a1",
@@ -44,7 +45,7 @@ describe("flomo archive articles formatter", () => {
       ],
     });
 
-    expect(payload.dedupeKey).toBe("archive-articles-2026-03-01");
+    expect(payload.dedupeKey).toBe("batch-123");
     expect(payload.content).toContain("【今日速览】");
     expect(payload.content).not.toContain("日期：");
     expect(payload.content).not.toContain("今日共");
