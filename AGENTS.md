@@ -54,3 +54,14 @@
 - Never commit secrets. Use `.env.local` for local values.
 - Key sensitive vars: `CRON_SECRET`, `TRACKER_SIGNING_SECRET`, `ARTICLE_DB_API_TOKEN`, `FLOMO_API_URL`.
 - When changing cron-triggered APIs, update both `vercel.json` and `README.md` together.
+
+## Flomo Integration Rules (Important)
+- Single flomo path only: keep `GET /api/v1/flomo/push-from-archive-articles` as the only flomo delivery path.
+- Legacy digest flomo flow is removed intentionally; do not re-introduce `lib/output/flomo-formatter.ts` or digest-runner direct flomo sync.
+- flomo tags must be appended at the very end of content.
+- Tag source is `tag_groups` only (not primary/secondary type fallback).
+- Tag format must be `#tag` with no spaces in tag text; normalize to snake_case-compatible keys.
+- Tag canonicalization must reuse active `tag_registry` definitions (alias -> canonical).
+- Preserve one-time consumption guarantees using existing Postgres state:
+  - `flomo_archive_push_batches`
+  - `flomo_archive_article_consumption`
