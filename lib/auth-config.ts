@@ -51,10 +51,20 @@ export function buildAuthorizeUrlForCurrentOrigin(state: string): string {
   return authorizeUrl.toString();
 }
 
+function toRuntimeAbsoluteUrl(rawPathOrUrl: string): string {
+  const value = String(rawPathOrUrl || "").trim();
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+  const runtimeOrigin =
+    typeof window !== "undefined" && window.location?.origin ? window.location.origin : getAppOrigin();
+  return new URL(value.startsWith("/") ? value : `/${value}`, runtimeOrigin).toString();
+}
+
 export function buildAuthMeUrl(): string {
-  return new URL(getAuthMePath(), getAuthIssuer()).toString();
+  return toRuntimeAbsoluteUrl(getAuthMePath());
 }
 
 export function buildAuthLogoutUrl(): string {
-  return new URL(getAuthLogoutPath(), getAuthIssuer()).toString();
+  return toRuntimeAbsoluteUrl(getAuthLogoutPath());
 }

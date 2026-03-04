@@ -23,8 +23,8 @@
 
 - 登录入口统一使用 `GET https://user.stringzhao.life/authorize?return_to=<callback>&state=<opaque_state>`
 - 回跳后必须校验 `authorized=1` 与 `state` 一致
-- 前端登录态读取：`GET https://user.stringzhao.life/api/auth/me`（`credentials: include`）
-- 前端退出登录：`POST https://user.stringzhao.life/api/auth/logout`（`credentials: include`）
+- 前端登录态读取：`GET /api/auth/me`（本站代理到账号中心，避免浏览器 CORS）
+- 前端退出登录：`POST /api/auth/logout`（本站代理到账号中心，避免浏览器 CORS）
 - `GET /api/stats/sources` 与 `GET /api/stats/types` 支持双轨鉴权：
   - 统一登录 JWT（`Authorization: Bearer <access_token>`）
   - 兼容机器调用 token（`Authorization: Bearer <TRACKER_API_TOKEN>`）
