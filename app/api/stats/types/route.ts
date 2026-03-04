@@ -1,13 +1,13 @@
-import { buildUpstashClient, keyToIsoDate, lastNDateKeys, parseBearerToken, parseHashResult } from "@/lib/domain/tracker-common";
+import { resolveStatsAuth } from "@/lib/auth/unified-auth";
+import { buildUpstashClient, keyToIsoDate, lastNDateKeys, parseHashResult } from "@/lib/domain/tracker-common";
 import { jsonResponse } from "@/lib/infra/route-utils";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request): Promise<Response> {
-  const expectedToken = String(process.env.TRACKER_API_TOKEN || "").trim();
-  const providedToken = parseBearerToken(request.headers.get("authorization"));
-  if (!expectedToken || providedToken !== expectedToken) {
-    return jsonResponse(401, { error: "Unauthorized" });
+  const auth = await resolveStatsAuth(request);
+  if (!auth.ok) {
+    return jsonResponse(401, { ok: false, error: auth.error }, true);
   }
 
   const url = new URL(request.url);

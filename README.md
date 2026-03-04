@@ -19,6 +19,16 @@
 - `GET /api/stats/types`
 - `GET /api/cron_digest`（已废弃，返回 `410`）
 
+### Unified Auth
+
+- 登录入口统一使用 `GET https://user.stringzhao.life/authorize?return_to=<callback>&state=<opaque_state>`
+- 回跳后必须校验 `authorized=1` 与 `state` 一致
+- 前端登录态读取：`GET https://user.stringzhao.life/api/auth/me`（`credentials: include`）
+- 前端退出登录：`POST https://user.stringzhao.life/api/auth/logout`（`credentials: include`）
+- `GET /api/stats/sources` 与 `GET /api/stats/types` 支持双轨鉴权：
+  - 统一登录 JWT（`Authorization: Bearer <access_token>`）
+  - 兼容机器调用 token（`Authorization: Bearer <TRACKER_API_TOKEN>`）
+
 ## Environment Variables
 
 ### Required for production
@@ -39,6 +49,17 @@
 - `TRACKER_BASE_URL`
 - `TRACKER_SIGNING_SECRET`
 - `TRACKER_API_TOKEN`
+
+### unified auth
+
+- `AUTH_ISSUER` (default: `https://user.stringzhao.life`)
+- `AUTH_AUDIENCE` (default: `base-account-client`)
+- `AUTH_JWKS_URL` (default: `https://user.stringzhao.life/.well-known/jwks.json`)
+- `NEXT_PUBLIC_AUTH_ISSUER` (default: `https://user.stringzhao.life`)
+- `NEXT_PUBLIC_AUTH_AUTHORIZE_PATH` (default: `/authorize`)
+- `NEXT_PUBLIC_AUTH_CALLBACK_PATH` (default: `/auth/callback`)
+- `NEXT_PUBLIC_AUTH_ME_PATH` (default: `/api/auth/me`)
+- `NEXT_PUBLIC_AUTH_LOGOUT_PATH` (default: `/api/auth/logout`)
 
 ## Development
 

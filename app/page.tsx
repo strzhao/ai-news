@@ -1,11 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import {
+  AUTH_STATE_STORAGE_KEY,
+  buildAuthLogoutUrl,
+  buildAuthMeUrl,
+  buildAuthorizeUrlForCurrentOrigin,
+  generateAuthState,
+} from "@/lib/auth-config";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
 const TODAY_PAGE_SIZE = 10;
 const LIMIT_PER_DAY_MAX = 200;
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  state_mismatch: "登录状态校验失败，请重新发起登录。",
+  authorization_not_completed: "授权未完成，请重试。",
+};
 
 interface ArchiveArticleSummary {
   article_id: string;
@@ -30,6 +42,12 @@ interface ArchiveArticlesResponse {
   has_more_by_date?: Record<string, boolean>;
   generated_at: string;
   total_articles: number;
+}
+
+interface AuthUser {
+  id: string;
+  email: string;
+  status: string;
 }
 
 function formatTime(value: string): string {
@@ -86,10 +104,58 @@ export default function HomePage(): React.ReactNode {
   const [groups, setGroups] = useState<ArchiveGroup[]>([]);
   const [hasMoreByDate, setHasMoreByDate] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authRuntimeError, setAuthRuntimeError] = useState("");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authActionPending, setAuthActionPending] = useState(false);
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
+
+  const refreshAuthUser = useCallback(async (showError = false): Promise<void> => {
+    try {
+      const response = await fetch(buildAuthMeUrl(), {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (response.status === 401) {
+        setAuthUser(null);
+        if (showError) {
+          setAuthRuntimeError("");
+        }
+        return;
+      }
+
+      const payload = (await response.json()) as Record<string, unknown>;
+      if (!response.ok) {
+        setAuthUser(null);
+        if (showError) {
+          setAuthRuntimeError("登录状态读取失败，请稍后重试。");
+        }
+        return;
+      }
+
+      const id = String(payload.id || "").trim();
+      const email = String(payload.email || "").trim();
+      const status = String(payload.status || "").trim();
+      if (!id || !email) {
+        setAuthUser(null);
+        if (showError) {
+          setAuthRuntimeError("登录状态异常，请重新登录。");
+        }
+        return;
+      }
+
+      setAuthUser({ id, email, status });
+      setAuthRuntimeError("");
+    } catch {
+      setAuthUser(null);
+      if (showError) {
+        setAuthRuntimeError("统一账号服务暂不可用，请稍后重试。");
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -101,7 +167,10 @@ export default function HomePage(): React.ReactNode {
       Math.max(0, Math.min(5000, Number.parseInt(params.get("article_limit_per_day") || "0", 10) || 0)),
     );
     setReadSet(loadReadSet());
-  }, []);
+    const authErrorCode = params.get("auth_error") ?? "";
+    setAuthError(authErrorCode ? AUTH_ERROR_MESSAGES[authErrorCode] ?? "登录流程异常，请重试。" : "");
+    void refreshAuthUser();
+  }, [refreshAuthUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +228,35 @@ export default function HomePage(): React.ReactNode {
   const todayItems = useMemo(() => todayGroup?.items || [], [todayGroup]);
   const hasMoreTodayItems = !loading && Boolean(hasMoreByDate[todayDate]);
   const historyGroups = groups.filter((group) => group.date !== todayDate);
+
+  function startUnifiedLogin(): void {
+    setAuthRuntimeError("");
+    const state = generateAuthState();
+    try {
+      window.sessionStorage.setItem(AUTH_STATE_STORAGE_KEY, state);
+    } catch {
+      // Ignore storage failures, callback will reject mismatched state.
+    }
+
+    const authorizeUrl = buildAuthorizeUrlForCurrentOrigin(state);
+    window.location.assign(authorizeUrl);
+  }
+
+  async function logoutUnifiedAccount(): Promise<void> {
+    setAuthActionPending(true);
+    setAuthRuntimeError("");
+    try {
+      await fetch(buildAuthLogoutUrl(), {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      setAuthRuntimeError("退出登录失败，请稍后重试。");
+    } finally {
+      await refreshAuthUser(true);
+      setAuthActionPending(false);
+    }
+  }
 
   function markArticleRead(articleId: string): void {
     const normalized = String(articleId || "").trim();
@@ -225,8 +323,31 @@ export default function HomePage(): React.ReactNode {
         <p className="hero-meta">
           {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
         </p>
+        <div className="hero-auth-row">
+          {authUser ? (
+            <div className="auth-session-row">
+              <span className="auth-user-chip">已登录 · {authUser.email}</span>
+              <button
+                type="button"
+                className="auth-logout-btn"
+                onClick={() => {
+                  void logoutUnifiedAccount();
+                }}
+                disabled={authActionPending}
+              >
+                {authActionPending ? "处理中..." : "退出登录"}
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="auth-login-btn" onClick={startUnifiedLogin}>
+              使用统一账号登录
+            </button>
+          )}
+        </div>
       </header>
 
+      {authError ? <div className="error-banner auth-error-banner">{authError}</div> : null}
+      {authRuntimeError ? <div className="error-banner auth-error-banner">{authRuntimeError}</div> : null}
       {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="content-block">
