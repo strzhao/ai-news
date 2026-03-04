@@ -50,6 +50,8 @@ interface AuthUser {
   status: string;
 }
 
+const AUTH_LOGIN_JUST_COMPLETED_KEY = "auth_login_just_completed";
+
 function formatTime(value: string): string {
   if (!value) return "-";
   const date = new Date(value);
@@ -93,6 +95,39 @@ function saveReadSet(set: Set<string>): void {
   window.localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(set)));
 }
 
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function extractAuthUser(payload: Record<string, unknown>): AuthUser | null {
+  const nestedUser = payload.user && typeof payload.user === "object" ? (payload.user as Record<string, unknown>) : null;
+  const dataUser =
+    payload.data && typeof payload.data === "object"
+      ? ((payload.data as Record<string, unknown>).user as Record<string, unknown> | undefined) || null
+      : null;
+
+  const id = firstNonEmptyString(
+    payload.id,
+    payload.user_id,
+    payload.sub,
+    nestedUser?.id,
+    nestedUser?.user_id,
+    nestedUser?.sub,
+    dataUser?.id,
+    dataUser?.user_id,
+    dataUser?.sub,
+  );
+  const email = firstNonEmptyString(payload.email, nestedUser?.email, dataUser?.email);
+  const status = firstNonEmptyString(payload.status, nestedUser?.status, dataUser?.status, "ACTIVE");
+
+  if (!id || !email) return null;
+  return { id, email, status };
+}
+
 interface RenderOptions {
   compact?: boolean;
   lead?: boolean;
@@ -113,7 +148,7 @@ export default function HomePage(): React.ReactNode {
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
 
-  const refreshAuthUser = useCallback(async (showError = false): Promise<void> => {
+  const refreshAuthUser = useCallback(async (showError = false): Promise<boolean> => {
     try {
       const response = await fetch(buildAuthMeUrl(), {
         cache: "no-store",
@@ -124,7 +159,7 @@ export default function HomePage(): React.ReactNode {
         if (showError) {
           setAuthRuntimeError("");
         }
-        return;
+        return false;
       }
 
       const payload = (await response.json()) as Record<string, unknown>;
@@ -133,27 +168,27 @@ export default function HomePage(): React.ReactNode {
         if (showError) {
           setAuthRuntimeError("登录状态读取失败，请稍后重试。");
         }
-        return;
+        return false;
       }
 
-      const id = String(payload.id || "").trim();
-      const email = String(payload.email || "").trim();
-      const status = String(payload.status || "").trim();
-      if (!id || !email) {
+      const user = extractAuthUser(payload);
+      if (!user) {
         setAuthUser(null);
-        if (showError) {
+        if (showError || response.ok) {
           setAuthRuntimeError("登录状态异常，请重新登录。");
         }
-        return;
+        return false;
       }
 
-      setAuthUser({ id, email, status });
+      setAuthUser(user);
       setAuthRuntimeError("");
+      return true;
     } catch {
       setAuthUser(null);
       if (showError) {
         setAuthRuntimeError("统一账号服务暂不可用，请稍后重试。");
       }
+      return false;
     }
   }, []);
 
@@ -169,6 +204,21 @@ export default function HomePage(): React.ReactNode {
     setReadSet(loadReadSet());
     const authErrorCode = params.get("auth_error") ?? "";
     setAuthError(authErrorCode ? AUTH_ERROR_MESSAGES[authErrorCode] ?? "登录流程异常，请重试。" : "");
+    const justCompleted =
+      (typeof window !== "undefined" && window.sessionStorage.getItem(AUTH_LOGIN_JUST_COMPLETED_KEY) === "1") || false;
+
+    if (justCompleted && typeof window !== "undefined") {
+      window.sessionStorage.removeItem(AUTH_LOGIN_JUST_COMPLETED_KEY);
+      void (async () => {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const ok = await refreshAuthUser(attempt > 0);
+          if (ok) return;
+          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+        }
+      })();
+      return;
+    }
+
     void refreshAuthUser();
   }, [refreshAuthUser]);
 

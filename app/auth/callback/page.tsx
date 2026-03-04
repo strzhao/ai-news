@@ -8,6 +8,7 @@ const ERROR_MESSAGE_MAP: Record<string, string> = {
   state_mismatch: "登录状态校验失败，请重新发起登录。",
   authorization_not_completed: "授权未完成，请重试。"
 };
+const AUTH_LOGIN_JUST_COMPLETED_KEY = "auth_login_just_completed";
 
 function redirectToHome(code?: string): void {
   const target = code ? `/?auth_error=${encodeURIComponent(code)}` : "/";
@@ -40,6 +41,12 @@ export default function AuthCallbackPage(): React.ReactNode {
       setStatusText(ERROR_MESSAGE_MAP.state_mismatch);
       redirectToHome("state_mismatch");
       return;
+    }
+
+    try {
+      window.sessionStorage.setItem(AUTH_LOGIN_JUST_COMPLETED_KEY, "1");
+    } catch {
+      // Ignore storage failures.
     }
 
     redirectToHome();
