@@ -368,32 +368,36 @@ export default function HomePage(): React.ReactNode {
   return (
     <main className="newsroom-shell">
       <header className="newsroom-hero">
-        <p className="eyebrow">AI News Daily Edition</p>
+        <div className="hero-topbar">
+          <p className="eyebrow">AI News Daily Edition</p>
+          <div className="hero-auth-corner">
+            <div className="hero-auth-row">
+              {authUser ? (
+                <div className="auth-session-row">
+                  <span className="auth-user-chip">已登录 · {authUser.email}</span>
+                  <button
+                    type="button"
+                    className="auth-logout-btn"
+                    onClick={() => {
+                      void logoutUnifiedAccount();
+                    }}
+                    disabled={authActionPending}
+                  >
+                    {authActionPending ? "处理中..." : "退出登录"}
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="auth-login-btn" onClick={startUnifiedLogin}>
+                  统一账号登录
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
         <h1>今天值得读的 AI 文章</h1>
         <p className="hero-meta">
           {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
         </p>
-        <div className="hero-auth-row">
-          {authUser ? (
-            <div className="auth-session-row">
-              <span className="auth-user-chip">已登录 · {authUser.email}</span>
-              <button
-                type="button"
-                className="auth-logout-btn"
-                onClick={() => {
-                  void logoutUnifiedAccount();
-                }}
-                disabled={authActionPending}
-              >
-                {authActionPending ? "处理中..." : "退出登录"}
-              </button>
-            </div>
-          ) : (
-            <button type="button" className="auth-login-btn" onClick={startUnifiedLogin}>
-              使用统一账号登录
-            </button>
-          )}
-        </div>
       </header>
 
       {authError ? <div className="error-banner auth-error-banner">{authError}</div> : null}
