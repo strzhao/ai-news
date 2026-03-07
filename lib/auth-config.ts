@@ -39,7 +39,7 @@ export function generateAuthState(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function buildAuthorizeUrlForCurrentOrigin(state: string): string {
+export function buildAuthorizeUrlForCurrentOrigin(state: string, prompt?: string): string {
   const runtimeOrigin =
     typeof window !== "undefined" && window.location?.origin ? window.location.origin : getAppOrigin();
   const returnTo = new URL(getCallbackPath(), runtimeOrigin).toString();
@@ -47,6 +47,9 @@ export function buildAuthorizeUrlForCurrentOrigin(state: string): string {
   const authorizeUrl = new URL(getAuthorizePath(), getAuthIssuer());
   authorizeUrl.searchParams.set("return_to", returnTo);
   authorizeUrl.searchParams.set("state", state);
+  if (prompt === "select_account") {
+    authorizeUrl.searchParams.set("prompt", "select_account");
+  }
 
   return authorizeUrl.toString();
 }

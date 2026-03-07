@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   AUTH_STATE_STORAGE_KEY,
-  buildAuthLogoutUrl,
   buildAuthMeUrl,
   buildAuthorizeUrlForCurrentOrigin,
   generateAuthState,
@@ -142,7 +141,6 @@ export default function HomePage(): React.ReactNode {
   const [authError, setAuthError] = useState("");
   const [authRuntimeError, setAuthRuntimeError] = useState("");
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [authActionPending, setAuthActionPending] = useState(false);
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
@@ -292,20 +290,13 @@ export default function HomePage(): React.ReactNode {
     window.location.assign(authorizeUrl);
   }
 
-  async function logoutUnifiedAccount(): Promise<void> {
-    setAuthActionPending(true);
-    setAuthRuntimeError("");
+  function switchAccount(): void {
+    const state = generateAuthState();
     try {
-      await fetch(buildAuthLogoutUrl(), {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch {
-      setAuthRuntimeError("退出登录失败，请稍后重试。");
-    } finally {
-      await refreshAuthUser(true);
-      setAuthActionPending(false);
-    }
+      window.sessionStorage.setItem(AUTH_STATE_STORAGE_KEY, state);
+    } catch {}
+    const authorizeUrl = buildAuthorizeUrlForCurrentOrigin(state, "select_account");
+    window.location.assign(authorizeUrl);
   }
 
   function markArticleRead(articleId: string): void {
@@ -378,12 +369,9 @@ export default function HomePage(): React.ReactNode {
                   <button
                     type="button"
                     className="auth-logout-btn"
-                    onClick={() => {
-                      void logoutUnifiedAccount();
-                    }}
-                    disabled={authActionPending}
+                    onClick={switchAccount}
                   >
-                    {authActionPending ? "处理中..." : "退出登录"}
+                    切换账号
                   </button>
                 </div>
               ) : (
