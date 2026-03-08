@@ -10,7 +10,7 @@ import {
 } from "@/lib/auth-config";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchFlomoData, saveFlomoWebhook } from "@/lib/client/flomo";
-import type { AuthUser, FlomoConfig, FlomoPushStats } from "@/lib/client/types";
+import type { AuthUser, FlomoConfig, FlomoPushStats, EmailNotifyConfig } from "@/lib/client/types";
 
 function formatPushTime(value: string): string {
   if (!value) return "-";
@@ -36,6 +36,8 @@ export default function SettingsPage(): React.ReactNode {
   const [flomoSaving, setFlomoSaving] = useState(false);
   const [flomoMessage, setFlomoMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [flomoPushStats, setFlomoPushStats] = useState<FlomoPushStats>({ total: 0, recent: [] });
+  const [emailNotify, setEmailNotify] = useState<EmailNotifyConfig | null>(null);
+  const [emailNotifyLoading, setEmailNotifyLoading] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -53,6 +55,17 @@ export default function SettingsPage(): React.ReactNode {
         // silent
       } finally {
         setFlomoConfigLoaded(true);
+      }
+
+      // Load email notification config
+      try {
+        const emailRes = await fetch("/api/v1/email-notify/config", { credentials: "include" });
+        const emailPayload = (await emailRes.json()) as { ok: boolean; config?: EmailNotifyConfig };
+        if (emailPayload.ok && emailPayload.config) {
+          setEmailNotify(emailPayload.config);
+        }
+      } catch {
+        // silent
       }
     })();
   }, []);
@@ -208,6 +221,47 @@ export default function SettingsPage(): React.ReactNode {
               {flomoMessage.text}
             </div>
           ) : null}
+        </section>
+      ) : null}
+
+      {emailNotify ? (
+        <section className="settings-section">
+          <header className="block-head">
+            <h2>邮件通知</h2>
+          </header>
+          <p className="flomo-description">
+            URL 资源提取完成后，结果将通过邮件发送到你的登录邮箱。
+          </p>
+          <div className="email-notify-row">
+            <button
+              type="button"
+              className={`email-notify-toggle${emailNotify.enabled ? " is-enabled" : ""}`}
+              disabled={emailNotifyLoading}
+              onClick={async () => {
+                setEmailNotifyLoading(true);
+                try {
+                  const res = await fetch("/api/v1/email-notify/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ enabled: !emailNotify.enabled }),
+                  });
+                  const payload = (await res.json()) as { ok: boolean; config?: EmailNotifyConfig };
+                  if (payload.ok && payload.config) {
+                    setEmailNotify(payload.config);
+                  }
+                } catch {
+                  // silent
+                } finally {
+                  setEmailNotifyLoading(false);
+                }
+              }}
+            />
+            <span className="email-notify-label">
+              {emailNotify.enabled ? "已开启" : "已关闭"}
+            </span>
+            <span className="email-notify-email">{emailNotify.email}</span>
+          </div>
         </section>
       ) : null}
 

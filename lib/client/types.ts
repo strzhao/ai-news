@@ -21,3 +21,33 @@ export interface FlomoPushStats {
   total: number;
   recent: FlomoPushLogEntry[];
 }
+
+export type ExtractionPlatform = "youtube" | "bilibili" | "twitter" | "xiaohongshu" | "instagram" | "webpage" | "unknown";
+export type ExtractionStatus = "pending" | "processing" | "completed" | "failed";
+export type ResourceType = "video" | "audio" | "subtitle" | "thumbnail" | "image" | "text" | "metadata";
+
+export interface ExtractedResource {
+  type: ResourceType;
+  url: string;
+  filename: string;
+  size_bytes: number;
+  mime_type: string;
+  language?: string;
+  format?: string;
+  expires_at?: string;
+}
+
+export interface ExtractionMetadata {
+  title: string;
+  description: string;
+  author: string;
+  duration?: number;
+  published_at?: string;
+  platform_id?: string;
+  tags?: string[];
+}
+
+export interface EmailNotifyConfig {
+  enabled: boolean;
+  email: string;
+}

@@ -11,6 +11,7 @@ import {
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchFlomoData } from "@/lib/client/flomo";
 import type { AuthUser, FlomoConfig } from "@/lib/client/types";
+import NavTabs from "@/app/components/nav-tabs";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
@@ -320,6 +321,7 @@ export default function HomePage(): React.ReactNode {
             </div>
           </div>
         </div>
+        <NavTabs />
         <h1>今天值得读的 AI 文章</h1>
         <p className="hero-meta">
           {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
