@@ -135,6 +135,11 @@ export default function SettingsPage(): React.ReactNode {
             <h2>Flomo 推送</h2>
           </header>
 
+          <p className="flomo-description">
+            配置后，系统会在每天 7:00 和 19:00 自动将当日精选 AI 文章摘要推送到你的 Flomo。
+            内容包含文章标题、摘要和原文链接，方便稍后阅读。你也可以在首页手动触发推送。
+          </p>
+
           {!flomoConfig || flomoEditing ? (
             <div className="flomo-config-form">
               <div className="flomo-config-row">
@@ -149,11 +154,11 @@ export default function SettingsPage(): React.ReactNode {
               <p className="flomo-help-text">
                 前往{" "}
                 <a
-                  href="https://flomoapp.com/mine?source=incoming_webhook"
+                  href="https://v.flomoapp.com/mine/?source=incoming_webhook"
                   target="_blank"
                   rel="noreferrer noopener"
                 >
-                  flomoapp.com/mine
+                  v.flomoapp.com/mine
                 </a>
                 {" "}→ API &amp; Webhook → 复制你的 Webhook 地址
               </p>

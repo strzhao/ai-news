@@ -56,7 +56,7 @@
 - When changing cron-triggered APIs, update both `vercel.json` and `README.md` together.
 
 ## Flomo Integration Rules (Important)
-- Single flomo path only: keep `GET /api/v1/flomo/push-from-archive-articles` as the only flomo delivery path.
+- Flomo push uses two paths: `GET /api/v1/flomo/cron-push` (scheduled, iterates all subscribers) and `POST /api/v1/flomo/push` (user-triggered, per-user).
 - Legacy digest flomo flow is removed intentionally; do not re-introduce `lib/output/flomo-formatter.ts` or digest-runner direct flomo sync.
 - flomo tags must be appended at the very end of content.
 - Tag source is `tag_groups` only (not primary/secondary type fallback).

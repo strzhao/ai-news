@@ -1,5 +1,5 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
-import { flomoConfigKey } from "@/lib/integrations/flomo-redis-keys";
+import { FLOMO_SUBSCRIBERS_KEY, flomoConfigKey } from "@/lib/integrations/flomo-redis-keys";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
 
@@ -76,7 +76,10 @@ export async function POST(request: Request): Promise<Response> {
       updated_at: new Date().toISOString(),
       status: "active",
     });
-    await redis.expire(key, CONFIG_TTL_SECONDS);
+    await redis.pipeline([
+      ["EXPIRE", key, CONFIG_TTL_SECONDS],
+      ["SADD", FLOMO_SUBSCRIBERS_KEY, auth.user.id],
+    ]);
 
     return jsonResponse(200, {
       ok: true,

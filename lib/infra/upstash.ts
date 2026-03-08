@@ -154,6 +154,13 @@ export class UpstashClient {
     return payload.map((item) => String(item)).filter((item) => item.trim());
   }
 
+  async smembers(key: string): Promise<string[]> {
+    const responses = await this.pipeline([["SMEMBERS", key]]);
+    const payload = unwrapPipelineResult(responses[0]);
+    if (!Array.isArray(payload)) return [];
+    return payload.map((item) => String(item)).filter((s) => s.trim());
+  }
+
   async zrevrangeWithScores(key: string, start: number, stop: number): Promise<Array<{ member: string; score: number }>> {
     const responses = await this.pipeline([["ZREVRANGE", key, Math.trunc(start), Math.trunc(stop), "WITHSCORES"]]);
     const payload = unwrapPipelineResult(responses[0]);

@@ -330,9 +330,14 @@ export default function HomePage(): React.ReactNode {
           <div className="hero-auth-corner">
             <div className="hero-auth-row">
               {authUser ? (
-                <Link href="/settings" className="auth-user-chip">
-                  {authUser.email}
-                </Link>
+                <div className="auth-session-row">
+                  <Link href="/settings" className="auth-user-chip">
+                    {authUser.email}
+                  </Link>
+                  {flomoConfigLoaded && !flomoConfig ? (
+                    <Link href="/settings" className="flomo-setup-link">配置 Flomo</Link>
+                  ) : null}
+                </div>
               ) : (
                 <button type="button" className="auth-login-btn" onClick={startUnifiedLogin}>
                   统一账号登录
@@ -364,9 +369,6 @@ export default function HomePage(): React.ReactNode {
               >
                 {flomoPushing ? "推送中..." : "推送到 Flomo"}
               </button>
-            ) : null}
-            {authUser && flomoConfigLoaded && !flomoConfig ? (
-              <Link href="/settings" className="flomo-setup-link">配置 Flomo</Link>
             ) : null}
             <span>{todayItems.length} 篇</span>
           </span>

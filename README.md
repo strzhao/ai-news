@@ -4,7 +4,9 @@
 
 - 首页内容展示（`/`）
 - 归档聚合接口（`/api/archive_articles`）
-- flomo 推送编排（`/api/v1/flomo/push-from-archive-articles`）
+- flomo 定时推送（`/api/v1/flomo/cron-push`，每天 7:00/19:00）
+- flomo 用户手动推送（`/api/v1/flomo/push`）
+- flomo 用户配置（`/api/v1/flomo/config`）
 - 点击追踪与统计（`/api/r`, `/api/stats/*`）
 
 文章抓取、AI 分析、标签治理与入库能力已拆分到独立仓库：`article-db`。
@@ -12,7 +14,10 @@
 ## API
 
 - `GET /api/archive_articles`
-- `GET /api/v1/flomo/push-from-archive-articles`
+- `GET /api/v1/flomo/cron-push`
+- `POST /api/v1/flomo/push`
+- `GET/POST /api/v1/flomo/config`
+- `GET /api/v1/flomo/push-log`
 - `GET /api/healthz`
 - `GET /api/r`
 - `GET /api/stats/sources`
@@ -74,6 +79,7 @@ npm test
 
 `vercel.json` 仅保留消费层 cron：
 
-- `10 23 * * *` (UTC) -> `/api/v1/flomo/push-from-archive-articles`
+- `0 23 * * *` (UTC, 北京 07:00) -> `/api/v1/flomo/cron-push`
+- `0 11 * * *` (UTC, 北京 19:00) -> `/api/v1/flomo/cron-push`
 
 `article-db` 的 ingestion cron（每小时）已迁移到 `article-db` 仓库中维护。

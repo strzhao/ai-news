@@ -5,14 +5,18 @@
     "app/api/archive_articles/route.ts": {
       "regions": ["sin1"]
     },
-    "app/api/v1/flomo/push-from-archive-articles/route.ts": {
+    "app/api/v1/flomo/cron-push/route.ts": {
       "regions": ["sin1"]
     }
   },
   "crons": [
     {
-      "path": "/api/v1/flomo/push-from-archive-articles",
-      "schedule": "10 23 * * *"
+      "path": "/api/v1/flomo/cron-push",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/v1/flomo/cron-push",
+      "schedule": "0 11 * * *"
     }
   ]
 }

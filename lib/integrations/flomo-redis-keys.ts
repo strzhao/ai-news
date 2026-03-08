@@ -1,3 +1,5 @@
+export const FLOMO_SUBSCRIBERS_KEY = "flomo:subscribers";
+
 export function flomoConfigKey(userId: string): string {
   return `flomo:config:${userId}`;
 }

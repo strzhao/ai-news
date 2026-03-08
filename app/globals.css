@@ -712,6 +712,13 @@ button:focus-visible {
   margin-top: 0;
 }
 
+.flomo-description {
+  margin: 8px 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .flomo-help-text {
   margin: 8px 0 0;
   font-size: 12px;
