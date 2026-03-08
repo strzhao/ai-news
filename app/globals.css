@@ -132,6 +132,14 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.auth-user-chip:hover {
+  background: var(--accent);
+  color: var(--home-accent-foreground);
+  border-color: var(--accent);
 }
 
 .auth-login-btn {
@@ -578,6 +586,16 @@ a {
   margin-top: 2px;
 }
 
+.flomo-link-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.flomo-unconfigured-row {
+  margin-top: 14px;
+}
+
 a:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--home-focus);
@@ -634,4 +652,151 @@ button:focus-visible {
   .block-head h2 {
     font-size: 24px;
   }
+}
+
+/* ── Settings page ── */
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.settings-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+}
+
+.settings-back-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 520;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.settings-back-link:hover {
+  color: var(--accent);
+  background: var(--home-accent-mist);
+}
+
+.settings-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.settings-section .block-head {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings-section .block-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.settings-account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.settings-account-email {
+  font-size: 15px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.settings-loading {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  margin-top: 60px;
+}
+
+.settings-empty {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
+.flomo-config-form {
+  margin-top: 14px;
+}
+
+.flomo-config-form .flomo-config-row {
+  margin-top: 0;
+}
+
+.flomo-help-text {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.flomo-help-text a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.flomo-help-text a:hover {
+  text-decoration: underline;
+}
+
+.flomo-action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.flomo-configured-info {
+  margin-top: 14px;
+}
+
+.flomo-configured-info .flomo-configured-row {
+  margin-top: 0;
+}
+
+.push-log-list {
+  margin-top: 14px;
+}
+
+.push-log-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+.push-log-item:last-child {
+  border-bottom: none;
+}
+
+.push-log-date {
+  font-weight: 560;
+  color: var(--ink);
+  min-width: 90px;
+}
+
+.push-log-count {
+  color: var(--muted);
+  flex: 1;
+}
+
+.push-log-time {
+  color: var(--muted);
+  font-size: 12px;
 }
