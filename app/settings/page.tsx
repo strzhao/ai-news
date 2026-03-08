@@ -137,7 +137,7 @@ export default function SettingsPage(): React.ReactNode {
 
           <p className="flomo-description">
             配置后，系统会在每天 7:00 和 19:00 自动将当日精选 AI 文章摘要推送到你的 Flomo。
-            内容包含文章标题、摘要和原文链接，方便稍后阅读。你也可以在首页手动触发推送。
+            内容包含文章标题、摘要和原文链接，方便稍后阅读。
           </p>
 
           {!flomoConfig || flomoEditing ? (

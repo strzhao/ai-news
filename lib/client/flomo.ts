@@ -39,28 +39,3 @@ export async function saveFlomoWebhook(
   }
   return { ok: true, config: payload.config };
 }
-
-export async function triggerFlomoPush(opts?: {
-  days?: number;
-  limit?: number;
-}): Promise<{
-  ok: boolean;
-  sent?: boolean;
-  article_count?: number;
-  daily_remaining?: number;
-  error?: string;
-}> {
-  const res = await fetch("/api/v1/flomo/push", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ days: opts?.days ?? 1, limit: opts?.limit ?? 10 }),
-  });
-  return (await res.json()) as {
-    ok: boolean;
-    sent?: boolean;
-    article_count?: number;
-    daily_remaining?: number;
-    error?: string;
-  };
-}

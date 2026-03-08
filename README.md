@@ -5,7 +5,6 @@
 - 首页内容展示（`/`）
 - 归档聚合接口（`/api/archive_articles`）
 - flomo 定时推送（`/api/v1/flomo/cron-push`，每天 7:00/19:00）
-- flomo 用户手动推送（`/api/v1/flomo/push`）
 - flomo 用户配置（`/api/v1/flomo/config`）
 - 点击追踪与统计（`/api/r`, `/api/stats/*`）
 
@@ -15,7 +14,6 @@
 
 - `GET /api/archive_articles`
 - `GET /api/v1/flomo/cron-push`
-- `POST /api/v1/flomo/push`
 - `GET/POST /api/v1/flomo/config`
 - `GET /api/v1/flomo/push-log`
 - `GET /api/healthz`

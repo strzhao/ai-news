@@ -9,7 +9,7 @@ import {
   generateAuthState,
 } from "@/lib/auth-config";
 import { fetchAuthUser } from "@/lib/client/auth";
-import { fetchFlomoData, triggerFlomoPush } from "@/lib/client/flomo";
+import { fetchFlomoData } from "@/lib/client/flomo";
 import type { AuthUser, FlomoConfig } from "@/lib/client/types";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
@@ -109,8 +109,6 @@ export default function HomePage(): React.ReactNode {
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
   const [flomoConfig, setFlomoConfig] = useState<FlomoConfig | null>(null);
   const [flomoConfigLoaded, setFlomoConfigLoaded] = useState(false);
-  const [flomoPushing, setFlomoPushing] = useState(false);
-  const [flomoMessage, setFlomoMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
@@ -133,30 +131,6 @@ export default function HomePage(): React.ReactNode {
       setFlomoConfigLoaded(true);
     }
   }, []);
-
-  async function pushToFlomo(): Promise<void> {
-    setFlomoPushing(true);
-    setFlomoMessage(null);
-    try {
-      const payload = await triggerFlomoPush();
-      if (!payload.ok) {
-        setFlomoMessage({ text: payload.error || "推送失败", type: "error" });
-        return;
-      }
-      if (!payload.sent) {
-        setFlomoMessage({ text: "暂无可推送的文章", type: "success" });
-        return;
-      }
-      setFlomoMessage({
-        text: `已推送 ${payload.article_count} 篇文章到 Flomo（今日剩余 ${payload.daily_remaining} 次）`,
-        type: "success",
-      });
-    } catch {
-      setFlomoMessage({ text: "网络错误，请重试", type: "error" });
-    } finally {
-      setFlomoPushing(false);
-    }
-  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -360,25 +334,9 @@ export default function HomePage(): React.ReactNode {
         <header className="block-head">
           <h2>今日精选</h2>
           <span className="block-head-actions">
-            {authUser && flomoConfig ? (
-              <button
-                type="button"
-                className="flomo-push-btn"
-                disabled={flomoPushing}
-                onClick={() => void pushToFlomo()}
-              >
-                {flomoPushing ? "推送中..." : "推送到 Flomo"}
-              </button>
-            ) : null}
             <span>{todayItems.length} 篇</span>
           </span>
         </header>
-
-        {flomoMessage ? (
-          <div className={`flomo-message ${flomoMessage.type === "success" ? "is-success" : "is-error"}`}>
-            {flomoMessage.text}
-          </div>
-        ) : null}
 
         <div className="editorial-list">
           {todayItems.length ? (

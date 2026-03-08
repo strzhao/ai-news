@@ -24,6 +24,7 @@ describe("archive_articles route", () => {
               article_id: "id_1",
               title: "Article",
               url: "https://example.com/a",
+              original_url: "https://example.com/a",
               summary: "summary",
               image_url: "",
               source_host: "example.com",
