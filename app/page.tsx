@@ -351,55 +351,32 @@ export default function HomePage(): React.ReactNode {
       {authRuntimeError ? <div className="error-banner auth-error-banner">{authRuntimeError}</div> : null}
       {error ? <div className="error-banner">{error}</div> : null}
 
-      {authUser && flomoConfigLoaded ? (
-        <section className="flomo-config-block">
-          <header className="block-head">
-            <h2>Flomo 推送</h2>
-          </header>
-
-          {flomoConfig ? (
-            <div className="flomo-configured-row">
-              <span className="flomo-webhook-display">已配置: {flomoConfig.webhook_url_masked}</span>
-              <button
-                type="button"
-                className="flomo-btn"
-                disabled={flomoPushing}
-                onClick={() => void pushToFlomo()}
-              >
-                {flomoPushing ? "推送中..." : "发送今日文章"}
-              </button>
-              <Link href="/settings" className="flomo-btn flomo-btn-secondary flomo-link-btn">
-                管理配置
-              </Link>
-            </div>
-          ) : (
-            <div className="flomo-unconfigured-row">
-              <Link href="/settings" className="flomo-btn flomo-link-btn">
-                前往设置配置 Flomo Webhook
-              </Link>
-            </div>
-          )}
-
-          {flomoMessage ? (
-            <div className={`flomo-message ${flomoMessage.type === "success" ? "is-success" : "is-error"}`}>
-              {flomoMessage.text}
-            </div>
-          ) : null}
-
-          <div className="consumption-stats">
-            <div className="consumption-stat">
-              <span className="consumption-stat-value">{readSet.size}</span>
-              <span className="consumption-stat-label">已读文章</span>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       <section className="content-block">
         <header className="block-head">
           <h2>今日精选</h2>
-          <span>{todayItems.length} 篇</span>
+          <span className="block-head-actions">
+            {authUser && flomoConfig ? (
+              <button
+                type="button"
+                className="flomo-push-btn"
+                disabled={flomoPushing}
+                onClick={() => void pushToFlomo()}
+              >
+                {flomoPushing ? "推送中..." : "推送到 Flomo"}
+              </button>
+            ) : null}
+            {authUser && flomoConfigLoaded && !flomoConfig ? (
+              <Link href="/settings" className="flomo-setup-link">配置 Flomo</Link>
+            ) : null}
+            <span>{todayItems.length} 篇</span>
+          </span>
         </header>
+
+        {flomoMessage ? (
+          <div className={`flomo-message ${flomoMessage.type === "success" ? "is-success" : "is-error"}`}>
+            {flomoMessage.text}
+          </div>
+        ) : null}
 
         <div className="editorial-list">
           {todayItems.length ? (
