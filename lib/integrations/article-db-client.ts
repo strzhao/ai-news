@@ -17,6 +17,7 @@ export interface HighQualityArticleItem {
   confidence: number;
   primary_type: string;
   secondary_types: string[];
+  original_url: string;
   tag_groups: Record<string, string[]>;
 }
 
@@ -113,6 +114,7 @@ export async function fetchHighQualityRange(
             article_id: String(entry.article_id || ""),
             title: String(entry.title || ""),
             url: String(entry.url || ""),
+            original_url: String(entry.original_url || ""),
             summary: String(entry.summary || ""),
             image_url: String(entry.image_url || ""),
             source_host: String(entry.source_host || ""),

@@ -21,6 +21,7 @@ export interface ArchiveArticleSummary {
   article_id: string;
   title: string;
   url: string;
+  original_url: string;
   summary: string;
   image_url: string;
   source_host: string;
@@ -326,6 +327,7 @@ export function aggregateArchiveArticlesFromDigests(
         article_id: stableArticleId(dedupeKey, `${digest.digest_id}:${index}`),
         title: article.title,
         url: article.url,
+        original_url: "",
         summary: normalizeSummary(article.summary),
         image_url: "",
         source_host: host,
@@ -462,6 +464,7 @@ export async function listArchiveArticles(options: {
           article_id: item.article_id,
           title: item.title,
           url: item.url,
+          original_url: item.original_url || "",
           summary: item.summary,
           image_url: item.image_url || "",
           source_host: item.source_host,

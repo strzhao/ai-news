@@ -427,6 +427,157 @@ a {
   font-size: 13px;
 }
 
+.flomo-config-block {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.flomo-config-block .block-head {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.flomo-config-block .block-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.flomo-config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.flomo-input {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+  outline: none;
+}
+
+.flomo-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px oklch(0.488 0.088 158 / 0.15);
+}
+
+.flomo-btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--home-accent-foreground);
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flomo-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.flomo-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.flomo-btn-secondary {
+  background: var(--panel);
+  color: var(--home-charcoal);
+  border-color: var(--line);
+}
+
+.flomo-btn-secondary:hover:not(:disabled) {
+  background: var(--home-accent-mist);
+  border-color: var(--accent-hover);
+  color: var(--accent);
+}
+
+.flomo-configured-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.flomo-webhook-display {
+  font-size: 13px;
+  color: var(--muted);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flomo-message {
+  margin-top: 10px;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.flomo-message.is-success {
+  color: var(--accent);
+  background: var(--home-accent-mist);
+  border: 1px solid oklch(0.488 0.088 158 / 0.25);
+}
+
+.flomo-message.is-error {
+  color: var(--danger);
+  background: oklch(0.980 0.020 23 / 0.75);
+  border: 1px solid oklch(0.548 0.168 23 / 0.25);
+}
+
+.flomo-stats {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.consumption-stats {
+  margin-top: 14px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.consumption-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  min-width: 80px;
+}
+
+.consumption-stat-value {
+  font-size: 22px;
+  font-weight: 620;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.consumption-stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 a:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--home-focus);

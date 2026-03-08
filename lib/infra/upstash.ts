@@ -115,6 +115,31 @@ export class UpstashClient {
     return {};
   }
 
+  async get(key: string): Promise<string | null> {
+    const responses = await this.pipeline([["GET", key]]);
+    const result = unwrapPipelineResult(responses[0]);
+    if (result === null || result === undefined) return null;
+    return String(result);
+  }
+
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    const commands: Array<Array<string | number>> = [["SET", key, value]];
+    if (ttlSeconds && ttlSeconds > 0) {
+      commands.push(["EXPIRE", key, Math.trunc(ttlSeconds)]);
+    }
+    await this.pipeline(commands);
+  }
+
+  async incr(key: string): Promise<number> {
+    const responses = await this.pipeline([["INCR", key]]);
+    return toInt(unwrapPipelineResult(responses[0]), 0);
+  }
+
+  async zcard(key: string): Promise<number> {
+    const responses = await this.pipeline([["ZCARD", key]]);
+    return toInt(unwrapPipelineResult(responses[0]), 0);
+  }
+
   async zadd(key: string, score: number, member: string): Promise<number> {
     const responses = await this.pipeline([["ZADD", key, String(score), member]]);
     return toInt(unwrapPipelineResult(responses[0]), 0);
@@ -127,6 +152,23 @@ export class UpstashClient {
       return [];
     }
     return payload.map((item) => String(item)).filter((item) => item.trim());
+  }
+
+  async zrevrangeWithScores(key: string, start: number, stop: number): Promise<Array<{ member: string; score: number }>> {
+    const responses = await this.pipeline([["ZREVRANGE", key, Math.trunc(start), Math.trunc(stop), "WITHSCORES"]]);
+    const payload = unwrapPipelineResult(responses[0]);
+    if (!Array.isArray(payload)) {
+      return [];
+    }
+    const results: Array<{ member: string; score: number }> = [];
+    for (let i = 0; i < payload.length - 1; i += 2) {
+      const member = String(payload[i] ?? "").trim();
+      const score = Number(payload[i + 1] ?? 0);
+      if (member) {
+        results.push({ member, score });
+      }
+    }
+    return results;
   }
 }
 

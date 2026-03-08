@@ -9,6 +9,7 @@ export interface FlomoArchiveArticleSummary {
   article_id: string;
   title: string;
   url: string;
+  original_url: string;
   summary: string;
   image_url: string;
   source_host: string;
@@ -180,10 +181,20 @@ function trackerSigningSecret(): string {
   return String(process.env.TRACKER_SIGNING_SECRET || "").trim();
 }
 
-function buildArchiveArticleLink(article: FlomoArchiveArticleSummary, reportDate: string): string {
-  const targetUrl = normalizeUrl(article.url);
+function resolveArticleUrl(article: FlomoArchiveArticleSummary): string {
+  const original = normalizeUrl(article.original_url);
+  if (original) return original;
+  return normalizeUrl(article.url);
+}
+
+function buildArchiveArticleLink(article: FlomoArchiveArticleSummary, reportDate: string, skipTracking = false): string {
+  const targetUrl = resolveArticleUrl(article);
   if (!targetUrl) {
     return "";
+  }
+
+  if (skipTracking) {
+    return targetUrl;
   }
 
   const baseUrl = trackerBaseUrl();
@@ -210,10 +221,12 @@ export function renderFlomoArchiveArticlesContent(params: {
   overviewLimit?: number;
   activeTagDefinitions?: FlomoTagDefinition[];
   tagLimit?: number;
+  skipTracking?: boolean;
 }): string {
   const reportDate = normalizeDate(params.reportDate);
   const articles = Array.isArray(params.articles) ? params.articles : [];
   const overviewLimit = Math.max(1, Math.min(Number(params.overviewLimit || 3), 8));
+  const skipTracking = Boolean(params.skipTracking);
   const lines: string[] = [];
 
   lines.push("【今日速览】");
@@ -239,7 +252,7 @@ export function renderFlomoArchiveArticlesContent(params: {
     articles.forEach((article, index) => {
       const title = normalizeText(article.title, 200) || `未命名文章 ${index + 1}`;
       const summary = normalizeText(article.summary, 320);
-      const url = buildArchiveArticleLink(article, reportDate);
+      const url = buildArchiveArticleLink(article, reportDate, skipTracking);
       lines.push(`${index + 1}. ${title}`);
       if (summary) {
         lines.push(summary);

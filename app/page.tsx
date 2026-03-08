@@ -22,12 +22,31 @@ interface ArchiveArticleSummary {
   article_id: string;
   title: string;
   url: string;
+  original_url: string;
   summary: string;
   image_url: string;
   source_host: string;
   date: string;
   digest_id: string;
   generated_at: string;
+}
+
+interface FlomoConfig {
+  webhook_url: string;
+  webhook_url_masked: string;
+  updated_at: string;
+  status: string;
+}
+
+interface FlomoPushLogEntry {
+  date: string;
+  article_count: number;
+  pushed_at: string;
+}
+
+interface FlomoPushStats {
+  total: number;
+  recent: FlomoPushLogEntry[];
 }
 
 interface ArchiveGroup {
@@ -142,6 +161,14 @@ export default function HomePage(): React.ReactNode {
   const [authRuntimeError, setAuthRuntimeError] = useState("");
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
+  const [flomoConfig, setFlomoConfig] = useState<FlomoConfig | null>(null);
+  const [flomoConfigLoaded, setFlomoConfigLoaded] = useState(false);
+  const [flomoWebhookInput, setFlomoWebhookInput] = useState("");
+  const [flomoEditing, setFlomoEditing] = useState(false);
+  const [flomoSaving, setFlomoSaving] = useState(false);
+  const [flomoPushing, setFlomoPushing] = useState(false);
+  const [flomoMessage, setFlomoMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [flomoPushStats, setFlomoPushStats] = useState<FlomoPushStats>({ total: 0, recent: [] });
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
@@ -190,6 +217,90 @@ export default function HomePage(): React.ReactNode {
     }
   }, []);
 
+  const loadFlomoData = useCallback(async () => {
+    try {
+      const [configRes, logRes] = await Promise.all([
+        fetch("/api/v1/flomo/config", { credentials: "include", cache: "no-store" }),
+        fetch("/api/v1/flomo/push-log?limit=5", { credentials: "include", cache: "no-store" }),
+      ]);
+      if (configRes.ok) {
+        const configPayload = (await configRes.json()) as { ok: boolean; config: FlomoConfig | null };
+        if (configPayload.ok) {
+          setFlomoConfig(configPayload.config);
+          if (configPayload.config) {
+            setFlomoWebhookInput(configPayload.config.webhook_url);
+          }
+        }
+      }
+      if (logRes.ok) {
+        const logPayload = (await logRes.json()) as { ok: boolean; total_pushes: number; recent: FlomoPushLogEntry[] };
+        if (logPayload.ok) {
+          setFlomoPushStats({ total: logPayload.total_pushes, recent: logPayload.recent || [] });
+        }
+      }
+    } catch {
+      // silent
+    } finally {
+      setFlomoConfigLoaded(true);
+    }
+  }, []);
+
+  async function saveFlomoConfig(): Promise<void> {
+    setFlomoSaving(true);
+    setFlomoMessage(null);
+    try {
+      const res = await fetch("/api/v1/flomo/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ webhook_url: flomoWebhookInput.trim() }),
+      });
+      const payload = (await res.json()) as { ok: boolean; config?: FlomoConfig; error?: string };
+      if (!res.ok || !payload.ok) {
+        setFlomoMessage({ text: payload.error || "保存失败", type: "error" });
+        return;
+      }
+      setFlomoConfig(payload.config || null);
+      setFlomoEditing(false);
+      setFlomoMessage({ text: "配置已保存", type: "success" });
+    } catch {
+      setFlomoMessage({ text: "网络错误，请重试", type: "error" });
+    } finally {
+      setFlomoSaving(false);
+    }
+  }
+
+  async function pushToFlomo(): Promise<void> {
+    setFlomoPushing(true);
+    setFlomoMessage(null);
+    try {
+      const res = await fetch("/api/v1/flomo/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ days: 1, limit: 10 }),
+      });
+      const payload = (await res.json()) as { ok: boolean; sent?: boolean; article_count?: number; daily_remaining?: number; error?: string };
+      if (!res.ok || !payload.ok) {
+        setFlomoMessage({ text: payload.error || "推送失败", type: "error" });
+        return;
+      }
+      if (!payload.sent) {
+        setFlomoMessage({ text: "暂无可推送的文章", type: "success" });
+        return;
+      }
+      setFlomoMessage({
+        text: `已推送 ${payload.article_count} 篇文章到 Flomo（今日剩余 ${payload.daily_remaining} 次）`,
+        type: "success",
+      });
+      setFlomoPushStats((prev) => ({ ...prev, total: prev.total + 1 }));
+    } catch {
+      setFlomoMessage({ text: "网络错误，请重试", type: "error" });
+    } finally {
+      setFlomoPushing(false);
+    }
+  }
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setDays(Math.max(1, Math.min(180, Number.parseInt(params.get("days") || "30", 10) || 30)));
@@ -210,15 +321,21 @@ export default function HomePage(): React.ReactNode {
       void (async () => {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           const ok = await refreshAuthUser(attempt > 0);
-          if (ok) return;
+          if (ok) {
+            void loadFlomoData();
+            return;
+          }
           await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
         }
       })();
       return;
     }
 
-    void refreshAuthUser();
-  }, [refreshAuthUser]);
+    void (async () => {
+      const ok = await refreshAuthUser();
+      if (ok) void loadFlomoData();
+    })();
+  }, [refreshAuthUser, loadFlomoData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -314,6 +431,7 @@ export default function HomePage(): React.ReactNode {
   function renderArticle(item: ArchiveArticleSummary, options: RenderOptions = {}): React.ReactNode {
     const articleId = String(item.article_id || "").trim();
     const read = readSet.has(articleId);
+    const articleUrl = item.original_url || item.url;
 
     return (
       <article
@@ -329,7 +447,7 @@ export default function HomePage(): React.ReactNode {
 
           <h3 className="article-headline">
             <a
-              href={item.url}
+              href={articleUrl}
               target="_blank"
               rel="noreferrer noopener"
               onClick={() => markArticleRead(articleId)}
@@ -343,7 +461,7 @@ export default function HomePage(): React.ReactNode {
           <div className="article-actions">
             <a
               className="article-cta"
-              href={item.url}
+              href={articleUrl}
               target="_blank"
               rel="noreferrer noopener"
               onClick={() => markArticleRead(articleId)}
@@ -391,6 +509,93 @@ export default function HomePage(): React.ReactNode {
       {authError ? <div className="error-banner auth-error-banner">{authError}</div> : null}
       {authRuntimeError ? <div className="error-banner auth-error-banner">{authRuntimeError}</div> : null}
       {error ? <div className="error-banner">{error}</div> : null}
+
+      {authUser && flomoConfigLoaded ? (
+        <section className="flomo-config-block">
+          <header className="block-head">
+            <h2>Flomo 推送</h2>
+          </header>
+
+          {!flomoConfig || flomoEditing ? (
+            <div className="flomo-config-row">
+              <input
+                className="flomo-input"
+                type="url"
+                placeholder="Flomo Webhook URL (https://...)"
+                value={flomoWebhookInput}
+                onChange={(e) => setFlomoWebhookInput(e.target.value)}
+              />
+              <button
+                type="button"
+                className="flomo-btn"
+                disabled={flomoSaving || !flomoWebhookInput.trim()}
+                onClick={() => void saveFlomoConfig()}
+              >
+                {flomoSaving ? "保存中..." : "保存"}
+              </button>
+              {flomoEditing && flomoConfig ? (
+                <button
+                  type="button"
+                  className="flomo-btn flomo-btn-secondary"
+                  onClick={() => {
+                    setFlomoEditing(false);
+                    setFlomoWebhookInput(flomoConfig.webhook_url);
+                    setFlomoMessage(null);
+                  }}
+                >
+                  取消
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flomo-configured-row">
+              <span className="flomo-webhook-display">
+                已配置: {flomoConfig.webhook_url_masked}
+              </span>
+              <button
+                type="button"
+                className="flomo-btn"
+                disabled={flomoPushing}
+                onClick={() => void pushToFlomo()}
+              >
+                {flomoPushing ? "推送中..." : "发送今日文章"}
+              </button>
+              <button
+                type="button"
+                className="flomo-btn flomo-btn-secondary"
+                onClick={() => setFlomoEditing(true)}
+              >
+                修改配置
+              </button>
+            </div>
+          )}
+
+          {flomoMessage ? (
+            <div className={`flomo-message ${flomoMessage.type === "success" ? "is-success" : "is-error"}`}>
+              {flomoMessage.text}
+            </div>
+          ) : null}
+
+          <div className="consumption-stats">
+            <div className="consumption-stat">
+              <span className="consumption-stat-value">{readSet.size}</span>
+              <span className="consumption-stat-label">已读文章</span>
+            </div>
+            <div className="consumption-stat">
+              <span className="consumption-stat-value">{flomoPushStats.total}</span>
+              <span className="consumption-stat-label">Flomo 推送</span>
+            </div>
+            {flomoPushStats.recent.length > 0 ? (
+              <div className="consumption-stat">
+                <span className="consumption-stat-value">
+                  {flomoPushStats.recent[0].date}
+                </span>
+                <span className="consumption-stat-label">最近推送</span>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <section className="content-block">
         <header className="block-head">
