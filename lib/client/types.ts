@@ -22,6 +22,12 @@ export interface FlomoPushStats {
   recent: FlomoPushLogEntry[];
 }
 
+export interface FlomoClickStats {
+  total_clicks: number;
+  days: number;
+  daily: Array<{ date: string; clicks: number }>;
+}
+
 export type ExtractionPlatform = "youtube" | "bilibili" | "twitter" | "xiaohongshu" | "instagram" | "webpage" | "unknown";
 export type ExtractionStatus = "pending" | "processing" | "completed" | "failed";
 export type ResourceType = "video" | "audio" | "subtitle" | "thumbnail" | "image" | "text" | "metadata";

@@ -187,13 +187,17 @@ function resolveArticleUrl(article: FlomoArchiveArticleSummary): string {
   return normalizeUrl(article.url);
 }
 
-function buildArchiveArticleLink(article: FlomoArchiveArticleSummary, reportDate: string, skipTracking = false): string {
+function buildArchiveArticleLink(
+  article: FlomoArchiveArticleSummary,
+  reportDate: string,
+  opts?: { skipTracking?: boolean; userId?: string },
+): string {
   const targetUrl = resolveArticleUrl(article);
   if (!targetUrl) {
     return "";
   }
 
-  if (skipTracking) {
+  if (opts?.skipTracking) {
     return targetUrl;
   }
 
@@ -211,6 +215,11 @@ function buildArchiveArticleLink(article: FlomoArchiveArticleSummary, reportDate
     ch: "flomo",
   };
 
+  const uid = String(opts?.userId || "").trim();
+  if (uid) {
+    params.uid = uid;
+  }
+
   return buildSignedTrackingUrl(baseUrl, params, signingSecret);
 }
 
@@ -222,11 +231,13 @@ export function renderFlomoArchiveArticlesContent(params: {
   activeTagDefinitions?: FlomoTagDefinition[];
   tagLimit?: number;
   skipTracking?: boolean;
+  userId?: string;
 }): string {
   const reportDate = normalizeDate(params.reportDate);
   const articles = Array.isArray(params.articles) ? params.articles : [];
   const overviewLimit = Math.max(1, Math.min(Number(params.overviewLimit || 3), 8));
   const skipTracking = Boolean(params.skipTracking);
+  const userId = String(params.userId || "").trim();
   const lines: string[] = [];
 
   lines.push("【今日速览】");
@@ -252,7 +263,7 @@ export function renderFlomoArchiveArticlesContent(params: {
     articles.forEach((article, index) => {
       const title = normalizeText(article.title, 200) || `未命名文章 ${index + 1}`;
       const summary = normalizeText(article.summary, 320);
-      const url = buildArchiveArticleLink(article, reportDate, skipTracking);
+      const url = buildArchiveArticleLink(article, reportDate, { skipTracking, userId });
       lines.push(`${index + 1}. ${title}`);
       if (summary) {
         lines.push(summary);
@@ -270,16 +281,17 @@ export function renderFlomoArchiveArticlesContent(params: {
     lines.push("");
   }
 
-  const tags = collectFlomoTags({
+  const dynamicTags = collectFlomoTags({
     articles,
     activeTagDefinitions: params.activeTagDefinitions || [],
-    tagLimit: params.tagLimit || 20,
+    tagLimit: params.tagLimit || 3,
   });
-  if (tags.length) {
+  const allTags = ["#AI新闻", ...dynamicTags.filter((t) => t !== "#ai新闻" && t !== "#ai___")].slice(0, 4);
+  if (allTags.length) {
     if (!homePageUrl) {
       lines.push("");
     }
-    lines.push(tags.join(" "));
+    lines.push(allTags.join(" "));
   }
 
   return `${lines.join("\n").trimEnd()}\n`;
@@ -301,7 +313,7 @@ export function buildFlomoArchiveArticlesPayload(params: {
       articles: params.articles,
       homePageUrl,
       activeTagDefinitions: params.activeTagDefinitions || [],
-      tagLimit: params.tagLimit || 20,
+      tagLimit: params.tagLimit || 3,
     }),
     dedupeKey,
   };

@@ -10,7 +10,7 @@ import {
 } from "@/lib/auth-config";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchFlomoData, saveFlomoWebhook } from "@/lib/client/flomo";
-import type { AuthUser, FlomoConfig, FlomoPushStats, EmailNotifyConfig } from "@/lib/client/types";
+import type { AuthUser, FlomoClickStats, FlomoConfig, FlomoPushStats, EmailNotifyConfig } from "@/lib/client/types";
 
 function formatPushTime(value: string): string {
   if (!value) return "-";
@@ -36,6 +36,7 @@ export default function SettingsPage(): React.ReactNode {
   const [flomoSaving, setFlomoSaving] = useState(false);
   const [flomoMessage, setFlomoMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [flomoPushStats, setFlomoPushStats] = useState<FlomoPushStats>({ total: 0, recent: [] });
+  const [flomoClickStats, setFlomoClickStats] = useState<FlomoClickStats>({ total_clicks: 0, days: 30, daily: [] });
   const [emailNotify, setEmailNotify] = useState<EmailNotifyConfig | null>(null);
   const [emailNotifyLoading, setEmailNotifyLoading] = useState(false);
 
@@ -51,6 +52,7 @@ export default function SettingsPage(): React.ReactNode {
         setFlomoConfig(data.config);
         if (data.config) setFlomoWebhookInput(data.config.webhook_url);
         setFlomoPushStats(data.pushStats);
+        setFlomoClickStats(data.clickStats);
       } catch {
         // silent
       } finally {
@@ -262,6 +264,54 @@ export default function SettingsPage(): React.ReactNode {
             </span>
             <span className="email-notify-email">{emailNotify.email}</span>
           </div>
+        </section>
+      ) : null}
+
+      {flomoConfigLoaded && (flomoPushStats.total > 0 || flomoClickStats.total_clicks > 0) ? (
+        <section className="settings-section">
+          <header className="block-head">
+            <h2>使用统计</h2>
+          </header>
+          <div className="stats-cards">
+            <div className="stats-card">
+              <span className="stats-card-value">{flomoPushStats.total}</span>
+              <span className="stats-card-label">总推送</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-card-value">{flomoClickStats.total_clicks}</span>
+              <span className="stats-card-label">总点击</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-card-value">
+                {(() => {
+                  const totalArticles = flomoPushStats.recent.reduce((sum, e) => sum + e.article_count, 0);
+                  if (!totalArticles) return "-";
+                  return (flomoClickStats.total_clicks / totalArticles).toFixed(1);
+                })()}
+              </span>
+              <span className="stats-card-label">篇均点击</span>
+            </div>
+          </div>
+          {(() => {
+            const last7 = flomoClickStats.daily.slice(0, 7);
+            const maxClicks = Math.max(...last7.map((d) => d.clicks), 1);
+            if (!last7.some((d) => d.clicks > 0)) return null;
+            return (
+              <div className="stats-sparkline">
+                <span className="stats-sparkline-label">最近 7 天</span>
+                <div className="stats-sparkline-bars">
+                  {last7.map((d) => (
+                    <div
+                      key={d.date}
+                      className="stats-sparkline-bar"
+                      style={{ height: `${Math.max(4, (d.clicks / maxClicks) * 32)}px` }}
+                      title={`${d.date}: ${d.clicks} 次点击`}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </section>
       ) : null}
 

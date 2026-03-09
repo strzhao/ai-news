@@ -80,6 +80,7 @@ describe("flomo archive articles formatter", () => {
     expect(payload.content).toContain("ch=flomo");
     expect(payload.content).toContain("sig=");
     expect(payload.content).toContain("查看更多：https://ai-news.example.com/");
+    expect(payload.content).toContain("#AI新闻");
     expect(payload.content).toContain("#multi_agent");
     expect(payload.content).toContain("#rag");
     expect(payload.content).toContain("#ai_engineer");
@@ -91,7 +92,9 @@ describe("flomo archive articles formatter", () => {
       .filter(Boolean);
     const lastLine = nonEmptyLines[nonEmptyLines.length - 1] || "";
     expect(lastLine.startsWith("#")).toBe(true);
-    expect(lastLine.split(/\s+/).every((token) => token.startsWith("#") && !token.includes(" "))).toBe(true);
+    const tagTokens = lastLine.split(/\s+/);
+    expect(tagTokens.every((token) => token.startsWith("#") && !token.includes(" "))).toBe(true);
+    expect(tagTokens.length).toBeLessThanOrEqual(4);
   });
 
   it("renders fallback text when there is no article", () => {

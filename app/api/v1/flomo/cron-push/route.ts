@@ -66,14 +66,7 @@ export async function GET(request: Request): Promise<Response> {
       });
     }
 
-    // 3. Format content once
-    const content = renderFlomoArchiveArticlesContent({
-      reportDate: todayDate,
-      articles: allArticles,
-      skipTracking: true,
-    });
-
-    // 4. Push to each subscriber
+    // 3. Push to each subscriber (content generated per-user for tracking URLs)
     let sent = 0;
     let skipped = 0;
     let failed = 0;
@@ -85,6 +78,12 @@ export async function GET(request: Request): Promise<Response> {
           skipped += 1;
           continue;
         }
+
+        const content = renderFlomoArchiveArticlesContent({
+          reportDate: todayDate,
+          articles: allArticles,
+          userId,
+        });
 
         const flomo = new FlomoClient(config.webhook_url);
         await flomo.send({

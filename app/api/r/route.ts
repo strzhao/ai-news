@@ -20,6 +20,7 @@ function signedParams(url: string): Record<string, string> {
     d: queryValue(url, "d"),
     ch: queryValue(url, "ch"),
     pt: queryValue(url, "pt"),
+    uid: queryValue(url, "uid"),
   };
 }
 
@@ -139,6 +140,13 @@ async function trackClick(params: Record<string, string>): Promise<void> {
     const typeKey = `clicks:type:${dateKey}`;
     await upstash.hincrby(typeKey, primaryType, 1);
     await upstash.expire(typeKey);
+  }
+
+  const uid = String(params.uid || "").trim();
+  if (uid) {
+    const userKey = `clicks:user:${uid}:${dateKey}`;
+    await upstash.hincrby(userKey, "total", 1);
+    await upstash.expire(userKey);
   }
 }
 
