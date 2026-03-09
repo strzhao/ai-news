@@ -1,12 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-
-import { fetchAuthUser } from "@/lib/client/auth";
-import { fetchFlomoData } from "@/lib/client/flomo";
-import type { AuthUser, FlomoConfig } from "@/lib/client/types";
-import NavTabs from "@/app/components/nav-tabs";
+import { useEffect, useMemo, useState } from "react";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
@@ -42,7 +36,6 @@ interface ArchiveArticlesResponse {
   generated_at: string;
   total_articles: number;
 }
-
 
 function formatTime(value: string): string {
   if (!value) return "-";
@@ -99,33 +92,10 @@ export default function HomePage(): React.ReactNode {
   const [hasMoreByDate, setHasMoreByDate] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [authError, setAuthError] = useState("");
-  const [authRuntimeError, setAuthRuntimeError] = useState("");
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
-  const [flomoConfig, setFlomoConfig] = useState<FlomoConfig | null>(null);
-  const [flomoConfigLoaded, setFlomoConfigLoaded] = useState(false);
   const [days, setDays] = useState(30);
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
-
-  const refreshAuthUser = useCallback(async (showError = false): Promise<boolean> => {
-    const { user, error } = await fetchAuthUser();
-    setAuthUser(user);
-    if (error && showError) setAuthRuntimeError(error);
-    if (user) setAuthRuntimeError("");
-    return !!user;
-  }, []);
-
-  const loadFlomoData = useCallback(async () => {
-    try {
-      const data = await fetchFlomoData();
-      setFlomoConfig(data.config);
-    } catch {
-      // silent
-    } finally {
-      setFlomoConfigLoaded(true);
-    }
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -139,12 +109,7 @@ export default function HomePage(): React.ReactNode {
     setReadSet(loadReadSet());
     const authErrorCode = params.get("auth_error") ?? "";
     setAuthError(authErrorCode ? AUTH_ERROR_MESSAGES[authErrorCode] ?? "登录流程异常，请重试。" : "");
-
-    void (async () => {
-      const ok = await refreshAuthUser();
-      if (ok) void loadFlomoData();
-    })();
-  }, [refreshAuthUser, loadFlomoData]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,9 +120,7 @@ export default function HomePage(): React.ReactNode {
       try {
         const response = await fetch(
           `/api/archive_articles?days=${days}&limit_per_day=${limitPerDay}&article_limit_per_day=${articleLimitPerDay}&image_probe_limit=0`,
-          {
-            cache: "no-store",
-          },
+          { cache: "no-store" },
         );
         const payload = (await response.json()) as ArchiveArticlesResponse;
         if (!response.ok || !payload.ok) {
@@ -202,11 +165,6 @@ export default function HomePage(): React.ReactNode {
   const todayItems = useMemo(() => todayGroup?.items || [], [todayGroup]);
   const hasMoreTodayItems = !loading && Boolean(hasMoreByDate[todayDate]);
   const historyGroups = groups.filter((group) => group.date !== todayDate);
-
-  function startUnifiedLogin(): void {
-    setAuthRuntimeError("");
-    window.location.assign("/api/auth/login");
-  }
 
   function markArticleRead(articleId: string): void {
     const normalized = String(articleId || "").trim();
@@ -267,38 +225,15 @@ export default function HomePage(): React.ReactNode {
   }
 
   return (
-    <main className="newsroom-shell">
-      <header className="newsroom-hero">
-        <div className="hero-topbar">
-          <p className="eyebrow">AI News Daily Edition</p>
-          <div className="hero-auth-corner">
-            <div className="hero-auth-row">
-              {authUser ? (
-                <div className="auth-session-row">
-                  <Link href="/settings" className="auth-user-chip">
-                    {authUser.email}
-                  </Link>
-                  {flomoConfigLoaded && !flomoConfig ? (
-                    <Link href="/settings" className="flomo-setup-link">配置 Flomo</Link>
-                  ) : null}
-                </div>
-              ) : (
-                <button type="button" className="auth-login-btn" onClick={startUnifiedLogin}>
-                  统一账号登录
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        <NavTabs />
-        <h1>今天值得读的 AI 文章</h1>
-        <p className="hero-meta">
+    <>
+      <div className="page-header">
+        <h1 className="page-title">今天值得读的 AI 文章</h1>
+        <p className="page-meta">
           {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
         </p>
-      </header>
+      </div>
 
       {authError ? <div className="error-banner auth-error-banner">{authError}</div> : null}
-      {authRuntimeError ? <div className="error-banner auth-error-banner">{authRuntimeError}</div> : null}
       {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="content-block">
@@ -354,10 +289,10 @@ export default function HomePage(): React.ReactNode {
       </section>
 
       <section className="content-block">
-        <p className="hero-meta">
+        <p className="page-meta">
           <a href="/archive-review">进入归档审查页（完整列表 + 好/不好反馈）</a>
         </p>
       </section>
-    </main>
+    </>
   );
 }

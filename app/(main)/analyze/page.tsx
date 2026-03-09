@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchAuthUser } from "@/lib/client/auth";
@@ -11,7 +10,6 @@ import {
   fetchTaskList,
   type ExtractionTaskResponse,
 } from "@/lib/client/url-analysis";
-import NavTabs from "@/app/components/nav-tabs";
 
 const POLL_INTERVAL_MS = 5_000;
 const MAX_POLL_ATTEMPTS = 120;
@@ -287,28 +285,13 @@ export default function AnalyzePage(): React.ReactNode {
   const isPolling = pollTimersRef.current.size > 0;
 
   return (
-    <main className="newsroom-shell">
-      <header className="newsroom-hero">
-        <div className="hero-topbar">
-          <p className="eyebrow">AI News Daily Edition</p>
-          <div className="hero-auth-corner">
-            <div className="hero-auth-row">
-              {authUser ? (
-                <Link href="/settings" className="auth-user-chip">{authUser.email}</Link>
-              ) : !authLoading ? (
-                <button type="button" className="auth-login-btn" onClick={startUnifiedLogin}>
-                  统一账号登录
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </div>
-        <NavTabs />
-        <h1>URL 资源提取</h1>
-        <p className="hero-meta">
+    <>
+      <div className="page-header">
+        <h1 className="page-title">URL 资源提取</h1>
+        <p className="page-meta">
           支持 YouTube / Bilibili / Twitter / 小红书 / Instagram / 网页
         </p>
-      </header>
+      </div>
 
       {!authUser && !authLoading ? (
         <section className="content-block">
@@ -404,7 +387,7 @@ export default function AnalyzePage(): React.ReactNode {
       {drawerOpen && selectedTask ? (
         <TaskDrawer task={selectedTask} expired={isTaskExpired(selectedTask)} onClose={closeDrawer} />
       ) : null}
-    </main>
+    </>
   );
 }
 

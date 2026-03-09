@@ -54,12 +54,11 @@ export default function AuthCallbackPage(): React.ReactNode {
   }, []);
 
   return (
-    <main className="newsroom-shell">
-      <section className="newsroom-hero">
-        <p className="eyebrow">Unified Auth</p>
-        <h1>登录处理中</h1>
-        <p className="hero-meta">{statusText}</p>
-      </section>
-    </main>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <div style={{ textAlign: "center" }}>
+        <h1 style={{ fontSize: 24, fontWeight: 650, marginBottom: 12 }}>登录处理中</h1>
+        <p style={{ color: "var(--muted)", fontSize: 14 }}>{statusText}</p>
+      </div>
+    </div>
   );
 }

@@ -54,7 +54,6 @@ export default function SettingsPage(): React.ReactNode {
         setFlomoConfigLoaded(true);
       }
 
-      // Load email notification config
       try {
         const emailRes = await fetch("/api/v1/email-notify/config", { credentials: "include" });
         const emailPayload = (await emailRes.json()) as { ok: boolean; config?: EmailNotifyConfig };
@@ -91,19 +90,14 @@ export default function SettingsPage(): React.ReactNode {
   }
 
   if (!authChecked) {
-    return (
-      <main className="newsroom-shell">
-        <p className="settings-loading">加载中...</p>
-      </main>
-    );
+    return <p className="settings-loading">加载中...</p>;
   }
 
   if (!authUser) {
     return (
-      <main className="newsroom-shell">
-        <div className="settings-header">
-          <Link href="/" className="settings-back-link">← 返回</Link>
-          <h1>设置</h1>
+      <>
+        <div className="page-header">
+          <h1 className="page-title">设置</h1>
         </div>
         <section className="settings-section">
           <p className="settings-empty">请先登录后访问设置页。</p>
@@ -111,15 +105,14 @@ export default function SettingsPage(): React.ReactNode {
             返回首页
           </Link>
         </section>
-      </main>
+      </>
     );
   }
 
   return (
-    <main className="newsroom-shell">
-      <div className="settings-header">
-        <Link href="/" className="settings-back-link">← 返回</Link>
-        <h1>设置</h1>
+    <>
+      <div className="page-header">
+        <h1 className="page-title">设置</h1>
       </div>
 
       <section className="settings-section">
@@ -322,6 +315,6 @@ export default function SettingsPage(): React.ReactNode {
           </div>
         </section>
       ) : null}
-    </main>
+    </>
   );
 }
