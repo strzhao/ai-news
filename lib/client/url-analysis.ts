@@ -43,3 +43,19 @@ export async function pollTaskStatus(taskId: string): Promise<SubmitResult> {
   const payload = (await response.json()) as SubmitResult;
   return payload;
 }
+
+interface TaskListResult {
+  ok: boolean;
+  tasks: ExtractionTaskResponse[];
+  error?: string;
+}
+
+export async function fetchTaskList(): Promise<TaskListResult> {
+  const response = await fetch("/api/v1/analyze-url/tasks", {
+    method: "GET",
+    credentials: "include",
+  });
+  const payload = (await response.json()) as TaskListResult;
+  if (!payload.tasks) payload.tasks = [];
+  return payload;
+}
