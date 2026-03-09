@@ -3,11 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  AUTH_STATE_STORAGE_KEY,
-  buildAuthorizeUrlForCurrentOrigin,
-  generateAuthState,
-} from "@/lib/auth-config";
 import { fetchAuthUser } from "@/lib/client/auth";
 import type { AuthUser, ExtractedResource } from "@/lib/client/types";
 import {
@@ -259,13 +254,7 @@ export default function AnalyzePage(): React.ReactNode {
   }
 
   function startUnifiedLogin(): void {
-    const state = generateAuthState();
-    try {
-      window.sessionStorage.setItem(AUTH_STATE_STORAGE_KEY, state);
-    } catch {
-      // Ignore
-    }
-    window.location.assign(buildAuthorizeUrlForCurrentOrigin(state));
+    window.location.assign("/api/auth/login");
   }
 
   // Handle ESC to close drawer

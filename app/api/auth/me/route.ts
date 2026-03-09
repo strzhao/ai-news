@@ -1,7 +1,18 @@
-import { proxyAuthCenter } from "@/lib/auth/auth-center-proxy";
+import { NextResponse } from "next/server";
+
+import { readGatewaySessionFromRequest } from "@/lib/auth/gateway-session";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request): Promise<Response> {
-  return proxyAuthCenter(request, "GET", "/api/auth/me");
+  const session = readGatewaySessionFromRequest(request);
+  if (!session) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  return NextResponse.json({
+    id: session.userId,
+    email: session.email,
+    status: "ACTIVE",
+  });
 }

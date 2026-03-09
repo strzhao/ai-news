@@ -3,11 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import {
-  AUTH_STATE_STORAGE_KEY,
-  buildAuthorizeUrlForCurrentOrigin,
-  generateAuthState,
-} from "@/lib/auth-config";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchFlomoData, saveFlomoWebhook } from "@/lib/client/flomo";
 import type { AuthUser, FlomoClickStats, FlomoConfig, FlomoPushStats, EmailNotifyConfig } from "@/lib/client/types";
@@ -73,12 +68,7 @@ export default function SettingsPage(): React.ReactNode {
   }, []);
 
   function switchAccount(): void {
-    const state = generateAuthState();
-    try {
-      window.sessionStorage.setItem(AUTH_STATE_STORAGE_KEY, state);
-    } catch {}
-    const authorizeUrl = buildAuthorizeUrlForCurrentOrigin(state, "select_account");
-    window.location.assign(authorizeUrl);
+    window.location.assign("/api/auth/login?prompt=select_account");
   }
 
   async function handleSaveWebhook(): Promise<void> {

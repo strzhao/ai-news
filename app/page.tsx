@@ -3,11 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  AUTH_STATE_STORAGE_KEY,
-  buildAuthorizeUrlForCurrentOrigin,
-  generateAuthState,
-} from "@/lib/auth-config";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchFlomoData } from "@/lib/client/flomo";
 import type { AuthUser, FlomoConfig } from "@/lib/client/types";
@@ -48,7 +43,6 @@ interface ArchiveArticlesResponse {
   total_articles: number;
 }
 
-const AUTH_LOGIN_JUST_COMPLETED_KEY = "auth_login_just_completed";
 
 function formatTime(value: string): string {
   if (!value) return "-";
@@ -145,23 +139,6 @@ export default function HomePage(): React.ReactNode {
     setReadSet(loadReadSet());
     const authErrorCode = params.get("auth_error") ?? "";
     setAuthError(authErrorCode ? AUTH_ERROR_MESSAGES[authErrorCode] ?? "登录流程异常，请重试。" : "");
-    const justCompleted =
-      (typeof window !== "undefined" && window.sessionStorage.getItem(AUTH_LOGIN_JUST_COMPLETED_KEY) === "1") || false;
-
-    if (justCompleted && typeof window !== "undefined") {
-      window.sessionStorage.removeItem(AUTH_LOGIN_JUST_COMPLETED_KEY);
-      void (async () => {
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          const ok = await refreshAuthUser(attempt > 0);
-          if (ok) {
-            void loadFlomoData();
-            return;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-        }
-      })();
-      return;
-    }
 
     void (async () => {
       const ok = await refreshAuthUser();
@@ -228,15 +205,7 @@ export default function HomePage(): React.ReactNode {
 
   function startUnifiedLogin(): void {
     setAuthRuntimeError("");
-    const state = generateAuthState();
-    try {
-      window.sessionStorage.setItem(AUTH_STATE_STORAGE_KEY, state);
-    } catch {
-      // Ignore storage failures, callback will reject mismatched state.
-    }
-
-    const authorizeUrl = buildAuthorizeUrlForCurrentOrigin(state);
-    window.location.assign(authorizeUrl);
+    window.location.assign("/api/auth/login");
   }
 
   function markArticleRead(articleId: string): void {

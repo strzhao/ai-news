@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { AUTH_STATE_STORAGE_KEY } from "@/lib/auth-config";
-
 const ERROR_MESSAGE_MAP: Record<string, string> = {
   state_mismatch: "登录状态校验失败，请重新发起登录。",
-  authorization_not_completed: "授权未完成，请重试。"
+  authorization_not_completed: "授权未完成，请重试。",
+  finalize_failed: "登录会话创建失败，请重试。",
 };
-const AUTH_LOGIN_JUST_COMPLETED_KEY = "auth_login_just_completed";
 
-function redirectToHome(code?: string): void {
-  const target = code ? `/?auth_error=${encodeURIComponent(code)}` : "/";
+function redirectToHome(path?: string, errorCode?: string): void {
+  const target = errorCode ? `/?auth_error=${encodeURIComponent(errorCode)}` : (path || "/");
   window.location.replace(target);
 }
 
@@ -23,33 +21,36 @@ export default function AuthCallbackPage(): React.ReactNode {
     const authorized = callbackUrl.searchParams.get("authorized");
     const returnedState = callbackUrl.searchParams.get("state");
 
-    let expectedState: string | null = null;
-    try {
-      expectedState = window.sessionStorage.getItem(AUTH_STATE_STORAGE_KEY);
-      window.sessionStorage.removeItem(AUTH_STATE_STORAGE_KEY);
-    } catch {
-      expectedState = null;
-    }
-
-    if (authorized !== "1") {
-      setStatusText(ERROR_MESSAGE_MAP.authorization_not_completed);
-      redirectToHome("authorization_not_completed");
+    if (authorized !== "1" || !returnedState) {
+      const code = authorized !== "1" ? "authorization_not_completed" : "state_mismatch";
+      setStatusText(ERROR_MESSAGE_MAP[code]);
+      redirectToHome(undefined, code);
       return;
     }
 
-    if (!returnedState || !expectedState || returnedState !== expectedState) {
-      setStatusText(ERROR_MESSAGE_MAP.state_mismatch);
-      redirectToHome("state_mismatch");
-      return;
-    }
+    void (async () => {
+      try {
+        const response = await fetch("/api/auth/session/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ state: returnedState }),
+        });
 
-    try {
-      window.sessionStorage.setItem(AUTH_LOGIN_JUST_COMPLETED_KEY, "1");
-    } catch {
-      // Ignore storage failures.
-    }
+        const payload = (await response.json()) as { ok: boolean; next?: string; error?: string };
+        if (!response.ok || !payload.ok) {
+          const code = payload.error || "finalize_failed";
+          setStatusText(ERROR_MESSAGE_MAP[code] || "登录会话创建失败，请重试。");
+          redirectToHome(undefined, code);
+          return;
+        }
 
-    redirectToHome();
+        redirectToHome(payload.next || "/");
+      } catch {
+        setStatusText(ERROR_MESSAGE_MAP.finalize_failed);
+        redirectToHome(undefined, "finalize_failed");
+      }
+    })();
   }, []);
 
   return (
