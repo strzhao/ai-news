@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
@@ -97,6 +98,13 @@ export default function HomePage(): React.ReactNode {
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
 
+  const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
+  const [summaryArticle, setSummaryArticle] = useState<ArchiveArticleSummary | null>(null);
+  const [summaryMarkdown, setSummaryMarkdown] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
+  const summaryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setDays(Math.max(1, Math.min(180, Number.parseInt(params.get("days") || "30", 10) || 30)));
@@ -178,6 +186,93 @@ export default function HomePage(): React.ReactNode {
     });
   }
 
+  const closeSummaryDrawer = useCallback(() => {
+    setSummaryDrawerOpen(false);
+    setSummaryArticle(null);
+    setSummaryMarkdown("");
+    setSummaryLoading(false);
+    setSummaryError("");
+    if (summaryPollRef.current) {
+      clearTimeout(summaryPollRef.current);
+      summaryPollRef.current = null;
+    }
+  }, []);
+
+  const fetchSummary = useCallback(async (articleId: string, pollCount = 0) => {
+    try {
+      const response = await fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, { cache: "no-store" });
+      const data = await response.json();
+
+      if (!data.ok) {
+        setSummaryError(data.error || "获取总结失败");
+        setSummaryLoading(false);
+        return;
+      }
+
+      if (data.status === "completed" && data.summary_markdown) {
+        setSummaryMarkdown(data.summary_markdown);
+        setSummaryLoading(false);
+        return;
+      }
+
+      if (data.status === "no_content") {
+        setSummaryError("文章内容不足，无法生成 AI 总结");
+        setSummaryLoading(false);
+        return;
+      }
+
+      if (data.status === "failed") {
+        setSummaryError(data.error || "AI 总结生成失败，请稍后重试");
+        setSummaryLoading(false);
+        return;
+      }
+
+      // status === "generating", keep polling
+      if (pollCount < 60) {
+        summaryPollRef.current = setTimeout(() => {
+          void fetchSummary(articleId, pollCount + 1);
+        }, 5000);
+      } else {
+        setSummaryError("总结生成超时，请稍后重试");
+        setSummaryLoading(false);
+      }
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : "网络错误");
+      setSummaryLoading(false);
+    }
+  }, []);
+
+  function handleOpenSummary(item: ArchiveArticleSummary): void {
+    if (summaryPollRef.current) {
+      clearTimeout(summaryPollRef.current);
+      summaryPollRef.current = null;
+    }
+    setSummaryArticle(item);
+    setSummaryMarkdown("");
+    setSummaryError("");
+    setSummaryLoading(true);
+    setSummaryDrawerOpen(true);
+    void fetchSummary(item.article_id);
+  }
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape" && summaryDrawerOpen) {
+        closeSummaryDrawer();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [summaryDrawerOpen, closeSummaryDrawer]);
+
+  useEffect(() => {
+    return () => {
+      if (summaryPollRef.current) {
+        clearTimeout(summaryPollRef.current);
+      }
+    };
+  }, []);
+
   function renderArticle(item: ArchiveArticleSummary, options: RenderOptions = {}): React.ReactNode {
     const articleId = String(item.article_id || "").trim();
     const read = readSet.has(articleId);
@@ -209,15 +304,13 @@ export default function HomePage(): React.ReactNode {
           {item.summary ? <p className="article-dek">{item.summary}</p> : null}
 
           <div className="article-actions">
-            <a
+            <button
+              type="button"
               className="article-cta"
-              href={articleUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              onClick={() => markArticleRead(articleId)}
+              onClick={() => handleOpenSummary(item)}
             >
-              阅读原文
-            </a>
+              AI 总结
+            </button>
           </div>
         </div>
       </article>
@@ -293,6 +386,65 @@ export default function HomePage(): React.ReactNode {
           <a href="/archive-review">进入归档审查页（完整列表 + 好/不好反馈）</a>
         </p>
       </section>
+
+      {summaryDrawerOpen && summaryArticle ? (
+        <>
+          <div className="drawer-overlay" onClick={closeSummaryDrawer} />
+          <div className="drawer-panel" role="dialog" aria-modal="true">
+            <button type="button" className="drawer-close" onClick={closeSummaryDrawer}>
+              ✕
+            </button>
+
+            <h2 className="summary-drawer-title">{summaryArticle.title}</h2>
+            <div className="summary-drawer-meta">
+              <span>{summaryArticle.source_host || "未知来源"}</span>
+              <span> · </span>
+              <span>{formatTime(summaryArticle.generated_at)}</span>
+            </div>
+
+            {summaryLoading ? (
+              <div className="analyze-pending">
+                <div className="analyze-spinner" />
+                <p className="analyze-pending-text">正在生成 AI 总结...</p>
+                <p className="analyze-pending-hint">通常需要 30-60 秒，请稍候</p>
+              </div>
+            ) : null}
+
+            {summaryError ? (
+              <div className="error-banner" style={{ marginTop: 20 }}>
+                {summaryError}
+              </div>
+            ) : null}
+
+            {summaryMarkdown ? (
+              <div className="summary-content">
+                <ReactMarkdown
+                  components={{
+                    a: ({ children, href, ...props }) => (
+                      <a href={href} target="_blank" rel="noreferrer noopener" {...props}>
+                        {children}
+                      </a>
+                    ),
+                  }}
+                >
+                  {summaryMarkdown}
+                </ReactMarkdown>
+              </div>
+            ) : null}
+
+            <div className="summary-drawer-footer">
+              <a
+                className="article-cta"
+                href={summaryArticle.original_url || summaryArticle.url}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                阅读原文
+              </a>
+            </div>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

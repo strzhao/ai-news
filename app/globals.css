@@ -462,6 +462,11 @@ a {
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .article-cta::after {
@@ -1494,4 +1499,73 @@ button:focus-visible {
   .archived-card-url {
     max-width: 160px;
   }
+}
+
+/* ── Summary Drawer ── */
+
+.summary-drawer-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  line-height: 1.4;
+  padding-right: 48px;
+}
+
+.summary-drawer-meta {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.summary-content {
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+.summary-content h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 28px 0 10px;
+  color: var(--ink);
+}
+
+.summary-content h2:first-child {
+  margin-top: 0;
+}
+
+.summary-content ol,
+.summary-content ul {
+  padding-left: 22px;
+  margin: 8px 0;
+}
+
+.summary-content li {
+  margin: 6px 0;
+}
+
+.summary-content p {
+  margin: 10px 0;
+}
+
+.summary-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.summary-content code {
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.summary-content strong {
+  font-weight: 600;
+}
+
+.summary-drawer-footer {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }

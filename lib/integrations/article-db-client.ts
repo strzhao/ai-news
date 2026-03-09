@@ -221,6 +221,43 @@ export async function markFlomoPushBatchSent(batchKey: string): Promise<{ consum
   };
 }
 
+export interface ArticleSummaryResult {
+  ok: boolean;
+  status?: "completed" | "generating" | "failed" | "no_content";
+  summary_markdown?: string;
+  model_name?: string;
+  updated_at?: string;
+  error?: string;
+}
+
+export async function fetchArticleSummary(articleId: string): Promise<ArticleSummaryResult> {
+  const root = baseUrl();
+  if (!root) {
+    throw new Error("ARTICLE_DB_BASE_URL is not configured");
+  }
+
+  const raw = (await fetchJson(
+    `${root}/api/v1/articles/${encodeURIComponent(articleId)}/summary`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        ...authHeaders(),
+      },
+      timeoutMs: 120_000,
+    },
+  )) as Record<string, unknown>;
+
+  return {
+    ok: Boolean(raw.ok),
+    status: String(raw.status || "") as ArticleSummaryResult["status"],
+    summary_markdown: raw.summary_markdown ? String(raw.summary_markdown) : undefined,
+    model_name: raw.model_name ? String(raw.model_name) : undefined,
+    updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
+    error: raw.error ? String(raw.error) : undefined,
+  };
+}
+
 export async function markFlomoPushBatchFailed(batchKey: string, errorMessage: string): Promise<void> {
   const root = baseUrl();
   if (!root) {
