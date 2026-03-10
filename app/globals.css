@@ -1063,10 +1063,86 @@ button:focus-visible {
   margin-top: 24px;
 }
 
+.resource-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .resource-list-title {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.resource-download-all {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.resource-download-all:hover {
+  background: var(--accent);
+  color: var(--home-accent-foreground);
+}
+.resource-download-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resource-filter-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.resource-filter-bar::-webkit-scrollbar { display: none; }
+
+.resource-filter-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 520;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.resource-filter-pill:hover { border-color: var(--ink-soft); color: var(--ink-soft); }
+.resource-filter-pill.is-active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.resource-filter-video.is-active { background: oklch(0.400 0.100 280); border-color: oklch(0.400 0.100 280); color: #fff; }
+.resource-filter-audio.is-active { background: oklch(0.400 0.080 158); border-color: oklch(0.400 0.080 158); color: #fff; }
+.resource-filter-subtitle.is-active { background: oklch(0.450 0.090 68); border-color: oklch(0.450 0.090 68); color: #fff; }
+.resource-filter-thumbnail.is-active,
+.resource-filter-image.is-active { background: oklch(0.420 0.080 320); border-color: oklch(0.420 0.080 320); color: #fff; }
+.resource-filter-text.is-active { background: var(--home-charcoal); border-color: var(--home-charcoal); color: #fff; }
+.resource-filter-metadata.is-active { background: var(--muted); border-color: var(--muted); color: #fff; }
+
+.resource-filter-empty {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
 }
 
 .resource-card {

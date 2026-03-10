@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchAuthUser } from "@/lib/client/auth";
-import type { AuthUser, ExtractedResource } from "@/lib/client/types";
+import type { AuthUser, ExtractedResource, ResourceType } from "@/lib/client/types";
 import {
   submitExtraction,
   pollTaskStatus,
@@ -463,6 +463,66 @@ function TaskDrawer({
   onClose: () => void;
 }): React.ReactNode {
   const isPending = task.status === "pending" || task.status === "processing";
+  const [activeFilters, setActiveFilters] = useState<Set<ResourceType>>(new Set());
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+
+  const resourceTypeCounts = useMemo(() => {
+    const counts = new Map<ResourceType, number>();
+    for (const r of task.resources || []) {
+      counts.set(r.type, (counts.get(r.type) || 0) + 1);
+    }
+    return counts;
+  }, [task.resources]);
+
+  const filteredResources = useMemo(() => {
+    if (!task.resources) return [];
+    if (activeFilters.size === 0) return task.resources;
+    return task.resources.filter((r) => activeFilters.has(r.type));
+  }, [task.resources, activeFilters]);
+
+  const downloadableResources = useMemo(() => {
+    return filteredResources.filter(
+      (r) => r.url && !expired && !isResourceExpired(r),
+    );
+  }, [filteredResources, expired]);
+
+  function toggleFilter(type: ResourceType): void {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  }
+
+  async function handleDownloadAll(): Promise<void> {
+    if (downloadableResources.length === 0 || downloading) return;
+    setDownloading(true);
+    setDownloadProgress({ current: 0, total: downloadableResources.length });
+
+    for (let i = 0; i < downloadableResources.length; i++) {
+      const r = downloadableResources[i];
+      setDownloadProgress({ current: i + 1, total: downloadableResources.length });
+      const a = document.createElement("a");
+      a.href = r.url;
+      a.download = r.filename;
+      a.target = "_blank";
+      a.rel = "noreferrer noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      if (i < downloadableResources.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    }
+
+    setDownloading(false);
+  }
 
   return (
     <>
@@ -537,10 +597,51 @@ function TaskDrawer({
 
             {task.resources?.length ? (
               <div className="resource-list">
-                <h3 className="resource-list-title">提取的资源 ({task.resources.length})</h3>
-                {task.resources.map((resource, idx) => (
-                  <ResourceCard key={`${resource.type}-${idx}`} resource={resource} taskExpired={expired} />
-                ))}
+                <div className="resource-list-header">
+                  <h3 className="resource-list-title">提取的资源 ({task.resources.length})</h3>
+                  {downloadableResources.length > 0 ? (
+                    <button
+                      type="button"
+                      className="resource-download-all"
+                      onClick={handleDownloadAll}
+                      disabled={downloading}
+                    >
+                      {downloading
+                        ? `下载中 (${downloadProgress.current}/${downloadProgress.total})...`
+                        : `↓ ${activeFilters.size > 0 ? "下载筛选" : "下载全部"} (${downloadableResources.length})`}
+                    </button>
+                  ) : null}
+                </div>
+
+                {resourceTypeCounts.size > 1 ? (
+                  <div className="resource-filter-bar">
+                    <button
+                      type="button"
+                      className={`resource-filter-pill${activeFilters.size === 0 ? " is-active" : ""}`}
+                      onClick={() => setActiveFilters(new Set())}
+                    >
+                      全部
+                    </button>
+                    {Array.from(resourceTypeCounts.entries()).map(([type, count]) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={`resource-filter-pill resource-filter-${type}${activeFilters.has(type) ? " is-active" : ""}`}
+                        onClick={() => toggleFilter(type)}
+                      >
+                        {RESOURCE_TYPE_LABELS[type] || type} ({count})
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {filteredResources.length > 0 ? (
+                  filteredResources.map((resource, idx) => (
+                    <ResourceCard key={`${resource.type}-${idx}`} resource={resource} taskExpired={expired} />
+                  ))
+                ) : (
+                  <p className="resource-filter-empty">当前筛选条件下无资源</p>
+                )}
               </div>
             ) : null}
           </div>
