@@ -1235,9 +1235,13 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.resource-download:hover {
+.resource-download:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+.resource-download:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ── Email Notify (Settings) ── */

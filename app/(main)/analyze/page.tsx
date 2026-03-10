@@ -100,6 +100,21 @@ function formatRelativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("zh-CN");
 }
 
+async function downloadFile(url: string, filename: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
+}
+
 function getThumbnailUrl(task: ExtractionTaskResponse): string | null {
   if (!task.resources) return null;
   const thumb = task.resources.find((r) => r.type === "thumbnail" || r.type === "image");
@@ -507,15 +522,11 @@ function TaskDrawer({
     for (let i = 0; i < downloadableResources.length; i++) {
       const r = downloadableResources[i];
       setDownloadProgress({ current: i + 1, total: downloadableResources.length });
-      const a = document.createElement("a");
-      a.href = r.url;
-      a.download = r.filename;
-      a.target = "_blank";
-      a.rel = "noreferrer noopener";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      try {
+        await downloadFile(r.url, r.filename);
+      } catch {
+        // Single file failure should not block others
+      }
       if (i < downloadableResources.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
@@ -664,6 +675,20 @@ function ResourceCard({
   const expiry = expiryText(resource.expires_at);
   const resourceIsExpired = taskExpired || isResourceExpired(resource);
   const isLargeMedia = resource.type === "video" || resource.type === "audio";
+  const [saving, setSaving] = useState(false);
+
+  async function handleDownload(): Promise<void> {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await downloadFile(resource.url, resource.filename);
+    } catch {
+      // Fallback: open in new tab if fetch fails
+      window.open(resource.url, "_blank", "noopener,noreferrer");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="resource-card">
@@ -698,15 +723,14 @@ function ResourceCard({
 
       <div className="resource-card-footer">
         {resource.url && !resourceIsExpired ? (
-          <a
+          <button
+            type="button"
             className="resource-download"
-            href={resource.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            download={resource.filename}
+            onClick={handleDownload}
+            disabled={saving}
           >
-            下载
-          </a>
+            {saving ? "下载中..." : "下载"}
+          </button>
         ) : null}
         {expiry ? <span className="expiry-badge expiry-badge-small">{expiry}</span> : null}
       </div>
