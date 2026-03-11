@@ -474,6 +474,22 @@ export async function listArchiveArticles(options: {
           generated_at: item.generated_at,
         })),
       }))
+      .map((group) => {
+        const seen = new Set<string>();
+        return {
+          ...group,
+          items: group.items.filter((item) => {
+            const key = buildArchiveArticleDedupeKey({
+              title: item.title,
+              url: item.original_url || item.url,
+              sourceHost: item.source_host,
+            });
+            if (!key || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }),
+        };
+      })
       .map((group) => ({
         ...group,
         items: articleLimitPerDay > 0 ? group.items.slice(0, articleLimitPerDay) : group.items,
