@@ -117,6 +117,40 @@ async function downloadFile(url: string, filename: string): Promise<void> {
   URL.revokeObjectURL(blobUrl);
 }
 
+async function downloadAsZip(
+  resources: Array<{ url: string; filename: string }>,
+  zipFilename: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<void> {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+
+  for (let i = 0; i < resources.length; i++) {
+    const r = resources[i];
+    onProgress?.(i + 1, resources.length);
+
+    try {
+      const res = await fetch(r.url);
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      zip.file(r.filename, blob);
+    } catch {
+      // Skip failed resources
+    }
+  }
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  const blobUrl = URL.createObjectURL(zipBlob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = zipFilename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
+}
+
 function getThumbnailUrl(task: ExtractionTaskResponse): string | null {
   if (!task.resources) return null;
   const thumb = task.resources.find((r) => r.type === "thumbnail" || r.type === "image");
@@ -492,6 +526,11 @@ function TaskDrawer({
   const [activeFilters, setActiveFilters] = useState<Set<ResourceType>>(new Set());
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+
+  useEffect(() => {
+    setIsMobileDevice(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+  }, []);
 
   const resourceTypeCounts = useMemo(() => {
     const counts = new Map<ResourceType, number>();
@@ -530,16 +569,31 @@ function TaskDrawer({
     setDownloading(true);
     setDownloadProgress({ current: 0, total: downloadableResources.length });
 
-    for (let i = 0; i < downloadableResources.length; i++) {
-      const r = downloadableResources[i];
-      setDownloadProgress({ current: i + 1, total: downloadableResources.length });
+    const isMobile = isMobileDevice || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile || downloadableResources.length > 3) {
       try {
-        await downloadFile(r.url, r.filename);
-      } catch {
-        // Single file failure should not block others
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+        await downloadAsZip(
+          downloadableResources,
+          `resources-${timestamp}.zip`,
+          (current, total) => setDownloadProgress({ current, total })
+        );
+      } catch (error) {
+        console.error("ZIP download failed:", error);
       }
-      if (i < downloadableResources.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
+    } else {
+      for (let i = 0; i < downloadableResources.length; i++) {
+        const r = downloadableResources[i];
+        setDownloadProgress({ current: i + 1, total: downloadableResources.length });
+        try {
+          await downloadFile(r.url, r.filename);
+        } catch {
+          // Single file failure should not block others
+        }
+        if (i < downloadableResources.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
       }
     }
 
@@ -622,16 +676,21 @@ function TaskDrawer({
                 <div className="resource-list-header">
                   <h3 className="resource-list-title">提取的资源 ({task.resources.length})</h3>
                   {downloadableResources.length > 0 ? (
-                    <button
-                      type="button"
-                      className="resource-download-all"
-                      onClick={handleDownloadAll}
-                      disabled={downloading}
-                    >
-                      {downloading
-                        ? `下载中 (${downloadProgress.current}/${downloadProgress.total})...`
-                        : `↓ ${activeFilters.size > 0 ? "下载筛选" : "下载全部"} (${downloadableResources.length})`}
-                    </button>
+                    <div className="resource-download-all-wrapper">
+                      <button
+                        type="button"
+                        className="resource-download-all"
+                        onClick={handleDownloadAll}
+                        disabled={downloading}
+                      >
+                        {downloading
+                          ? `下载中 (${downloadProgress.current}/${downloadProgress.total})...`
+                          : `↓ ${activeFilters.size > 0 ? "下载筛选" : "下载全部"} (${downloadableResources.length})`}
+                      </button>
+                      {(isMobileDevice || downloadableResources.length > 3) && downloadableResources.length > 1 && !downloading ? (
+                        <span className="resource-download-zip-hint">将打包为 ZIP</span>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
 

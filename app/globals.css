@@ -1109,6 +1109,19 @@ button:focus-visible {
   cursor: not-allowed;
 }
 
+.resource-download-all-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.resource-download-zip-hint {
+  font-size: 11px;
+  color: var(--muted-foreground, #888);
+  white-space: nowrap;
+}
+
 .resource-filter-bar {
   display: flex;
   gap: 6px;
