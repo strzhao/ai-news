@@ -1251,6 +1251,78 @@ button:focus-visible {
   cursor: not-allowed;
 }
 
+/* Secondary download button (text resources) */
+.resource-download-secondary {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  margin-left: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
+}
+
+.resource-download-secondary:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+  color: var(--ink-soft);
+}
+
+.resource-download-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Text resource preview */
+.resource-text-preview {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.resource-text-copy-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 10px;
+  background: var(--home-mist);
+  border-bottom: 1px solid var(--line);
+}
+
+.resource-text-copy-btn {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--home-charcoal);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.resource-text-copy-btn:hover {
+  background: var(--home-accent-mist);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.resource-text-content {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+
 /* ── Email Notify (Settings) ── */
 
 .email-notify-section {

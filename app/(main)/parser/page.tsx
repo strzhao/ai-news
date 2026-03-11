@@ -687,6 +687,9 @@ function ResourceCard({
   const resourceIsExpired = taskExpired || isResourceExpired(resource);
   const isLargeMedia = resource.type === "video" || resource.type === "audio";
   const [saving, setSaving] = useState(false);
+  const [textContent, setTextContent] = useState<string | null>(null);
+  const [textLoading, setTextLoading] = useState(false);
+  const [textExpanded, setTextExpanded] = useState(false);
 
   async function handleDownload(): Promise<void> {
     if (saving) return;
@@ -698,6 +701,25 @@ function ResourceCard({
       window.open(resource.url, "_blank", "noopener,noreferrer");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleLoadText(): Promise<void> {
+    if (textContent !== null) {
+      setTextExpanded((v) => !v);
+      return;
+    }
+    setTextLoading(true);
+    try {
+      const res = await fetch(resource.url);
+      const text = await res.text();
+      setTextContent(text);
+      setTextExpanded(true);
+    } catch {
+      setTextContent("加载失败，请重试");
+      setTextExpanded(true);
+    } finally {
+      setTextLoading(false);
     }
   }
 
@@ -732,14 +754,39 @@ function ResourceCard({
         </p>
       ) : null}
 
+      {/* Text content preview */}
+      {resource.type === "text" && textExpanded && textContent !== null ? (
+        <div className="resource-text-preview">
+          <div className="resource-text-copy-bar">
+            <button
+              type="button"
+              className="resource-text-copy-btn"
+              onClick={() => navigator.clipboard.writeText(textContent)}
+            >
+              复制
+            </button>
+          </div>
+          <pre className="resource-text-content">{textContent}</pre>
+        </div>
+      ) : null}
+
       <div className="resource-card-footer">
-        {resource.url && !resourceIsExpired ? (
-          <button
-            type="button"
-            className="resource-download"
-            onClick={handleDownload}
-            disabled={saving}
-          >
+        {resource.type === "text" && resource.url && !resourceIsExpired ? (
+          <>
+            <button type="button" className="resource-download" onClick={handleLoadText} disabled={textLoading}>
+              {textLoading ? "加载中..." : textExpanded ? "收起" : "查看内容"}
+            </button>
+            <button
+              type="button"
+              className="resource-download-secondary"
+              onClick={handleDownload}
+              disabled={saving}
+            >
+              {saving ? "下载中..." : "下载"}
+            </button>
+          </>
+        ) : resource.url && !resourceIsExpired ? (
+          <button type="button" className="resource-download" onClick={handleDownload} disabled={saving}>
             {saving ? "下载中..." : "下载"}
           </button>
         ) : null}

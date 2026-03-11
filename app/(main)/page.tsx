@@ -104,6 +104,7 @@ export default function HomePage(): React.ReactNode {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState("");
   const summaryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const summaryAutoOpenedRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -196,6 +197,13 @@ export default function HomePage(): React.ReactNode {
       clearTimeout(summaryPollRef.current);
       summaryPollRef.current = null;
     }
+
+    // 清除 URL 参数
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("summary")) {
+      url.searchParams.delete("summary");
+      window.history.replaceState(null, "", url.toString());
+    }
   }, []);
 
   const fetchSummary = useCallback(async (articleId: string, pollCount = 0) => {
@@ -253,6 +261,11 @@ export default function HomePage(): React.ReactNode {
     setSummaryLoading(true);
     setSummaryDrawerOpen(true);
     void fetchSummary(item.article_id);
+
+    // 写入 URL 参数，不刷新页面
+    const url = new URL(window.location.href);
+    url.searchParams.set("summary", item.article_id);
+    window.history.pushState(null, "", url.toString());
   }
 
   useEffect(() => {
@@ -272,6 +285,32 @@ export default function HomePage(): React.ReactNode {
       }
     };
   }, []);
+
+  // 页面加载时检查 URL 参数，自动打开对应的 AI 总结
+  useEffect(() => {
+    if (loading || groups.length === 0 || summaryAutoOpenedRef.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const summaryId = params.get("summary");
+    if (!summaryId) return;
+
+    // 在所有 groups 中查找对应文章
+    for (const group of groups) {
+      const found = group.items.find((item) => item.article_id === summaryId);
+      if (found) {
+        summaryAutoOpenedRef.current = true;
+        // 内联 handleOpenSummary 逻辑
+        if (summaryPollRef.current) clearTimeout(summaryPollRef.current);
+        setSummaryArticle(found);
+        setSummaryMarkdown("");
+        setSummaryError("");
+        setSummaryLoading(true);
+        setSummaryDrawerOpen(true);
+        void fetchSummary(found.article_id);
+        return;
+      }
+    }
+  }, [loading, groups, fetchSummary]);
 
   function renderArticle(item: ArchiveArticleSummary, options: RenderOptions = {}): React.ReactNode {
     const articleId = String(item.article_id || "").trim();
