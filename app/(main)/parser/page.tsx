@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchAuthUser } from "@/lib/client/auth";
-import type { AuthUser, ExtractedResource, ResourceType } from "@/lib/client/types";
+import type { AuthUser, ExtractedResource, ExtractionPlatform, ResourceType } from "@/lib/client/types";
 import {
   submitExtraction,
   pollTaskStatus,
@@ -14,22 +14,24 @@ import {
 const POLL_INTERVAL_MS = 5_000;
 const MAX_POLL_ATTEMPTS = 120;
 
-const PLATFORM_LABELS: Record<string, string> = {
+const PLATFORM_LABELS: Record<ExtractionPlatform, string> = {
   youtube: "YouTube",
   bilibili: "Bilibili",
   twitter: "Twitter / X",
   xiaohongshu: "小红书",
   instagram: "Instagram",
+  wechat: "微信公众号",
   webpage: "网页",
   unknown: "未知",
 };
 
-const PLATFORM_ICONS: Record<string, string> = {
+const PLATFORM_ICONS: Record<ExtractionPlatform, string> = {
   youtube: "▶",
   bilibili: "📺",
   twitter: "𝕏",
   xiaohongshu: "📕",
   instagram: "📷",
+  wechat: "💬",
   webpage: "🌐",
   unknown: "?",
 };
@@ -121,7 +123,7 @@ function getThumbnailUrl(task: ExtractionTaskResponse): string | null {
   return thumb?.url || null;
 }
 
-export default function AnalyzePage(): React.ReactNode {
+export default function ParserPage(): React.ReactNode {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [url, setUrl] = useState("");
@@ -202,9 +204,18 @@ export default function AnalyzePage(): React.ReactNode {
         try {
           const result = await pollTaskStatus(taskId);
           if (result.ok && result.task) {
-            setTasks((prev) =>
-              prev.map((t) => (t.task_id === taskId ? result.task! : t)),
-            );
+            setTasks((prev) => {
+              const nextTask = result.task!;
+              let changed = false;
+              const nextTasks = prev.map((t) => {
+                if (t.task_id !== taskId) return t;
+                const sameTask = JSON.stringify(t) === JSON.stringify(nextTask);
+                if (sameTask) return t;
+                changed = true;
+                return nextTask;
+              });
+              return changed ? nextTasks : prev;
+            });
             if (result.task.status === "completed" || result.task.status === "failed") {
               pollTimersRef.current.delete(taskId);
               pollCountsRef.current.delete(taskId);
@@ -302,16 +313,16 @@ export default function AnalyzePage(): React.ReactNode {
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">URL 资源提取</h1>
+        <h1 className="page-title">万能解析</h1>
         <p className="page-meta">
-          支持 YouTube / Bilibili / Twitter / 小红书 / Instagram / 网页
+          支持 YouTube / Bilibili / Twitter / 小红书 / Instagram / 微信公众号 / 网页
         </p>
       </div>
 
       {!authUser && !authLoading ? (
         <section className="content-block">
           <div className="analyze-login-prompt">
-            <p>请先登录后使用 URL 分析功能。</p>
+            <p>请先登录后使用万能解析功能。</p>
             <button type="button" className="flomo-btn" onClick={startUnifiedLogin}>
               统一账号登录
             </button>
