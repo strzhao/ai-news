@@ -423,7 +423,7 @@ export default function HomePage(): React.ReactNode {
                   {{ morning: "晨报", noon: "午报", evening: "晚报" }[editorial.edition]}
                 </span>
               ) : null}
-              <span className="editorial-byline-label">作者</span>
+              <span className="editorial-byline-label">主编</span>
               <span className="editorial-editor-name">{editorial.editor_name}</span>
               <span className="editorial-editor-title">{editorial.editor_title}</span>
             </div>
