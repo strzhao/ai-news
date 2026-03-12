@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import type { DailyEditorial } from "@/lib/llm/editorial";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
@@ -20,6 +21,7 @@ interface ArchiveArticleSummary {
   summary: string;
   image_url: string;
   source_host: string;
+  tag_groups: Record<string, string[]>;
   date: string;
   digest_id: string;
   generated_at: string;
@@ -37,6 +39,8 @@ interface ArchiveArticlesResponse {
   generated_at: string;
   total_articles: number;
 }
+
+/* ── Helpers ── */
 
 function formatTime(value: string): string {
   if (!value) return "-";
@@ -63,6 +67,18 @@ function currentDateInTz(): string {
   return `${year}-${month}-${day}`;
 }
 
+function formatEditorialDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+    timeZone: ARCHIVE_TZ,
+  }).format(d);
+}
+
 function loadReadSet(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
@@ -81,10 +97,26 @@ function saveReadSet(set: Set<string>): void {
   window.localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(set)));
 }
 
-interface RenderOptions {
-  compact?: boolean;
-  lead?: boolean;
+function renderTags(tagGroups: Record<string, string[]>): React.ReactNode {
+  if (!tagGroups || typeof tagGroups !== "object") return null;
+  const chips: React.ReactNode[] = [];
+  for (const groupKey of ["topic", "tech", "role", "scenario"]) {
+    const tags = tagGroups[groupKey];
+    if (!Array.isArray(tags)) continue;
+    for (const tag of tags) {
+      if (chips.length >= 5) break;
+      chips.push(
+        <span key={`${groupKey}-${tag}`} className="article-tag">
+          {tag.replace(/_/g, " ")}
+        </span>,
+      );
+    }
+    if (chips.length >= 5) break;
+  }
+  return chips.length > 0 ? <div className="article-tags">{chips}</div> : null;
 }
+
+/* ── Component ── */
 
 export default function HomePage(): React.ReactNode {
   const [loading, setLoading] = useState(true);
@@ -98,6 +130,11 @@ export default function HomePage(): React.ReactNode {
   const [limitPerDay, setLimitPerDay] = useState(10);
   const [articleLimitPerDay, setArticleLimitPerDay] = useState(0);
 
+  // Editorial state
+  const [editorial, setEditorial] = useState<DailyEditorial | null>(null);
+  const [editorialLoading, setEditorialLoading] = useState(true);
+
+  // Summary drawer state
   const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
   const [summaryArticle, setSummaryArticle] = useState<ArchiveArticleSummary | null>(null);
   const [summaryMarkdown, setSummaryMarkdown] = useState("");
@@ -106,6 +143,9 @@ export default function HomePage(): React.ReactNode {
   const summaryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const summaryAutoOpenedRef = useRef(false);
 
+  const todayDate = useMemo(() => currentDateInTz(), []);
+
+  // Init from URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setDays(Math.max(1, Math.min(180, Number.parseInt(params.get("days") || "30", 10) || 30)));
@@ -120,22 +160,41 @@ export default function HomePage(): React.ReactNode {
     setAuthError(authErrorCode ? AUTH_ERROR_MESSAGES[authErrorCode] ?? "登录流程异常，请重试。" : "");
   }, []);
 
+  // Load editorial (parallel with articles)
   useEffect(() => {
     let cancelled = false;
+    async function loadEditorial(): Promise<void> {
+      try {
+        const response = await fetch("/api/daily_editorial", { cache: "no-store" });
+        const data = await response.json();
+        if (!cancelled && data.ok && data.editorial) {
+          setEditorial(data.editorial);
+        }
+      } catch {
+        // Silently degrade
+      } finally {
+        if (!cancelled) setEditorialLoading(false);
+      }
+    }
+    void loadEditorial();
+    return () => { cancelled = true; };
+  }, [todayDate]);
 
+  // Load articles
+  useEffect(() => {
+    let cancelled = false;
     async function loadArchiveArticles(): Promise<void> {
       setLoading(true);
       setError("");
       try {
         const response = await fetch(
-          `/api/archive_articles?days=${days}&limit_per_day=${limitPerDay}&article_limit_per_day=${articleLimitPerDay}&image_probe_limit=0`,
+          `/api/archive_articles?days=${days}&limit_per_day=${limitPerDay}&article_limit_per_day=${articleLimitPerDay}&image_probe_limit=5`,
           { cache: "no-store" },
         );
         const payload = (await response.json()) as ArchiveArticlesResponse;
         if (!response.ok || !payload.ok) {
           throw new Error("加载文章归档失败");
         }
-
         if (!cancelled) {
           const nextGroups = Array.isArray(payload.groups) ? payload.groups : [];
           const nextHasMoreByDate =
@@ -152,28 +211,20 @@ export default function HomePage(): React.ReactNode {
           setStatus("加载失败");
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
-
     void loadArchiveArticles();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [days, limitPerDay, articleLimitPerDay]);
-
-  const todayDate = useMemo(() => currentDateInTz(), []);
 
   const todayGroup = useMemo(
     () => groups.find((group) => String(group.date || "").trim() === todayDate) || null,
     [groups, todayDate],
   );
-
   const todayItems = useMemo(() => todayGroup?.items || [], [todayGroup]);
   const hasMoreTodayItems = !loading && Boolean(hasMoreByDate[todayDate]);
-  const historyGroups = groups.filter((group) => group.date !== todayDate);
+  const historyGroups = useMemo(() => groups.filter((group) => group.date !== todayDate), [groups, todayDate]);
 
   function markArticleRead(articleId: string): void {
     const normalized = String(articleId || "").trim();
@@ -187,6 +238,8 @@ export default function HomePage(): React.ReactNode {
     });
   }
 
+  /* ── Summary Drawer ── */
+
   const closeSummaryDrawer = useCallback(() => {
     setSummaryDrawerOpen(false);
     setSummaryArticle(null);
@@ -197,8 +250,6 @@ export default function HomePage(): React.ReactNode {
       clearTimeout(summaryPollRef.current);
       summaryPollRef.current = null;
     }
-
-    // 清除 URL 参数
     const url = new URL(window.location.href);
     if (url.searchParams.has("summary")) {
       url.searchParams.delete("summary");
@@ -210,36 +261,12 @@ export default function HomePage(): React.ReactNode {
     try {
       const response = await fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, { cache: "no-store" });
       const data = await response.json();
-
-      if (!data.ok) {
-        setSummaryError(data.error || "获取总结失败");
-        setSummaryLoading(false);
-        return;
-      }
-
-      if (data.status === "completed" && data.summary_markdown) {
-        setSummaryMarkdown(data.summary_markdown);
-        setSummaryLoading(false);
-        return;
-      }
-
-      if (data.status === "no_content") {
-        setSummaryError("文章内容不足，无法生成 AI 总结");
-        setSummaryLoading(false);
-        return;
-      }
-
-      if (data.status === "failed") {
-        setSummaryError(data.error || "AI 总结生成失败，请稍后重试");
-        setSummaryLoading(false);
-        return;
-      }
-
-      // status === "generating", keep polling
+      if (!data.ok) { setSummaryError(data.error || "获取总结失败"); setSummaryLoading(false); return; }
+      if (data.status === "completed" && data.summary_markdown) { setSummaryMarkdown(data.summary_markdown); setSummaryLoading(false); return; }
+      if (data.status === "no_content") { setSummaryError("文章内容不足，无法生成 AI 总结"); setSummaryLoading(false); return; }
+      if (data.status === "failed") { setSummaryError(data.error || "AI 总结生成失败，请稍后重试"); setSummaryLoading(false); return; }
       if (pollCount < 60) {
-        summaryPollRef.current = setTimeout(() => {
-          void fetchSummary(articleId, pollCount + 1);
-        }, 5000);
+        summaryPollRef.current = setTimeout(() => { void fetchSummary(articleId, pollCount + 1); }, 5000);
       } else {
         setSummaryError("总结生成超时，请稍后重试");
         setSummaryLoading(false);
@@ -251,18 +278,13 @@ export default function HomePage(): React.ReactNode {
   }, []);
 
   function handleOpenSummary(item: ArchiveArticleSummary): void {
-    if (summaryPollRef.current) {
-      clearTimeout(summaryPollRef.current);
-      summaryPollRef.current = null;
-    }
+    if (summaryPollRef.current) { clearTimeout(summaryPollRef.current); summaryPollRef.current = null; }
     setSummaryArticle(item);
     setSummaryMarkdown("");
     setSummaryError("");
     setSummaryLoading(true);
     setSummaryDrawerOpen(true);
     void fetchSummary(item.article_id);
-
-    // 写入 URL 参数，不刷新页面
     const url = new URL(window.location.href);
     url.searchParams.set("summary", item.article_id);
     window.history.pushState(null, "", url.toString());
@@ -270,36 +292,24 @@ export default function HomePage(): React.ReactNode {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
-      if (e.key === "Escape" && summaryDrawerOpen) {
-        closeSummaryDrawer();
-      }
+      if (e.key === "Escape" && summaryDrawerOpen) closeSummaryDrawer();
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [summaryDrawerOpen, closeSummaryDrawer]);
 
-  useEffect(() => {
-    return () => {
-      if (summaryPollRef.current) {
-        clearTimeout(summaryPollRef.current);
-      }
-    };
-  }, []);
+  useEffect(() => { return () => { if (summaryPollRef.current) clearTimeout(summaryPollRef.current); }; }, []);
 
-  // 页面加载时检查 URL 参数，自动打开对应的 AI 总结
+  // Auto-open summary from URL
   useEffect(() => {
     if (loading || groups.length === 0 || summaryAutoOpenedRef.current) return;
-
     const params = new URLSearchParams(window.location.search);
     const summaryId = params.get("summary");
     if (!summaryId) return;
-
-    // 在所有 groups 中查找对应文章
     for (const group of groups) {
       const found = group.items.find((item) => item.article_id === summaryId);
       if (found) {
         summaryAutoOpenedRef.current = true;
-        // 内联 handleOpenSummary 逻辑
         if (summaryPollRef.current) clearTimeout(summaryPollRef.current);
         setSummaryArticle(found);
         setSummaryMarkdown("");
@@ -312,73 +322,147 @@ export default function HomePage(): React.ReactNode {
     }
   }, [loading, groups, fetchSummary]);
 
-  function renderArticle(item: ArchiveArticleSummary, options: RenderOptions = {}): React.ReactNode {
+  /* ── Render Helpers ── */
+
+  function renderHeroArticle(item: ArchiveArticleSummary): React.ReactNode {
     const articleId = String(item.article_id || "").trim();
     const read = readSet.has(articleId);
     const articleUrl = item.original_url || item.url;
 
     return (
-      <article
-        key={articleId}
-        className={`article-row${read ? " is-read" : ""}${options.compact ? " is-compact" : ""}${options.lead ? " is-lead" : ""}`}
-      >
+      <article key={articleId} className={`article-row hero-card${read ? " is-read" : ""}`}>
+        {item.image_url ? (
+          <div className="hero-image-wrap">
+            <img
+              src={item.image_url}
+              alt=""
+              className="hero-image"
+              loading="eager"
+              onError={(e) => { const wrap = (e.target as HTMLImageElement).parentElement; if (wrap) wrap.style.display = "none"; }}
+            />
+          </div>
+        ) : null}
         <div className="article-copy">
           <div className="article-meta">
+            <span className="article-number">01</span>
             <span>{item.source_host || "未知来源"}</span>
             <span>{formatTime(item.generated_at)}</span>
             {read ? <span className="article-read">已读</span> : null}
           </div>
-
-          <h3 className="article-headline">
-            <a
-              href={articleUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              onClick={() => markArticleRead(articleId)}
-            >
+          <h3 className="article-headline hero-headline">
+            <a href={articleUrl} target="_blank" rel="noreferrer noopener" onClick={() => markArticleRead(articleId)}>
               {item.title || "无标题"}
             </a>
           </h3>
-
-          {item.summary ? <p className="article-dek">{item.summary}</p> : null}
-
+          {item.summary ? <p className="article-dek hero-dek">{item.summary}</p> : null}
+          {renderTags(item.tag_groups)}
           <div className="article-actions">
-            <button
-              type="button"
-              className="article-cta"
-              onClick={() => handleOpenSummary(item)}
-            >
-              AI 总结
-            </button>
+            <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
           </div>
         </div>
       </article>
     );
   }
 
+  function renderNumberedArticle(item: ArchiveArticleSummary, index: number, options: { compact?: boolean } = {}): React.ReactNode {
+    const articleId = String(item.article_id || "").trim();
+    const read = readSet.has(articleId);
+    const articleUrl = item.original_url || item.url;
+    const num = String(index + 1).padStart(2, "0");
+
+    return (
+      <article
+        key={articleId}
+        className={`article-row numbered-article${read ? " is-read" : ""}${options.compact ? " is-compact" : ""}`}
+      >
+        <div className="article-number-col">
+          <span className="article-number">{num}</span>
+        </div>
+        <div className="article-copy">
+          <div className="article-meta">
+            <span>{item.source_host || "未知来源"}</span>
+            <span>{formatTime(item.generated_at)}</span>
+            {read ? <span className="article-read">已读</span> : null}
+          </div>
+          <h3 className="article-headline">
+            <a href={articleUrl} target="_blank" rel="noreferrer noopener" onClick={() => markArticleRead(articleId)}>
+              {item.title || "无标题"}
+            </a>
+          </h3>
+          {item.summary ? <p className="article-dek">{item.summary}</p> : null}
+          {renderTags(item.tag_groups)}
+        </div>
+        <div className="article-right-col">
+          <div className="article-actions">
+            <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  /* ── JSX ── */
+
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">今天值得读的 AI 文章</h1>
-        <p className="page-meta">
-          {todayDate} · {ARCHIVE_TZ} · {loading ? "正在更新" : status}
+      {/* ── Newsletter Header ── */}
+      <div className="page-header newsletter-header">
+        <p className="newsletter-date">{formatEditorialDate(todayDate)}</p>
+
+        {editorialLoading ? (
+          <div className="editorial-skeleton">
+            <div className="skeleton-line skeleton-line-lg" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line skeleton-line-sm" />
+          </div>
+        ) : editorial ? (
+          <div className="editorial-card">
+            <div className="editorial-byline">
+              <span className="editorial-byline-label">作者</span>
+              <span className="editorial-editor-name">{editorial.editor_name}</span>
+              <span className="editorial-editor-title">{editorial.editor_title}</span>
+            </div>
+            <h1 className="page-title newsletter-title">{editorial.headline}</h1>
+            <div className="editorial-body">
+              {editorial.body_paragraphs.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+            </div>
+            {editorial.tags.length > 0 ? (
+              <div className="editorial-tags">
+                {editorial.tags.map((tag) => (
+                  <span key={tag} className="editorial-tag">#{tag}</span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <h1 className="page-title newsletter-title">今天值得读的 AI 文章</h1>
+        )}
+
+        <p className="newsletter-subtitle">
+          AI 领域精选日报 · {loading ? "正在更新..." : status}
         </p>
       </div>
 
       {authError ? <div className="error-banner auth-error-banner">{authError}</div> : null}
       {error ? <div className="error-banner">{error}</div> : null}
 
+      {/* ── Today's Picks ── */}
       <section className="content-block">
         <header className="block-head">
           <h2>今日精选</h2>
           <span className="block-head-actions">
-            <span>{todayItems.length} 篇</span>
+            <span>{todayItems.length} 篇精选</span>
           </span>
         </header>
 
         <div className="editorial-list">
           {todayItems.length ? (
-            todayItems.map((item, index) => renderArticle(item, { lead: index === 0 }))
+            <>
+              {renderHeroArticle(todayItems[0])}
+              {todayItems.slice(1).map((item, i) => renderNumberedArticle(item, i + 1))}
+            </>
           ) : (
             <p className="empty-note">今日暂无文章。</p>
           )}
@@ -397,6 +481,7 @@ export default function HomePage(): React.ReactNode {
         ) : null}
       </section>
 
+      {/* ── History Archive ── */}
       <section className="content-block content-block-history">
         <header className="block-head">
           <h2>历史归档</h2>
@@ -411,7 +496,9 @@ export default function HomePage(): React.ReactNode {
                   <span className="archive-date">{group.date}</span>
                   <span className="archive-count">{group.items.length} 篇</span>
                 </summary>
-                <div className="archive-day-items">{group.items.map((item) => renderArticle(item, { compact: true }))}</div>
+                <div className="archive-day-items">
+                  {group.items.map((item, i) => renderNumberedArticle(item, i, { compact: true }))}
+                </div>
               </details>
             ))
           ) : (
@@ -426,6 +513,7 @@ export default function HomePage(): React.ReactNode {
         </p>
       </section>
 
+      {/* ── Summary Drawer ── */}
       {summaryDrawerOpen && summaryArticle ? (
         <>
           <div className="drawer-overlay" onClick={closeSummaryDrawer} />
@@ -433,14 +521,12 @@ export default function HomePage(): React.ReactNode {
             <button type="button" className="drawer-close" onClick={closeSummaryDrawer}>
               ✕
             </button>
-
             <h2 className="summary-drawer-title">{summaryArticle.title}</h2>
             <div className="summary-drawer-meta">
               <span>{summaryArticle.source_host || "未知来源"}</span>
               <span> · </span>
               <span>{formatTime(summaryArticle.generated_at)}</span>
             </div>
-
             {summaryLoading ? (
               <div className="analyze-pending">
                 <div className="analyze-spinner" />
@@ -448,21 +534,15 @@ export default function HomePage(): React.ReactNode {
                 <p className="analyze-pending-hint">通常需要 30-60 秒，请稍候</p>
               </div>
             ) : null}
-
             {summaryError ? (
-              <div className="error-banner" style={{ marginTop: 20 }}>
-                {summaryError}
-              </div>
+              <div className="error-banner" style={{ marginTop: 20 }}>{summaryError}</div>
             ) : null}
-
             {summaryMarkdown ? (
               <div className="summary-content">
                 <ReactMarkdown
                   components={{
                     a: ({ children, href, ...props }) => (
-                      <a href={href} target="_blank" rel="noreferrer noopener" {...props}>
-                        {children}
-                      </a>
+                      <a href={href} target="_blank" rel="noreferrer noopener" {...props}>{children}</a>
                     ),
                   }}
                 >
@@ -470,7 +550,6 @@ export default function HomePage(): React.ReactNode {
                 </ReactMarkdown>
               </div>
             ) : null}
-
             <div className="summary-drawer-footer">
               <a
                 className="article-cta"
