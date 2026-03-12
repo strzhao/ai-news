@@ -10,6 +10,7 @@ import type { AuthUser } from "@/lib/client/types";
 const NAV_ITEMS = [
   { href: "/", icon: "📰", label: "每日精选" },
   { href: "/parser", icon: "🔗", label: "万能解析" },
+  { href: "/docs", icon: "📖", label: "CLI 文档" },
   { href: "/settings", icon: "⚙️", label: "设置" },
 ] as const;
 
