@@ -1,10 +1,11 @@
 import { listArchiveArticles } from "@/lib/domain/archive-articles";
 import { DeepSeekClient } from "@/lib/llm/deepseek-client";
-import { EditorialGenerator } from "@/lib/llm/editorial";
+import { EditorialGenerator, type EditorialEdition } from "@/lib/llm/editorial";
 import { buildUpstashClientOrNone } from "@/lib/infra/upstash";
 import { jsonResponse } from "@/lib/infra/route-utils";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 export const preferredRegion = ["sin1"];
 
 const ARCHIVE_TZ = "Asia/Shanghai";
@@ -22,12 +23,35 @@ function currentDateInTz(): string {
   return `${year}-${month}-${day}`;
 }
 
+const VALID_EDITIONS = new Set<EditorialEdition>(["morning", "noon", "evening"]);
+
+function getYesterdayDate(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function isCronAuthorized(request: Request): boolean {
+  const cronSecret = String(process.env.CRON_SECRET || "").trim();
+  if (!cronSecret) return true;
+  const authHeader = String(request.headers.get("authorization") || "").trim();
+  if (authHeader === `Bearer ${cronSecret}`) return true;
+  const url = new URL(request.url);
+  return url.searchParams.get("token") === cronSecret;
+}
+
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  // Only support today's editorial; ignore arbitrary date params to avoid stale misses
   const date = currentDateInTz();
-  // Allow cache busting via ?force=1
-  const forceRefresh = url.searchParams.get("force") === "1";
+  // force=1 triggers a fresh generation (requires CRON_SECRET auth)
+  const wantsForce = url.searchParams.get("force") === "1";
+  const forceRefresh = wantsForce && isCronAuthorized(request);
+  const editionParam = url.searchParams.get("edition") as EditorialEdition | null;
+  const edition: EditorialEdition | undefined =
+    editionParam && VALID_EDITIONS.has(editionParam) ? editionParam : undefined;
 
   try {
     const redis = buildUpstashClientOrNone();
@@ -41,12 +65,24 @@ export async function GET(request: Request): Promise<Response> {
 
     const generator = new EditorialGenerator(deepseekClient, redis, { forceRefresh });
 
-    // Fetch today's articles
-    let articles: Awaited<ReturnType<typeof listArchiveArticles>>["groups"][number]["items"] = [];
+    // Morning edition: fetch today + yesterday (late-night articles)
+    // Noon/Evening: today only
+    type ArchiveItem = Awaited<ReturnType<typeof listArchiveArticles>>["groups"][number]["items"][number];
+    let articles: ArchiveItem[] = [];
     try {
-      const archiveResult = await listArchiveArticles({ days: 1, limitPerDay: 30, qualityTier: "high" });
-      const todayGroup = archiveResult.groups.find((g) => g.date === date);
-      articles = todayGroup?.items || [];
+      const fetchDays = edition === "morning" ? 2 : 1;
+      const archiveResult = await listArchiveArticles({ days: fetchDays, limitPerDay: 30, qualityTier: "high" });
+
+      if (edition === "morning") {
+        const todayGroup = archiveResult.groups.find((g) => g.date === date);
+        const yesterdayDate = getYesterdayDate(date);
+        const yesterdayGroup = archiveResult.groups.find((g) => g.date === yesterdayDate);
+        // Today's articles first, then yesterday's as supplement
+        articles = [...(todayGroup?.items || []), ...(yesterdayGroup?.items || [])];
+      } else {
+        const todayGroup = archiveResult.groups.find((g) => g.date === date);
+        articles = todayGroup?.items || [];
+      }
     } catch (err) {
       console.error("[daily_editorial] Archive fetch error:", err instanceof Error ? err.message : String(err));
       return jsonResponse(200, { ok: false, editorial: null, reason: "archive_fetch_failed" }, true);
@@ -63,7 +99,7 @@ export async function GET(request: Request): Promise<Response> {
       tag_groups: a.tag_groups || {},
     }));
 
-    const editorial = await generator.getDailyEditorial(date, briefs);
+    const editorial = await generator.getDailyEditorial(date, briefs, edition);
 
     return jsonResponse(200, { ok: true, editorial }, true);
   } catch (error) {

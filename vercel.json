@@ -7,6 +7,9 @@
     },
     "app/api/v1/flomo/cron-push/route.ts": {
       "regions": ["sin1"]
+    },
+    "app/api/daily_editorial/route.ts": {
+      "regions": ["sin1"]
     }
   },
   "crons": [
@@ -17,6 +20,18 @@
     {
       "path": "/api/v1/flomo/cron-push",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/daily_editorial?force=1&edition=morning",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/daily_editorial?force=1&edition=noon",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/daily_editorial?force=1&edition=evening",
+      "schedule": "0 10 * * *"
     }
   ]
 }

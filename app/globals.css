@@ -1807,6 +1807,19 @@ button:focus-visible {
   margin-bottom: 12px;
 }
 
+.editorial-edition-label {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--home-accent);
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+
 .editorial-byline-label {
   font-size: 13px;
   font-weight: 500;

@@ -1,6 +1,8 @@
 import { DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
 import { UpstashClient } from "@/lib/infra/upstash";
 
+export type EditorialEdition = "morning" | "noon" | "evening";
+
 export interface ArticleBrief {
   title: string;
   summary: string;
@@ -10,6 +12,7 @@ export interface ArticleBrief {
 
 export interface DailyEditorial {
   date: string;
+  edition?: EditorialEdition;
   editor_name: string;
   editor_title: string;
   headline: string;
@@ -91,11 +94,23 @@ const EDITORS: EditorPersona[] = [
 const CACHE_TTL_SECONDS = 48 * 3600;
 const CACHE_KEY_PREFIX = "editorial:daily:";
 
-function buildSystemPrompt(editor: EditorPersona): string {
+const EDITION_INSTRUCTIONS: Record<string, string> = {
+  morning:
+    "请基于昨晚到今晨的最新动态，撰写今日晨间编辑综述。" +
+    "重点关注昨晚深夜至今早出现的新进展，如果今日内容尚少可回顾昨日重要动态。",
+  noon: "请基于今日上午的精选文章，撰写午间编辑综述。",
+  evening: "请基于今日全天的精选文章，撰写晚间编辑综述，做好今日总结和前瞻。",
+};
+
+function buildSystemPrompt(editor: EditorPersona, edition?: EditorialEdition): string {
+  const task =
+    EDITION_INSTRUCTIONS[edition || ""] ||
+    "请基于今日精选文章列表，以你的视角撰写今日编辑综述。";
+
   return (
     `你是 ${editor.name}，一位 AI 领域的资深编辑。${editor.style_prompt}\n\n` +
     "你用中文写作，保持你独特的表达风格和视角。\n" +
-    "请基于今日精选文章列表，以你的视角撰写今日编辑综述。\n\n" +
+    `${task}\n\n` +
     "严格输出 JSON，不要输出 Markdown 或解释。字段：\n" +
     '{\n  "headline": "一句话概括今日最重要的 AI 动态（15-25字，体现你的风格）",\n' +
     '  "body_paragraphs": [\n' +
@@ -124,7 +139,7 @@ export class EditorialGenerator {
     this.forceRefresh = Boolean(options.forceRefresh);
   }
 
-  async getDailyEditorial(date: string, articles: ArticleBrief[]): Promise<DailyEditorial | null> {
+  async getDailyEditorial(date: string, articles: ArticleBrief[], edition?: EditorialEdition): Promise<DailyEditorial | null> {
     if (!articles.length) {
       return null;
     }
@@ -136,7 +151,7 @@ export class EditorialGenerator {
     }
 
     // Generate
-    const editorial = await this.generate(date, articles);
+    const editorial = await this.generate(date, articles, edition);
 
     // Cache
     if (this.redis) {
@@ -168,7 +183,7 @@ export class EditorialGenerator {
     }
   }
 
-  private async generate(date: string, articles: ArticleBrief[]): Promise<DailyEditorial> {
+  private async generate(date: string, articles: ArticleBrief[], edition?: EditorialEdition): Promise<DailyEditorial> {
     const editor = getEditorForDate(date);
 
     const inputs = articles.slice(0, 20).map((a) => ({
@@ -178,11 +193,11 @@ export class EditorialGenerator {
       tags: this.flattenTags(a.tag_groups),
     }));
 
-    const userPrompt = JSON.stringify({ date, article_count: articles.length, articles: inputs });
+    const userPrompt = JSON.stringify({ date, edition: edition || "default", article_count: articles.length, articles: inputs });
 
     const result = await this.llmClient.chatJson(
       [
-        { role: "system", content: buildSystemPrompt(editor) },
+        { role: "system", content: buildSystemPrompt(editor, edition) },
         { role: "user", content: userPrompt },
       ],
       0.3,
@@ -206,6 +221,7 @@ export class EditorialGenerator {
 
     return {
       date,
+      edition,
       editor_name: editor.name,
       editor_title: editor.title,
       headline,
