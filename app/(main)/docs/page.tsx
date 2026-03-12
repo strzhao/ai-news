@@ -67,6 +67,19 @@ ai-news stats:types --days 30`}
         </ul>
       </section>
 
+      <section style={{ marginBottom: 32 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>Claude Code Skill</h2>
+        <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>
+          安装 AI News skill 后，可在 Claude Code 中通过 <code>/ai-news</code> 命令调用 CLI 能力。
+        </p>
+        <pre style={{ background: "var(--surface)", padding: 16, borderRadius: 8, overflow: "auto", fontSize: 13 }}>
+{`npx skills add github.com/strzhao/ai-news-cli`}
+        </pre>
+        <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 12 }}>
+          安装后，在 Claude Code 中输入 <code>/ai-news</code> 即可让 agent 使用 ai-news-cli 查询文章、分析 URL、管理 Flomo 等。
+        </p>
+      </section>
+
       <section>
         <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>源码</h2>
         <p style={{ fontSize: 13 }}>
