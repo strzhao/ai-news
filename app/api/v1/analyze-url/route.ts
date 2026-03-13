@@ -53,7 +53,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const body = (await request.json()) as { url?: string };
+    const body = (await request.json()) as { url?: string; ai_summary?: boolean };
     const url = String(body?.url || "").trim();
     if (!url) {
       return jsonResponse(400, { ok: false, error: "missing_url", message: "请提供 URL" }, true);
@@ -66,7 +66,7 @@ export async function POST(request: Request): Promise<Response> {
         Accept: "application/json",
         ...articleDbAuthHeaders(),
       },
-      body: JSON.stringify({ url, user_id: auth.user.id }),
+      body: JSON.stringify({ url, user_id: auth.user.id, ai_summary: !!body.ai_summary }),
       timeoutMs: 90_000,
     });
 

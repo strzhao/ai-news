@@ -161,6 +161,7 @@ export default function ParserPage(): React.ReactNode {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [url, setUrl] = useState("");
+  const [aiSummary, setAiSummary] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -276,26 +277,45 @@ export default function ParserPage(): React.ReactNode {
     setError("");
     setSubmitting(true);
 
+    // Immediately open drawer with a temporary placeholder task
+    const tempId = `temp-${Date.now()}`;
+    const tempTask: ExtractionTaskResponse = {
+      task_id: tempId,
+      url: trimmed,
+      platform: "unknown",
+      status: "pending",
+      resources: [],
+      metadata: { title: trimmed, description: "", author: "" },
+      created_at: new Date().toISOString(),
+      blob_ttl_hours: 0,
+    };
+    setTasks((prev) => [tempTask, ...prev]);
+    setSelectedTaskId(tempId);
+    setDrawerOpen(true);
+    setUrl("");
+
     try {
-      const result = await submitExtraction(trimmed);
+      const result = await submitExtraction(trimmed, aiSummary);
       if (!result.ok) {
+        // Remove temp task and show error
+        setTasks((prev) => prev.filter((t) => t.task_id !== tempId));
+        setDrawerOpen(false);
         setError(result.error || "提交失败");
         return;
       }
 
       if (result.task) {
-        // Add to list head
-        setTasks((prev) => [result.task!, ...prev.filter((t) => t.task_id !== result.task!.task_id)]);
-        // Open drawer for the new task
+        // Replace temp task with real task
+        setTasks((prev) => [result.task!, ...prev.filter((t) => t.task_id !== tempId && t.task_id !== result.task!.task_id)]);
         setSelectedTaskId(result.task.task_id);
-        setDrawerOpen(true);
-        setUrl("");
 
         if (result.task.status === "pending" || result.task.status === "processing") {
           startPolling(result.task.task_id);
         }
       }
     } catch (err) {
+      setTasks((prev) => prev.filter((t) => t.task_id !== tempId));
+      setDrawerOpen(false);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
@@ -342,8 +362,6 @@ export default function ParserPage(): React.ReactNode {
     [tasks, selectedTaskId],
   );
 
-  const isPolling = pollTimersRef.current.size > 0;
-
   return (
     <>
       <div className="page-header">
@@ -382,6 +400,15 @@ export default function ParserPage(): React.ReactNode {
                 {submitting ? "提取中..." : "提取"}
               </button>
             </div>
+            <label className="analyze-ai-option">
+              <input
+                type="checkbox"
+                checked={aiSummary}
+                onChange={(e) => setAiSummary(e.target.checked)}
+                disabled={submitting}
+              />
+              <span>AI 智能总结</span>
+            </label>
           </form>
 
           {error ? <div className="error-banner" style={{ marginTop: 16 }}>{error}</div> : null}
@@ -409,7 +436,7 @@ export default function ParserPage(): React.ReactNode {
                     />
                   ))}
                 </div>
-              ) : !tasksLoading && tasks.length === 0 ? (
+              ) : tasks.length === 0 ? (
                 <p style={{ marginTop: 24, color: "var(--muted)", fontSize: 14, textAlign: "center" }}>
                   暂无提取任务，输入 URL 开始提取
                 </p>
@@ -668,6 +695,13 @@ function TaskDrawer({
                 {task.metadata.tags.map((tag) => (
                   <span key={tag} className="tag-chip">{tag}</span>
                 ))}
+              </div>
+            ) : null}
+
+            {task.ai_summary ? (
+              <div className="analyze-ai-summary">
+                <h3 className="analyze-ai-summary-title">AI 总结</h3>
+                <div className="analyze-ai-summary-content">{task.ai_summary}</div>
               </div>
             ) : null}
 

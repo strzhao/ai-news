@@ -991,6 +991,54 @@ button:focus-visible {
   border-radius: 10px;
 }
 
+.analyze-ai-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.analyze-ai-option input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.analyze-ai-option span {
+  transition: color 0.15s;
+}
+
+.analyze-ai-option:hover span {
+  color: var(--ink);
+}
+
+.analyze-ai-summary {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: oklch(0.97 0.01 158 / 0.5);
+  border: 1px solid oklch(0.9 0.03 158 / 0.6);
+  border-radius: 10px;
+}
+
+.analyze-ai-summary-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.analyze-ai-summary-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
 .analyze-login-prompt {
   text-align: center;
   padding: 40px 20px;
