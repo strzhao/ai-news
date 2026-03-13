@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { DailyEditorial } from "@/lib/llm/editorial";
+import { fetchAuthUser } from "@/lib/client/auth";
+import { fetchHeartedIds, toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
+import type { AuthUser } from "@/lib/client/types";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
@@ -143,6 +146,10 @@ export default function HomePage(): React.ReactNode {
   const summaryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const summaryAutoOpenedRef = useRef(false);
 
+  // Heart state
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [heartedIds, setHeartedIds] = useState<Set<string>>(new Set());
+
   const todayDate = useMemo(() => currentDateInTz(), []);
 
   // Init from URL params
@@ -179,6 +186,22 @@ export default function HomePage(): React.ReactNode {
     void loadEditorial();
     return () => { cancelled = true; };
   }, [todayDate]);
+
+  // Load auth + hearted IDs
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHearts(): Promise<void> {
+      const { user } = await fetchAuthUser();
+      if (cancelled) return;
+      setAuthUser(user);
+      if (user) {
+        const ids = await fetchHeartedIds();
+        if (!cancelled) setHeartedIds(new Set(ids));
+      }
+    }
+    void loadHearts();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load articles
   useEffect(() => {
@@ -236,6 +259,33 @@ export default function HomePage(): React.ReactNode {
       saveReadSet(next);
       return next;
     });
+  }
+
+  async function handleToggleHeart(item: ArchiveArticleSummary): Promise<void> {
+    if (!authUser) {
+      window.location.assign("/api/auth/login");
+      return;
+    }
+    const articleId = item.article_id;
+    const wasHearted = heartedIds.has(articleId);
+    // Optimistic update
+    setHeartedIds((prev) => {
+      const next = new Set(prev);
+      if (wasHearted) next.delete(articleId);
+      else next.add(articleId);
+      return next;
+    });
+    try {
+      await toggleHeartApi(item);
+    } catch {
+      // Rollback
+      setHeartedIds((prev) => {
+        const next = new Set(prev);
+        if (wasHearted) next.add(articleId);
+        else next.delete(articleId);
+        return next;
+      });
+    }
   }
 
   /* ── Summary Drawer ── */
@@ -324,6 +374,20 @@ export default function HomePage(): React.ReactNode {
 
   /* ── Render Helpers ── */
 
+  function renderHeartButton(articleId: string, item: ArchiveArticleSummary): React.ReactNode {
+    const hearted = heartedIds.has(articleId);
+    return (
+      <button
+        type="button"
+        className={`heart-btn${hearted ? " is-hearted" : ""}`}
+        onClick={() => { void handleToggleHeart(item); }}
+        aria-label={hearted ? "取消收藏" : "收藏"}
+      >
+        {hearted ? "♥" : "♡"}
+      </button>
+    );
+  }
+
   function renderHeroArticle(item: ArchiveArticleSummary): React.ReactNode {
     const articleId = String(item.article_id || "").trim();
     const read = readSet.has(articleId);
@@ -357,6 +421,7 @@ export default function HomePage(): React.ReactNode {
           {item.summary ? <p className="article-dek hero-dek">{item.summary}</p> : null}
           {renderTags(item.tag_groups)}
           <div className="article-actions">
+            {renderHeartButton(articleId, item)}
             <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
           </div>
         </div>
@@ -394,6 +459,7 @@ export default function HomePage(): React.ReactNode {
         </div>
         <div className="article-right-col">
           <div className="article-actions">
+            {renderHeartButton(articleId, item)}
             <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
           </div>
         </div>

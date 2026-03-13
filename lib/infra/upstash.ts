@@ -161,6 +161,19 @@ export class UpstashClient {
     return payload.map((item) => String(item)).filter((s) => s.trim());
   }
 
+  async zrem(key: string, member: string): Promise<number> {
+    const responses = await this.pipeline([["ZREM", key, member]]);
+    return toInt(unwrapPipelineResult(responses[0]), 0);
+  }
+
+  async zscore(key: string, member: string): Promise<number | null> {
+    const responses = await this.pipeline([["ZSCORE", key, member]]);
+    const result = unwrapPipelineResult(responses[0]);
+    if (result === null || result === undefined) return null;
+    const n = Number(result);
+    return Number.isFinite(n) ? n : null;
+  }
+
   async zrevrangeWithScores(key: string, start: number, stop: number): Promise<Array<{ member: string; score: number }>> {
     const responses = await this.pipeline([["ZREVRANGE", key, Math.trunc(start), Math.trunc(stop), "WITHSCORES"]]);
     const payload = unwrapPipelineResult(responses[0]);

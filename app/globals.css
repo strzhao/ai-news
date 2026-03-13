@@ -458,6 +458,8 @@ a {
   margin-top: 14px;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
   padding-right: 10px;
 }
 
@@ -502,6 +504,33 @@ a {
   content: "\2192";
   font-size: 13px;
   transform: translateY(-0.5px);
+}
+
+/* ── Heart Button ── */
+
+.heart-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 4px;
+  color: var(--muted);
+  transition: color 0.15s ease, transform 0.15s ease;
+  font-family: inherit;
+}
+
+.heart-btn:hover {
+  color: oklch(0.588 0.200 15);
+  transform: scale(1.15);
+}
+
+.heart-btn.is-hearted {
+  color: oklch(0.588 0.200 15);
+}
+
+.heart-btn.is-hearted:hover {
+  opacity: 0.7;
 }
 
 .article-cta:hover {
