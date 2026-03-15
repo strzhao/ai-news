@@ -34,6 +34,10 @@ export default function SettingsPage(): React.ReactNode {
   const [flomoClickStats, setFlomoClickStats] = useState<FlomoClickStats>({ total_clicks: 0, days: 30, daily: [] });
   const [emailNotify, setEmailNotify] = useState<EmailNotifyConfig | null>(null);
   const [emailNotifyLoading, setEmailNotifyLoading] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -59,6 +63,20 @@ export default function SettingsPage(): React.ReactNode {
         const emailPayload = (await emailRes.json()) as { ok: boolean; config?: EmailNotifyConfig };
         if (emailPayload.ok && emailPayload.config) {
           setEmailNotify(emailPayload.config);
+        }
+      } catch {
+        // silent
+      }
+
+      try {
+        const { isPushSupported } = await import("@/lib/client/web-push");
+        if (isPushSupported()) {
+          setPushSupported(true);
+          const pushRes = await fetch("/api/v1/web-push/config", { credentials: "include" });
+          const pushPayload = (await pushRes.json()) as { ok: boolean; config?: { enabled: boolean } };
+          if (pushPayload.ok && pushPayload.config) {
+            setPushEnabled(pushPayload.config.enabled);
+          }
         }
       } catch {
         // silent
@@ -247,6 +265,60 @@ export default function SettingsPage(): React.ReactNode {
             </span>
             <span className="email-notify-email">{emailNotify.email}</span>
           </div>
+        </section>
+      ) : null}
+
+      {pushSupported ? (
+        <section className="settings-section">
+          <header className="block-head">
+            <h2>浏览器推送</h2>
+          </header>
+          <p className="flomo-description">
+            开启后，系统会在每天 7:00 和 19:00 通过浏览器推送通知提醒你查看当日精选 AI 文章。
+          </p>
+          <div className="email-notify-row">
+            <button
+              type="button"
+              className={`email-notify-toggle${pushEnabled ? " is-enabled" : ""}`}
+              disabled={pushLoading}
+              onClick={async () => {
+                setPushLoading(true);
+                setPushMessage(null);
+                try {
+                  if (!pushEnabled) {
+                    const perm = await Notification.requestPermission();
+                    if (perm !== "granted") {
+                      setPushMessage("请在浏览器设置中允许通知权限");
+                      return;
+                    }
+                    const { subscribeToPush } = await import("@/lib/client/web-push");
+                    const ok = await subscribeToPush();
+                    if (ok) {
+                      setPushEnabled(true);
+                    } else {
+                      setPushMessage("订阅失败，请重试");
+                    }
+                  } else {
+                    const { unsubscribeFromPush } = await import("@/lib/client/web-push");
+                    await unsubscribeFromPush();
+                    setPushEnabled(false);
+                  }
+                } catch {
+                  setPushMessage("操作失败，请重试");
+                } finally {
+                  setPushLoading(false);
+                }
+              }}
+            />
+            <span className="email-notify-label">
+              {pushEnabled ? "已开启" : "已关闭"}
+            </span>
+          </div>
+          {pushMessage ? (
+            <div className="flomo-message is-error" style={{ marginTop: 8 }}>
+              {pushMessage}
+            </div>
+          ) : null}
         </section>
       ) : null}
 

@@ -3,12 +3,15 @@
 ## Project Structure & Module Organization
 - `app/`: Next.js App Router pages and API handlers.
   - `app/api/`: public and internal endpoints (`/api/archive_articles`, `/api/v1/*`, tracker routes).
+  - `app/components/`: shared client components (e.g., `sw-register.tsx`).
   - `app/archive-review/`: archive review UI.
 - `lib/`: core business logic by domain.
   - `lib/article-db/`: ingestion, repository, auth, migration.
   - `lib/domain/`: archive, tracker, and shared domain utilities.
   - `lib/output/`: markdown/flomo formatters.
   - `lib/integrations/`, `lib/tracking/`, `lib/fetch/`, `lib/llm/`: external clients and pipelines.
+  - `lib/client/`: browser-side API helpers (auth, flomo, web-push).
+- `public/`: PWA assets (manifest.json, sw.js, icons).
 - `tests-ts/`: Vitest unit/integration-style tests (`*.test.ts`).
 - `config/`: source and type configuration YAML.
 - `db/`: SQL or DB artifacts.
@@ -52,7 +55,7 @@
 
 ## Security & Configuration Tips
 - Never commit secrets. Use `.env.local` for local values.
-- Key sensitive vars: `CRON_SECRET`, `TRACKER_SIGNING_SECRET`, `ARTICLE_DB_API_TOKEN`, `FLOMO_API_URL`.
+- Key sensitive vars: `CRON_SECRET`, `TRACKER_SIGNING_SECRET`, `ARTICLE_DB_API_TOKEN`, `FLOMO_API_URL`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 - When changing cron-triggered APIs, update both `vercel.json` and `README.md` together.
 
 ## Flomo Integration Rules (Important)
