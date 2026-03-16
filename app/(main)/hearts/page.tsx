@@ -102,6 +102,7 @@ function HeartsContent(): React.ReactNode {
   }
 
   async function handleUnheart(item: HeartedArticle): Promise<void> {
+    if (!window.confirm(`确定取消收藏「${item.title || "无标题"}」吗？`)) return;
     const prev = [...items];
     setItems((list) => list.filter((i) => i.article_id !== item.article_id));
     setTotal((t) => Math.max(0, t - 1));
@@ -177,7 +178,6 @@ function HeartsContent(): React.ReactNode {
                   </div>
                   <div className="article-right-col">
                     <div className="article-actions">
-                      <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
                       <button
                         type="button"
                         className="heart-btn is-hearted"
@@ -186,6 +186,7 @@ function HeartsContent(): React.ReactNode {
                       >
                         ♥
                       </button>
+                      <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
                     </div>
                   </div>
                 </article>
