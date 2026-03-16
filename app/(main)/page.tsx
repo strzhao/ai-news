@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 import type { DailyEditorial } from "@/lib/llm/editorial";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchHeartedIds, toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
+import { submitExtraction, pollTaskStatus } from "@/lib/client/url-analysis";
+import { saveUserPick, fetchUserPicks, type UserPickItem } from "@/lib/client/user-picks";
 import type { AuthUser } from "@/lib/client/types";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
@@ -119,6 +121,16 @@ function renderTags(tagGroups: Record<string, string[]>): React.ReactNode {
   return chips.length > 0 ? <div className="article-tags">{chips}</div> : null;
 }
 
+interface HeartableArticle {
+  article_id: string;
+  title: string;
+  url: string;
+  original_url?: string;
+  source_host: string;
+  image_url?: string;
+  summary?: string;
+}
+
 /* ── Component ── */
 
 export default function HomePage(): React.ReactNode {
@@ -149,6 +161,14 @@ export default function HomePage(): React.ReactNode {
   // Heart state
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [heartedIds, setHeartedIds] = useState<Set<string>>(new Set());
+
+  // User picks state
+  const [userPicks, setUserPicks] = useState<UserPickItem[]>([]);
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [submitUrl, setSubmitUrl] = useState("");
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "submitting" | "extracting" | "summarizing" | "saving" | "done" | "error">("idle");
+  const [submitError, setSubmitError] = useState("");
+  const submitAbortRef = useRef(false);
 
   const todayDate = useMemo(() => currentDateInTz(), []);
 
@@ -203,6 +223,18 @@ export default function HomePage(): React.ReactNode {
     return () => { cancelled = true; };
   }, []);
 
+  // Load user picks
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    async function loadPicks(): Promise<void> {
+      const items = await fetchUserPicks();
+      if (!cancelled) setUserPicks(items);
+    }
+    void loadPicks();
+    return () => { cancelled = true; };
+  }, [authUser]);
+
   // Load articles
   useEffect(() => {
     let cancelled = false;
@@ -249,6 +281,113 @@ export default function HomePage(): React.ReactNode {
   const hasMoreTodayItems = !loading && Boolean(hasMoreByDate[todayDate]);
   const historyGroups = useMemo(() => groups.filter((group) => group.date !== todayDate), [groups, todayDate]);
 
+  /* ── Submit URL (user picks) ── */
+
+  async function handleSubmitUrl(): Promise<void> {
+    const trimmed = submitUrl.trim();
+    if (!trimmed) return;
+
+    setSubmitError("");
+    setSubmitStatus("submitting");
+    submitAbortRef.current = false;
+
+    try {
+      const result = await submitExtraction(trimmed, true);
+      if (!result.ok || !result.task) {
+        setSubmitStatus("error");
+        setSubmitError(result.error || "提交失败");
+        return;
+      }
+
+      setSubmitStatus("extracting");
+      const taskId = result.task.task_id;
+
+      // Poll until completed
+      let task = result.task;
+      for (let i = 0; i < 120; i++) {
+        if (submitAbortRef.current) return;
+        if (task.status === "completed") break;
+        if (task.status === "failed") {
+          setSubmitStatus("error");
+          setSubmitError(task.error_message || "提取失败");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 5000));
+        if (submitAbortRef.current) return;
+        const poll = await pollTaskStatus(taskId);
+        if (poll.ok && poll.task) {
+          task = poll.task;
+        }
+      }
+
+      if (task.status !== "completed") {
+        setSubmitStatus("error");
+        setSubmitError("提取超时，请稍后重试");
+        return;
+      }
+
+      setSubmitStatus("summarizing");
+
+      // If ai_summary not yet ready, poll a few more times
+      if (!task.ai_summary) {
+        for (let i = 0; i < 24; i++) {
+          if (submitAbortRef.current) break;
+          await new Promise((r) => setTimeout(r, 5000));
+          if (submitAbortRef.current) break;
+          const poll = await pollTaskStatus(taskId);
+          if (poll.ok && poll.task) {
+            task = poll.task;
+            if (task.ai_summary) break;
+          }
+        }
+      }
+
+      // Build article payload
+      const thumbResource = task.resources?.find((r) => r.type === "thumbnail" || r.type === "image");
+      const meta = task.metadata as unknown as Record<string, unknown> | undefined;
+      const articleId = String(meta?.article_id || "") || `pick-${task.task_id}`;
+      let sourceHost = "";
+      try { sourceHost = new URL(task.url).hostname; } catch { /* malformed URL */ }
+      const payload = {
+        article_id: articleId,
+        title: task.metadata?.title || task.url,
+        url: task.url,
+        original_url: task.url,
+        source_host: sourceHost,
+        image_url: thumbResource?.url || "",
+        summary: task.metadata?.description || "",
+        ai_summary: task.ai_summary || "",
+      };
+
+      setSubmitStatus("saving");
+      await saveUserPick(payload);
+
+      // Update local state
+      setHeartedIds((prev) => {
+        const next = new Set(prev);
+        next.add(articleId);
+        return next;
+      });
+      setUserPicks((prev) => [
+        {
+          ...payload,
+          saved_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+
+      setSubmitStatus("done");
+      setTimeout(() => {
+        setSubmitModalOpen(false);
+        setSubmitStatus("idle");
+        setSubmitUrl("");
+      }, 1000);
+    } catch (err) {
+      setSubmitStatus("error");
+      setSubmitError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   function markArticleRead(articleId: string): void {
     const normalized = String(articleId || "").trim();
     if (!normalized) return;
@@ -261,7 +400,7 @@ export default function HomePage(): React.ReactNode {
     });
   }
 
-  async function handleToggleHeart(item: ArchiveArticleSummary): Promise<void> {
+  async function handleToggleHeart(item: HeartableArticle): Promise<void> {
     if (!authUser) {
       window.location.assign("/api/auth/login");
       return;
@@ -374,7 +513,7 @@ export default function HomePage(): React.ReactNode {
 
   /* ── Render Helpers ── */
 
-  function renderHeartButton(articleId: string, item: ArchiveArticleSummary): React.ReactNode {
+  function renderHeartButton(articleId: string, item: HeartableArticle): React.ReactNode {
     const hearted = heartedIds.has(articleId);
     return (
       <button
@@ -519,11 +658,59 @@ export default function HomePage(): React.ReactNode {
       {authError ? <div className="error-banner auth-error-banner">{authError}</div> : null}
       {error ? <div className="error-banner">{error}</div> : null}
 
+      {/* ── User Picks ── */}
+      {userPicks.length > 0 ? (
+        <section className="content-block user-picks-block">
+          <header className="block-head">
+            <h2>我的收录</h2>
+            <span className="block-head-actions">{userPicks.length} 篇</span>
+          </header>
+          <div className="editorial-list">
+            {userPicks.map((pick, i) => (
+              <article key={pick.article_id} className="article-row numbered-article">
+                <div className="article-number-col">
+                  <span className="article-number">{String(i + 1).padStart(2, "0")}</span>
+                </div>
+                <div className="article-copy">
+                  <div className="article-meta">
+                    <span>{pick.source_host || "未知来源"}</span>
+                    <span>{formatTime(pick.saved_at)}</span>
+                    <span className="pick-badge">收录</span>
+                  </div>
+                  <h3 className="article-headline">
+                    <a href={pick.original_url || pick.url} target="_blank" rel="noreferrer noopener">
+                      {pick.title || "无标题"}
+                    </a>
+                  </h3>
+                  {pick.summary ? <p className="article-dek">{pick.summary}</p> : null}
+                  {pick.ai_summary ? (
+                    <details className="pick-ai-summary">
+                      <summary>AI 总结</summary>
+                      <div className="pick-ai-summary-content">{pick.ai_summary}</div>
+                    </details>
+                  ) : null}
+                </div>
+                <div className="article-right-col">
+                  <div className="article-actions">
+                    {renderHeartButton(pick.article_id, pick)}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {/* ── Today's Picks ── */}
       <section className="content-block">
         <header className="block-head">
           <h2>今日精选</h2>
           <span className="block-head-actions">
+            {authUser ? (
+              <button className="pick-submit-btn" onClick={() => setSubmitModalOpen(true)}>
+                + 收录文章
+              </button>
+            ) : null}
             <span>{todayItems.length} 篇精选</span>
           </span>
         </header>
@@ -631,6 +818,34 @@ export default function HomePage(): React.ReactNode {
                 阅读原文
               </a>
             </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* ── Submit URL Modal ── */}
+      {submitModalOpen ? (
+        <>
+          <div className="drawer-overlay" onClick={() => { if (submitStatus === "idle" || submitStatus === "done" || submitStatus === "error") setSubmitModalOpen(false); }} />
+          <div className="pick-modal" role="dialog" aria-modal="true">
+            <button type="button" className="drawer-close" onClick={() => { submitAbortRef.current = true; setSubmitModalOpen(false); setSubmitStatus("idle"); }}>✕</button>
+            <h2 className="pick-modal-title">收录文章</h2>
+            <p className="pick-modal-desc">输入文章 URL，系统将自动提取内容并生成 AI 总结</p>
+            <form onSubmit={(e) => { e.preventDefault(); void handleSubmitUrl(); }}>
+              <input type="url" className="pick-modal-input" placeholder="https://..." value={submitUrl} onChange={(e) => setSubmitUrl(e.target.value)} disabled={submitStatus !== "idle" && submitStatus !== "error" && submitStatus !== "done"} required />
+              <button type="submit" className="flomo-btn pick-modal-submit" disabled={!submitUrl.trim() || (submitStatus !== "idle" && submitStatus !== "error" && submitStatus !== "done")}>
+                {submitStatus === "idle" || submitStatus === "error" || submitStatus === "done" ? "开始收录" : "处理中..."}
+              </button>
+            </form>
+            {submitStatus !== "idle" ? (
+              <div className="pick-progress">
+                <div className={`pick-step ${submitStatus === "submitting" ? "active" : ["extracting", "summarizing", "saving", "done"].includes(submitStatus) ? "done" : ""}`}>提交</div>
+                <div className={`pick-step ${submitStatus === "extracting" ? "active" : ["summarizing", "saving", "done"].includes(submitStatus) ? "done" : ""}`}>提取内容</div>
+                <div className={`pick-step ${submitStatus === "summarizing" ? "active" : ["saving", "done"].includes(submitStatus) ? "done" : ""}`}>AI 总结</div>
+                <div className={`pick-step ${submitStatus === "saving" ? "active" : submitStatus === "done" ? "done" : ""}`}>保存</div>
+                {submitStatus === "done" ? <div className="pick-step done">完成</div> : null}
+              </div>
+            ) : null}
+            {submitError ? <div className="error-banner" style={{ marginTop: 12 }}>{submitError}</div> : null}
           </div>
         </>
       ) : null}

@@ -2182,3 +2182,180 @@ button:focus-visible {
     padding: 0 6px;
   }
 }
+
+/* ── User Picks ── */
+
+.pick-submit-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--home-accent-foreground);
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.pick-submit-btn:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.user-picks-block {
+  border-left: 3px solid var(--accent);
+}
+
+.pick-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--home-accent-mist);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pick-ai-summary {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pick-ai-summary > summary {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+  background: var(--home-accent-mist);
+}
+
+.pick-ai-summary > summary:hover {
+  background: var(--panel);
+}
+
+.pick-ai-summary-content {
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--home-charcoal);
+  white-space: pre-wrap;
+}
+
+/* ── Pick Modal ── */
+
+.pick-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  max-width: 520px;
+  background: var(--bg);
+  z-index: 1001;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 8px 32px oklch(0 0 0 / 0.18);
+  animation: drawer-fade-in 0.2s ease-out;
+}
+
+.pick-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+}
+
+.pick-modal-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 20px 0;
+}
+
+.pick-modal-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--panel);
+  color: var(--home-charcoal);
+  box-sizing: border-box;
+  margin-bottom: 12px;
+}
+
+.pick-modal-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px oklch(0.55 0.15 250 / 0.15);
+}
+
+.pick-modal-input:disabled {
+  opacity: 0.55;
+}
+
+.pick-modal-submit {
+  width: 100%;
+}
+
+/* ── Pick Progress ── */
+
+.pick-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.pick-step {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.pick-step.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--home-accent-mist);
+  animation: pick-pulse 1.5s ease-in-out infinite;
+}
+
+.pick-step.done {
+  color: #16a34a;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+@keyframes pick-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@media (max-width: 600px) {
+  .pick-modal {
+    width: 95vw;
+    padding: 24px 20px;
+  }
+
+  .pick-progress {
+    gap: 6px;
+  }
+
+  .pick-step {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+}

@@ -161,7 +161,6 @@ export default function ParserPage(): React.ReactNode {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [url, setUrl] = useState("");
-  const [aiSummary, setAiSummary] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -295,7 +294,7 @@ export default function ParserPage(): React.ReactNode {
     setUrl("");
 
     try {
-      const result = await submitExtraction(trimmed, aiSummary);
+      const result = await submitExtraction(trimmed);
       if (!result.ok) {
         // Remove temp task and show error
         setTasks((prev) => prev.filter((t) => t.task_id !== tempId));
@@ -400,15 +399,6 @@ export default function ParserPage(): React.ReactNode {
                 {submitting ? "提取中..." : "提取"}
               </button>
             </div>
-            <label className="analyze-ai-option">
-              <input
-                type="checkbox"
-                checked={aiSummary}
-                onChange={(e) => setAiSummary(e.target.checked)}
-                disabled={submitting}
-              />
-              <span>AI 智能总结</span>
-            </label>
           </form>
 
           {error ? <div className="error-banner" style={{ marginTop: 16 }}>{error}</div> : null}
@@ -695,13 +685,6 @@ function TaskDrawer({
                 {task.metadata.tags.map((tag) => (
                   <span key={tag} className="tag-chip">{tag}</span>
                 ))}
-              </div>
-            ) : null}
-
-            {task.ai_summary ? (
-              <div className="analyze-ai-summary">
-                <h3 className="analyze-ai-summary-title">AI 总结</h3>
-                <div className="analyze-ai-summary-content">{task.ai_summary}</div>
               </div>
             ) : null}
 
