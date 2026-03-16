@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
+import { fetchUserPicks } from "@/lib/client/user-picks";
 import type { AuthUser } from "@/lib/client/types";
 
 interface HeartedArticle {
@@ -19,6 +21,9 @@ interface HeartedArticle {
 const PAGE_SIZE = 20;
 
 export default function HeartsPage(): React.ReactNode {
+  const searchParams = useSearchParams();
+  const openParam = searchParams.get("open") || "";
+
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [items, setItems] = useState<HeartedArticle[]>([]);
@@ -26,6 +31,10 @@ export default function HeartsPage(): React.ReactNode {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [aiSummaryMap, setAiSummaryMap] = useState<Map<string, string>>(new Map());
+  const openArticleId = openParam;
+  const openRef = useRef<HTMLDetailsElement | null>(null);
+  const scrolledRef = useRef(false);
 
   useEffect(() => {
     void (async () => {
@@ -61,6 +70,33 @@ export default function HeartsPage(): React.ReactNode {
     void load();
     return () => { cancelled = true; };
   }, [authUser, page]);
+
+  // Load AI summaries from user-picks
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    async function loadSummaries(): Promise<void> {
+      const picks = await fetchUserPicks();
+      if (cancelled) return;
+      const map = new Map<string, string>();
+      for (const pick of picks) {
+        if (pick.ai_summary) {
+          map.set(pick.article_id, pick.ai_summary);
+        }
+      }
+      setAiSummaryMap(map);
+    }
+    void loadSummaries();
+    return () => { cancelled = true; };
+  }, [authUser]);
+
+  // Scroll to open article (only once)
+  useEffect(() => {
+    if (openArticleId && openRef.current && !scrolledRef.current) {
+      scrolledRef.current = true;
+      openRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [openArticleId, items]);
 
   async function handleUnheart(item: HeartedArticle): Promise<void> {
     const prev = [...items];
@@ -122,6 +158,8 @@ export default function HeartsPage(): React.ReactNode {
           ) : (
             items.map((item) => {
               const articleUrl = item.original_url || item.url;
+              const aiSummary = aiSummaryMap.get(item.article_id);
+              const isOpen = openArticleId === item.article_id;
               return (
                 <article key={item.article_id} className="article-row numbered-article">
                   <div className="article-copy">
@@ -135,6 +173,16 @@ export default function HeartsPage(): React.ReactNode {
                       </a>
                     </h3>
                     {item.summary ? <p className="article-dek">{item.summary}</p> : null}
+                    {aiSummary ? (
+                      <details
+                        className="hearts-ai-summary"
+                        open={isOpen || undefined}
+                        ref={isOpen ? openRef : undefined}
+                      >
+                        <summary>AI 总结</summary>
+                        <div className="hearts-ai-summary-content">{aiSummary}</div>
+                      </details>
+                    ) : null}
                   </div>
                   <div className="article-right-col">
                     <div className="article-actions">
