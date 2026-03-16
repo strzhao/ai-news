@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DailyEditorial } from "@/lib/llm/editorial";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchHeartedIds, toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
 import type { AuthUser } from "@/lib/client/types";
+import { SummaryDrawer } from "@/app/components/summary-drawer";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
@@ -150,10 +150,6 @@ export default function HomePage(): React.ReactNode {
   // Summary drawer state
   const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
   const [summaryArticle, setSummaryArticle] = useState<ArchiveArticleSummary | null>(null);
-  const [summaryMarkdown, setSummaryMarkdown] = useState("");
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState("");
-  const summaryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const summaryAutoOpenedRef = useRef(false);
 
   // Heart state
@@ -300,65 +296,13 @@ export default function HomePage(): React.ReactNode {
 
   /* ── Summary Drawer ── */
 
-  const closeSummaryDrawer = useCallback(() => {
-    setSummaryDrawerOpen(false);
-    setSummaryArticle(null);
-    setSummaryMarkdown("");
-    setSummaryLoading(false);
-    setSummaryError("");
-    if (summaryPollRef.current) {
-      clearTimeout(summaryPollRef.current);
-      summaryPollRef.current = null;
-    }
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("summary")) {
-      url.searchParams.delete("summary");
-      window.history.replaceState(null, "", url.toString());
-    }
-  }, []);
-
-  const fetchSummary = useCallback(async (articleId: string, pollCount = 0) => {
-    try {
-      const response = await fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, { cache: "no-store" });
-      const data = await response.json();
-      if (!data.ok) { setSummaryError(data.error || "获取总结失败"); setSummaryLoading(false); return; }
-      if (data.status === "completed" && data.summary_markdown) { setSummaryMarkdown(data.summary_markdown); setSummaryLoading(false); return; }
-      if (data.status === "no_content") { setSummaryError("文章内容不足，无法生成 AI 总结"); setSummaryLoading(false); return; }
-      if (data.status === "failed") { setSummaryError(data.error || "AI 总结生成失败，请稍后重试"); setSummaryLoading(false); return; }
-      if (pollCount < 60) {
-        summaryPollRef.current = setTimeout(() => { void fetchSummary(articleId, pollCount + 1); }, 5000);
-      } else {
-        setSummaryError("总结生成超时，请稍后重试");
-        setSummaryLoading(false);
-      }
-    } catch (err) {
-      setSummaryError(err instanceof Error ? err.message : "网络错误");
-      setSummaryLoading(false);
-    }
-  }, []);
-
   function handleOpenSummary(item: ArchiveArticleSummary): void {
-    if (summaryPollRef.current) { clearTimeout(summaryPollRef.current); summaryPollRef.current = null; }
     setSummaryArticle(item);
-    setSummaryMarkdown("");
-    setSummaryError("");
-    setSummaryLoading(true);
     setSummaryDrawerOpen(true);
-    void fetchSummary(item.article_id);
     const url = new URL(window.location.href);
     url.searchParams.set("summary", item.article_id);
     window.history.pushState(null, "", url.toString());
   }
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent): void {
-      if (e.key === "Escape" && summaryDrawerOpen) closeSummaryDrawer();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [summaryDrawerOpen, closeSummaryDrawer]);
-
-  useEffect(() => { return () => { if (summaryPollRef.current) clearTimeout(summaryPollRef.current); }; }, []);
 
   // Auto-open summary from URL
   useEffect(() => {
@@ -370,17 +314,12 @@ export default function HomePage(): React.ReactNode {
       const found = group.items.find((item) => item.article_id === summaryId);
       if (found) {
         summaryAutoOpenedRef.current = true;
-        if (summaryPollRef.current) clearTimeout(summaryPollRef.current);
         setSummaryArticle(found);
-        setSummaryMarkdown("");
-        setSummaryError("");
-        setSummaryLoading(true);
         setSummaryDrawerOpen(true);
-        void fetchSummary(found.article_id);
         return;
       }
     }
-  }, [loading, groups, fetchSummary]);
+  }, [loading, groups]);
 
   /* ── Render Helpers ── */
 
@@ -600,55 +539,26 @@ export default function HomePage(): React.ReactNode {
       </section>
 
       {/* ── Summary Drawer ── */}
-      {summaryDrawerOpen && summaryArticle ? (
-        <>
-          <div className="drawer-overlay" onClick={closeSummaryDrawer} />
-          <div className="drawer-panel" role="dialog" aria-modal="true">
-            <button type="button" className="drawer-close" onClick={closeSummaryDrawer}>
-              ✕
-            </button>
-            <h2 className="summary-drawer-title">{summaryArticle.title}</h2>
-            <div className="summary-drawer-meta">
-              <span>{summaryArticle.source_host || "未知来源"}</span>
-              <span> · </span>
-              <span>{formatTime(summaryArticle.generated_at)}</span>
-            </div>
-            {summaryLoading ? (
-              <div className="analyze-pending">
-                <div className="analyze-spinner" />
-                <p className="analyze-pending-text">正在生成 AI 总结...</p>
-                <p className="analyze-pending-hint">通常需要 30-60 秒，请稍候</p>
-              </div>
-            ) : null}
-            {summaryError ? (
-              <div className="error-banner" style={{ marginTop: 20 }}>{summaryError}</div>
-            ) : null}
-            {summaryMarkdown ? (
-              <div className="summary-content">
-                <ReactMarkdown
-                  components={{
-                    a: ({ children, href, ...props }) => (
-                      <a href={href} target="_blank" rel="noreferrer noopener" {...props}>{children}</a>
-                    ),
-                  }}
-                >
-                  {summaryMarkdown}
-                </ReactMarkdown>
-              </div>
-            ) : null}
-            <div className="summary-drawer-footer">
-              <a
-                className="article-cta"
-                href={summaryArticle.original_url || summaryArticle.url}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                阅读原文
-              </a>
-            </div>
-          </div>
-        </>
-      ) : null}
+      <SummaryDrawer
+        article={summaryArticle ? {
+          article_id: summaryArticle.article_id,
+          title: summaryArticle.title,
+          url: summaryArticle.url,
+          original_url: summaryArticle.original_url,
+          source_host: summaryArticle.source_host,
+          generated_at: summaryArticle.generated_at,
+        } : null}
+        open={summaryDrawerOpen}
+        onClose={() => {
+          setSummaryDrawerOpen(false);
+          setSummaryArticle(null);
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("summary")) {
+            url.searchParams.delete("summary");
+            window.history.replaceState(null, "", url.toString());
+          }
+        }}
+      />
 
     </>
   );

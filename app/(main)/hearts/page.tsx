@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
 import { fetchUserPicks } from "@/lib/client/user-picks";
 import type { AuthUser } from "@/lib/client/types";
+import { SummaryDrawer } from "@/app/components/summary-drawer";
 
 interface HeartedArticle {
   article_id: string;
@@ -29,9 +29,6 @@ export default function HeartsPage(): React.ReactNode {
 }
 
 function HeartsContent(): React.ReactNode {
-  const searchParams = useSearchParams();
-  const openParam = searchParams.get("open") || "";
-
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [items, setItems] = useState<HeartedArticle[]>([]);
@@ -40,9 +37,10 @@ function HeartsContent(): React.ReactNode {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [aiSummaryMap, setAiSummaryMap] = useState<Map<string, string>>(new Map());
-  const openArticleId = openParam;
-  const openRef = useRef<HTMLDetailsElement | null>(null);
-  const scrolledRef = useRef(false);
+
+  // Summary drawer state
+  const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
+  const [summaryArticle, setSummaryArticle] = useState<HeartedArticle | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -98,13 +96,10 @@ function HeartsContent(): React.ReactNode {
     return () => { cancelled = true; };
   }, [authUser]);
 
-  // Scroll to open article (only once)
-  useEffect(() => {
-    if (openArticleId && openRef.current && !scrolledRef.current) {
-      scrolledRef.current = true;
-      openRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [openArticleId, items]);
+  function handleOpenSummary(item: HeartedArticle): void {
+    setSummaryArticle(item);
+    setSummaryDrawerOpen(true);
+  }
 
   async function handleUnheart(item: HeartedArticle): Promise<void> {
     const prev = [...items];
@@ -166,8 +161,6 @@ function HeartsContent(): React.ReactNode {
           ) : (
             items.map((item) => {
               const articleUrl = item.original_url || item.url;
-              const aiSummary = aiSummaryMap.get(item.article_id);
-              const isOpen = openArticleId === item.article_id;
               return (
                 <article key={item.article_id} className="article-row numbered-article">
                   <div className="article-copy">
@@ -181,19 +174,10 @@ function HeartsContent(): React.ReactNode {
                       </a>
                     </h3>
                     {item.summary ? <p className="article-dek">{item.summary}</p> : null}
-                    {aiSummary ? (
-                      <details
-                        className="hearts-ai-summary"
-                        open={isOpen || undefined}
-                        ref={isOpen ? openRef : undefined}
-                      >
-                        <summary>AI 总结</summary>
-                        <div className="hearts-ai-summary-content">{aiSummary}</div>
-                      </details>
-                    ) : null}
                   </div>
                   <div className="article-right-col">
                     <div className="article-actions">
+                      <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
                       <button
                         type="button"
                         className="heart-btn is-hearted"
@@ -223,6 +207,20 @@ function HeartsContent(): React.ReactNode {
           </div>
         ) : null}
       </section>
+
+      <SummaryDrawer
+        article={summaryArticle ? {
+          article_id: summaryArticle.article_id,
+          title: summaryArticle.title,
+          url: summaryArticle.url,
+          original_url: summaryArticle.original_url,
+          source_host: summaryArticle.source_host,
+          metaLabel: `收藏于 ${formatHeartedTime(summaryArticle.hearted_at)}`,
+        } : null}
+        open={summaryDrawerOpen}
+        onClose={() => { setSummaryDrawerOpen(false); setSummaryArticle(null); }}
+        preloadedSummary={summaryArticle ? aiSummaryMap.get(summaryArticle.article_id) : undefined}
+      />
     </>
   );
 }
