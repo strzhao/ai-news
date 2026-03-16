@@ -62,7 +62,7 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary }: Summ
       const data = await response.json();
       if (activeArticleIdRef.current !== articleId) return;
       if (!data.ok) {
-        setSummaryError(data.error || "获取总结失败");
+        setSummaryError("暂无 AI 总结");
         setSummaryLoading(false);
         return;
       }
@@ -101,8 +101,13 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary }: Summ
       activeArticleIdRef.current = article.article_id;
       setSummaryMarkdown("");
       setSummaryError("");
-      setSummaryLoading(true);
-      void fetchSummary(article.article_id);
+      // Skip API call when preloadedSummary is available (e.g. user-picks articles not in article-db)
+      if (preloadedSummary) {
+        setSummaryLoading(false);
+      } else {
+        setSummaryLoading(true);
+        void fetchSummary(article.article_id);
+      }
     } else {
       cleanupPoll();
       activeArticleIdRef.current = null;
