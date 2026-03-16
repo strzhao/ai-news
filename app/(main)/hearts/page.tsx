@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
-import { fetchUserPicks } from "@/lib/client/user-picks";
 import type { AuthUser } from "@/lib/client/types";
 import { SummaryDrawer } from "@/app/components/summary-drawer";
 
@@ -16,6 +15,7 @@ interface HeartedArticle {
   source_host: string;
   image_url: string;
   summary: string;
+  ai_summary?: string;
 }
 
 const PAGE_SIZE = 20;
@@ -36,7 +36,6 @@ function HeartsContent(): React.ReactNode {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [aiSummaryMap, setAiSummaryMap] = useState<Map<string, string>>(new Map());
 
   // Summary drawer state
   const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
@@ -76,25 +75,6 @@ function HeartsContent(): React.ReactNode {
     void load();
     return () => { cancelled = true; };
   }, [authUser, page]);
-
-  // Load AI summaries from user-picks
-  useEffect(() => {
-    if (!authUser) return;
-    let cancelled = false;
-    async function loadSummaries(): Promise<void> {
-      const picks = await fetchUserPicks();
-      if (cancelled) return;
-      const map = new Map<string, string>();
-      for (const pick of picks) {
-        if (pick.ai_summary) {
-          map.set(pick.article_id, pick.ai_summary);
-        }
-      }
-      setAiSummaryMap(map);
-    }
-    void loadSummaries();
-    return () => { cancelled = true; };
-  }, [authUser]);
 
   function handleOpenSummary(item: HeartedArticle): void {
     setSummaryArticle(item);
@@ -220,7 +200,7 @@ function HeartsContent(): React.ReactNode {
         } : null}
         open={summaryDrawerOpen}
         onClose={() => { setSummaryDrawerOpen(false); setSummaryArticle(null); }}
-        preloadedSummary={summaryArticle ? aiSummaryMap.get(summaryArticle.article_id) : undefined}
+        preloadedSummary={summaryArticle?.ai_summary || undefined}
       />
     </>
   );

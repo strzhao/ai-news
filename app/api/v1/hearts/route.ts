@@ -98,6 +98,7 @@ export async function GET(request: Request): Promise<Response> {
         source_host: meta.source_host || "",
         image_url: meta.image_url || "",
         summary: meta.summary || "",
+        ai_summary: meta.ai_summary || "",
       };
     });
 

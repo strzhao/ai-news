@@ -54,7 +54,7 @@ export async function POST(request: Request): Promise<Response> {
       redis.zadd(picksKey, now, articleId),
       redis.hset(picksMetaKey, { ...metaFields, ai_summary: aiSummary }),
       redis.zadd(hKey, now, articleId),
-      redis.hset(hMetaKey, metaFields),
+      redis.hset(hMetaKey, { ...metaFields, ai_summary: aiSummary }),
     ]);
 
     // TTL can also be parallel
