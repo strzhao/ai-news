@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
@@ -21,6 +21,14 @@ interface HeartedArticle {
 const PAGE_SIZE = 20;
 
 export default function HeartsPage(): React.ReactNode {
+  return (
+    <Suspense fallback={<div className="page-header"><p className="empty-note">加载中...</p></div>}>
+      <HeartsContent />
+    </Suspense>
+  );
+}
+
+function HeartsContent(): React.ReactNode {
   const searchParams = useSearchParams();
   const openParam = searchParams.get("open") || "";
 
