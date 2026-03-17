@@ -1,5 +1,6 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
 import { heartsKey, heartsMetaKey } from "@/lib/integrations/hearts-redis-keys";
+import { userPicksMetaKey } from "@/lib/integrations/user-picks-redis-keys";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
 
@@ -39,6 +40,7 @@ export async function POST(request: Request): Promise<Response> {
     const sourceHost = String(body.source_host || "").trim();
     const imageUrl = String(body.image_url || "").trim();
     const summary = String(body.summary || "").trim();
+    const aiSummary = String(body.ai_summary || "").trim();
 
     if (title || url) {
       const metaKey = heartsMetaKey(articleId);
@@ -49,6 +51,7 @@ export async function POST(request: Request): Promise<Response> {
         source_host: sourceHost,
         image_url: imageUrl,
         summary,
+        ai_summary: aiSummary,
         saved_at: new Date().toISOString(),
       });
       await redis.expire(metaKey, META_TTL_SECONDS);
@@ -90,7 +93,7 @@ export async function GET(request: Request): Promise<Response> {
     const items = entries.map((entry, i) => {
       const meta = metas[i];
       return {
-        article_id: entry.member,
+        article_id: entry.member as string,
         hearted_at: entry.score,
         title: meta.title || "",
         url: meta.url || "",
@@ -101,6 +104,23 @@ export async function GET(request: Request): Promise<Response> {
         ai_summary: meta.ai_summary || "",
       };
     });
+
+    // Backfill ai_summary from user-picks meta for articles missing it
+    const needBackfill = items.reduce<number[]>((acc, item, i) => {
+      if (!item.ai_summary) acc.push(i);
+      return acc;
+    }, []);
+    if (needBackfill.length > 0) {
+      const picksMetas = await Promise.all(
+        needBackfill.map((i) => redis.hgetall(userPicksMetaKey(items[i].article_id))),
+      );
+      for (let j = 0; j < needBackfill.length; j++) {
+        const picksMeta = picksMetas[j];
+        if (picksMeta?.ai_summary) {
+          items[needBackfill[j]].ai_summary = String(picksMeta.ai_summary);
+        }
+      }
+    }
 
     return jsonResponse(200, { ok: true, items, total, page, size });
   } catch (error) {
