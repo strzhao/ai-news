@@ -84,7 +84,7 @@ function HeartsContent(): React.ReactNode {
 
   // Auto-open summary from URL parameter
   useEffect(() => {
-    if (loading || items.length === 0 || summaryAutoOpenedRef.current) return;
+    if (loading || summaryAutoOpenedRef.current) return;
     const params = new URLSearchParams(window.location.search);
     const summaryId = params.get("summary");
     if (!summaryId) return;
@@ -92,6 +92,10 @@ function HeartsContent(): React.ReactNode {
     if (found) {
       summaryAutoOpenedRef.current = true;
       setSummaryArticle(found);
+    } else {
+      // 文章不在当前用户收藏中 → fallback 到公共总结页
+      summaryAutoOpenedRef.current = true;
+      window.location.replace(`/summary/${encodeURIComponent(summaryId)}`);
     }
   }, [loading, items]);
 
