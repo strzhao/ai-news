@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
 import type { AuthUser } from "@/lib/client/types";
@@ -38,6 +38,7 @@ function HeartsContent(): React.ReactNode {
   const [error, setError] = useState("");
 
   const [summaryArticle, setSummaryArticle] = useState<HeartedArticle | null>(null);
+  const summaryAutoOpenedRef = useRef(false);
 
   useEffect(() => {
     void (async () => {
@@ -76,7 +77,23 @@ function HeartsContent(): React.ReactNode {
 
   function handleOpenSummary(item: HeartedArticle): void {
     setSummaryArticle(item);
+    const url = new URL(window.location.href);
+    url.searchParams.set("summary", item.article_id);
+    window.history.pushState(null, "", url.toString());
   }
+
+  // Auto-open summary from URL parameter
+  useEffect(() => {
+    if (loading || items.length === 0 || summaryAutoOpenedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const summaryId = params.get("summary");
+    if (!summaryId) return;
+    const found = items.find((item) => item.article_id === summaryId);
+    if (found) {
+      summaryAutoOpenedRef.current = true;
+      setSummaryArticle(found);
+    }
+  }, [loading, items]);
 
   async function handleUnheart(item: HeartedArticle): Promise<void> {
     if (!window.confirm(`确定取消收藏「${item.title || "无标题"}」吗？`)) return;
@@ -196,7 +213,14 @@ function HeartsContent(): React.ReactNode {
           metaLabel: `收藏于 ${formatHeartedTime(summaryArticle.hearted_at)}`,
         } : null}
         open={summaryArticle !== null}
-        onClose={() => setSummaryArticle(null)}
+        onClose={() => {
+          setSummaryArticle(null);
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("summary")) {
+            url.searchParams.delete("summary");
+            window.history.replaceState(null, "", url.toString());
+          }
+        }}
         preloadedSummary={summaryArticle?.ai_summary || undefined}
         onSummaryRegenerated={(articleId, newSummary) => {
           setItems((prev) =>

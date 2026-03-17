@@ -42,6 +42,7 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState("");
   const [regenerating, setRegenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeArticleIdRef = useRef<string | null>(null);
 
@@ -141,6 +142,7 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
       activeArticleIdRef.current = article.article_id;
       setSummaryMarkdown("");
       setSummaryError("");
+      setCopied(false);
       // Use preloaded summary when available (e.g. user-picks articles not in article-db)
       if (preloadedSummary) {
         setSummaryLoading(false);
@@ -250,6 +252,19 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
           >
             阅读原文
           </a>
+          <button
+            type="button"
+            className="share-link-btn"
+            onClick={() => {
+              const shareUrl = `${window.location.origin}/summary/${article.article_id}`;
+              void navigator.clipboard.writeText(shareUrl).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+          >
+            {copied ? "已复制" : "复制分享链接"}
+          </button>
         </div>
       </div>
     </>
