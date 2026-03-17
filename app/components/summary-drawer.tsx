@@ -215,7 +215,15 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
 
         {showPreloaded ? (
           <div className="summary-content">
-            <div>{preloadedSummary}</div>
+            <ReactMarkdown
+              components={{
+                a: ({ children, href, ...props }) => (
+                  <a href={href} target="_blank" rel="noreferrer noopener" {...props}>{children}</a>
+                ),
+              }}
+            >
+              {preloadedSummary}
+            </ReactMarkdown>
           </div>
         ) : null}
 
