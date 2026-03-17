@@ -16,8 +16,10 @@ const STEPS: { key: RunStep; label: string }[] = [
   { key: "saving", label: "保存" },
 ];
 
-function stepIndex(step: RunStep): number {
-  return STEPS.findIndex((s) => s.key === step);
+function stepClassName(idx: number, currentIdx: number): string {
+  if (idx < currentIdx) return "url-float-step done";
+  if (idx === currentIdx) return "url-float-step active";
+  return "url-float-step pending";
 }
 
 export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null }): React.ReactNode {
@@ -28,6 +30,7 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
   const [errorMsg, setErrorMsg] = useState("");
   const [doneTitle, setDoneTitle] = useState("");
   const [doneArticleId, setDoneArticleId] = useState("");
+  const [doneMissingSummary, setDoneMissingSummary] = useState(false);
   const abortRef = useRef(false);
 
   // Listen for custom event to open the float
@@ -50,6 +53,7 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
     setRunStep("submitting");
     setDoneTitle("");
     setDoneArticleId("");
+    setDoneMissingSummary(false);
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -145,10 +149,10 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
       };
 
       await saveUserPick(payload);
-      // saveUserPick already auto-hearts on the server side (ZADD hearts), no need to toggle
 
       if (abortRef.current) return;
 
+      setDoneMissingSummary(!task.ai_summary);
       setDoneTitle(payload.title);
       setDoneArticleId(articleId);
       setState("done");
@@ -169,10 +173,9 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
     setErrorMsg("");
   }, []);
 
-  if (!authUser) return null;
-  if (state === "hidden") return null;
+  if (!authUser || state === "hidden") return null;
 
-  const currentStepIdx = stepIndex(runStep);
+  const currentStepIdx = STEPS.findIndex((s) => s.key === runStep);
 
   return (
     <div className="url-float">
@@ -211,30 +214,28 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
         {/* Running state */}
         {state === "running" ? (
           <div className="url-float-steps">
-            {STEPS.map((step, idx) => {
-              let cls = "url-float-step";
-              if (idx < currentStepIdx) cls += " done";
-              else if (idx === currentStepIdx) cls += " active";
-              else cls += " pending";
-              return (
-                <div key={step.key} className={cls}>
-                  <span className="url-float-step-icon">
-                    {idx < currentStepIdx ? "\u2713" : idx === currentStepIdx ? "" : ""}
-                  </span>
-                  <span className="url-float-step-label">{step.label}</span>
-                </div>
-              );
-            })}
+            {STEPS.map((step, idx) => (
+              <div key={step.key} className={stepClassName(idx, currentStepIdx)}>
+                <span className="url-float-step-icon">
+                  {idx < currentStepIdx ? "\u2713" : ""}
+                </span>
+                <span className="url-float-step-label">{step.label}</span>
+              </div>
+            ))}
           </div>
         ) : null}
 
         {/* Done state */}
         {state === "done" ? (
           <div className="url-float-done-card" onClick={handleDoneClick} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") handleDoneClick(); }}>
-            <div className="url-float-done-check">{"\u2713"}</div>
+            <div className={doneMissingSummary ? "url-float-done-check url-float-done-warn" : "url-float-done-check"}>{doneMissingSummary ? "\u26A0" : "\u2713"}</div>
             <div className="url-float-done-info">
               <div className="url-float-done-title">{doneTitle || "文章已保存"}</div>
-              <div className="url-float-done-hint">点击查看收藏 &rarr;</div>
+              {doneMissingSummary ? (
+                <div className="url-float-done-hint url-float-done-hint-warn">AI 总结生成失败，仅保存了文章信息</div>
+              ) : (
+                <div className="url-float-done-hint">点击查看收藏 &rarr;</div>
+              )}
             </div>
           </div>
         ) : null}

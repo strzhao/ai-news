@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-
-/* ── Types ── */
+import { submitExtraction, pollTaskStatus } from "@/lib/client/url-analysis";
+import { updatePickSummary } from "@/lib/client/user-picks";
 
 export interface SummaryDrawerArticle {
   article_id: string;
@@ -20,9 +20,8 @@ export interface SummaryDrawerProps {
   open: boolean;
   onClose: () => void;
   preloadedSummary?: string;
+  onSummaryRegenerated?: (articleId: string, newSummary: string) => void;
 }
-
-/* ── Helpers ── */
 
 function formatTime(value: string): string {
   if (!value) return "-";
@@ -38,12 +37,11 @@ function formatTime(value: string): string {
   }).format(date);
 }
 
-/* ── Component ── */
-
-export function SummaryDrawer({ article, open, onClose, preloadedSummary }: SummaryDrawerProps): React.ReactNode {
+export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSummaryRegenerated }: SummaryDrawerProps): React.ReactNode {
   const [summaryMarkdown, setSummaryMarkdown] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState("");
+  const [regenerating, setRegenerating] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeArticleIdRef = useRef<string | null>(null);
 
@@ -55,44 +53,86 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary }: Summ
   }, []);
 
   const fetchSummary = useCallback(async (articleId: string, pollCount = 0) => {
-    // Bail out if the article changed while we were polling
     if (activeArticleIdRef.current !== articleId) return;
     try {
       const response = await fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, { cache: "no-store" });
       const data = await response.json();
       if (activeArticleIdRef.current !== articleId) return;
+
       if (!data.ok) {
         setSummaryError("暂无 AI 总结");
-        setSummaryLoading(false);
-        return;
-      }
-      if (data.status === "completed" && data.summary_markdown) {
+      } else if (data.status === "completed" && data.summary_markdown) {
         setSummaryMarkdown(data.summary_markdown);
-        setSummaryLoading(false);
-        return;
-      }
-      if (data.status === "no_content") {
+      } else if (data.status === "no_content") {
         setSummaryError("文章内容不足，无法生成 AI 总结");
-        setSummaryLoading(false);
-        return;
-      }
-      if (data.status === "failed") {
+      } else if (data.status === "failed") {
         setSummaryError(data.error || "AI 总结生成失败，请稍后重试");
-        setSummaryLoading(false);
-        return;
-      }
-      if (pollCount < 60) {
+      } else if (pollCount < 60) {
         pollRef.current = setTimeout(() => { void fetchSummary(articleId, pollCount + 1); }, 5000);
+        return;
       } else {
         setSummaryError("总结生成超时，请稍后重试");
-        setSummaryLoading(false);
       }
+      setSummaryLoading(false);
     } catch (err) {
       if (activeArticleIdRef.current !== articleId) return;
       setSummaryError(err instanceof Error ? err.message : "网络错误");
       setSummaryLoading(false);
     }
   }, []);
+
+  const handleRegenerate = useCallback(async () => {
+    if (!article) return;
+    const articleUrl = article.original_url || article.url;
+    setRegenerating(true);
+    setSummaryError("");
+    setSummaryLoading(true);
+
+    function finishRegen(error?: string): void {
+      if (error) setSummaryError(error);
+      setSummaryLoading(false);
+      setRegenerating(false);
+    }
+
+    try {
+      const result = await submitExtraction(articleUrl, true);
+      if (!result.ok || !result.task) {
+        finishRegen(result.error || "重新生成失败");
+        return;
+      }
+
+      const taskId = result.task.task_id;
+      let task = result.task;
+
+      for (let i = 0; i < 60; i++) {
+        if (activeArticleIdRef.current !== article.article_id) {
+          setRegenerating(false);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 5000));
+        const poll = await pollTaskStatus(taskId);
+        if (poll.ok && poll.task) {
+          task = poll.task;
+          if (task.ai_summary) {
+            setSummaryMarkdown(task.ai_summary);
+            setSummaryError("");
+            finishRegen();
+            await updatePickSummary(article.article_id, task.ai_summary);
+            onSummaryRegenerated?.(article.article_id, task.ai_summary);
+            return;
+          }
+          if (task.status === "failed") {
+            finishRegen(task.error_message || "重新生成失败");
+            return;
+          }
+        }
+      }
+
+      finishRegen("重新生成超时，请稍后重试");
+    } catch (err) {
+      finishRegen(err instanceof Error ? err.message : "网络错误");
+    }
+  }, [article, onSummaryRegenerated]);
 
   // Start / stop fetching when open or article changes
   useEffect(() => {
@@ -101,7 +141,7 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary }: Summ
       activeArticleIdRef.current = article.article_id;
       setSummaryMarkdown("");
       setSummaryError("");
-      // Skip API call when preloadedSummary is available (e.g. user-picks articles not in article-db)
+      // Use preloaded summary when available (e.g. user-picks articles not in article-db)
       if (preloadedSummary) {
         setSummaryLoading(false);
       } else {
@@ -151,25 +191,26 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary }: Summ
         <div className="summary-drawer-meta">
           <span>{article.source_host || "未知来源"}</span>
           <span> · </span>
-          <span>
-            {article.metaLabel
-              ? article.metaLabel
-              : article.generated_at
-                ? formatTime(article.generated_at)
-                : "-"}
-          </span>
+          <span>{article.metaLabel ?? (article.generated_at ? formatTime(article.generated_at) : "-")}</span>
         </div>
 
         {summaryLoading && !showPreloaded ? (
           <div className="analyze-pending">
             <div className="analyze-spinner" />
-            <p className="analyze-pending-text">正在生成 AI 总结...</p>
+            <p className="analyze-pending-text">{regenerating ? "正在重新生成 AI 总结..." : "正在生成 AI 总结..."}</p>
             <p className="analyze-pending-hint">通常需要 30-60 秒，请稍候</p>
           </div>
         ) : null}
 
         {hasError && !suppressError ? (
-          <div className="error-banner" style={{ marginTop: 20 }}>{summaryError}</div>
+          <div className="error-banner" style={{ marginTop: 20 }}>
+            {summaryError}
+            {!regenerating ? (
+              <button type="button" className="regen-btn" onClick={() => { void handleRegenerate(); }}>
+                重新生成
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {showPreloaded ? (

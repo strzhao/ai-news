@@ -37,8 +37,6 @@ function HeartsContent(): React.ReactNode {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Summary drawer state
-  const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
   const [summaryArticle, setSummaryArticle] = useState<HeartedArticle | null>(null);
 
   useEffect(() => {
@@ -78,7 +76,6 @@ function HeartsContent(): React.ReactNode {
 
   function handleOpenSummary(item: HeartedArticle): void {
     setSummaryArticle(item);
-    setSummaryDrawerOpen(true);
   }
 
   async function handleUnheart(item: HeartedArticle): Promise<void> {
@@ -198,9 +195,16 @@ function HeartsContent(): React.ReactNode {
           source_host: summaryArticle.source_host,
           metaLabel: `收藏于 ${formatHeartedTime(summaryArticle.hearted_at)}`,
         } : null}
-        open={summaryDrawerOpen}
-        onClose={() => { setSummaryDrawerOpen(false); setSummaryArticle(null); }}
+        open={summaryArticle !== null}
+        onClose={() => setSummaryArticle(null)}
         preloadedSummary={summaryArticle?.ai_summary || undefined}
+        onSummaryRegenerated={(articleId, newSummary) => {
+          setItems((prev) =>
+            prev.map((item) =>
+              item.article_id === articleId ? { ...item, ai_summary: newSummary } : item,
+            ),
+          );
+        }}
       />
     </>
   );

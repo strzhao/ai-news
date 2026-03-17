@@ -2454,6 +2454,26 @@ button:focus-visible {
   white-space: pre-wrap;
 }
 
+.url-float-done-warn {
+  background: #d97706;
+}
+
+.url-float-done-hint-warn {
+  color: #d97706;
+}
+
+.regen-btn {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+
 /* Responsive */
 
 @media (max-width: 600px) {

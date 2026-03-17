@@ -9,6 +9,10 @@ export const runtime = "nodejs";
 const META_TTL_SECONDS = 365 * 24 * 3600;
 const MAX_PICKS = 50;
 
+function errorResponse(error: unknown): Response {
+  return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+}
+
 export async function POST(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
@@ -46,26 +50,23 @@ export async function POST(request: Request): Promise<Response> {
       source_host: sourceHost,
       image_url: imageUrl,
       summary,
+      ai_summary: aiSummary,
       saved_at: savedAt,
     };
 
-    // Write user_picks + hearts in parallel
+    // Write user_picks + hearts + TTL in parallel
     await Promise.all([
       redis.zadd(picksKey, now, articleId),
-      redis.hset(picksMetaKey, { ...metaFields, ai_summary: aiSummary }),
+      redis.hset(picksMetaKey, metaFields),
       redis.zadd(hKey, now, articleId),
-      redis.hset(hMetaKey, { ...metaFields, ai_summary: aiSummary }),
-    ]);
-
-    // TTL can also be parallel
-    await Promise.all([
+      redis.hset(hMetaKey, metaFields),
       redis.expire(picksMetaKey, META_TTL_SECONDS),
       redis.expire(hMetaKey, META_TTL_SECONDS),
     ]);
 
     return jsonResponse(200, { ok: true });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return errorResponse(error);
   }
 }
 
@@ -102,6 +103,39 @@ export async function GET(request: Request): Promise<Response> {
 
     return jsonResponse(200, { ok: true, items });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return errorResponse(error);
+  }
+}
+
+export async function PATCH(request: Request): Promise<Response> {
+  const auth = await resolveUserFromRequest(request);
+  if (!auth.ok || !auth.user) {
+    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+  }
+
+  try {
+    const body = (await request.json()) as Record<string, unknown>;
+    const articleId = String(body.article_id || "").trim();
+    if (!articleId) {
+      return jsonResponse(400, { ok: false, error: "article_id is required" });
+    }
+
+    const aiSummary = String(body.ai_summary || "").trim();
+    if (!aiSummary) {
+      return jsonResponse(400, { ok: false, error: "ai_summary is required" });
+    }
+
+    const redis = buildUpstashClient();
+    const picksMetaK = userPicksMetaKey(articleId);
+    const hMetaK = heartsMetaKey(articleId);
+
+    await Promise.all([
+      redis.hset(picksMetaK, { ai_summary: aiSummary }),
+      redis.hset(hMetaK, { ai_summary: aiSummary }),
+    ]);
+
+    return jsonResponse(200, { ok: true });
+  } catch (error) {
+    return errorResponse(error);
   }
 }

@@ -28,8 +28,7 @@ export async function saveUserPick(payload: UserPickPayload): Promise<{ ok: bool
     credentials: "include",
     body: JSON.stringify(payload),
   });
-  const data = (await response.json()) as { ok: boolean };
-  return data;
+  return (await response.json()) as { ok: boolean };
 }
 
 export async function fetchUserPicks(): Promise<UserPickItem[]> {
@@ -44,4 +43,14 @@ export async function fetchUserPicks(): Promise<UserPickItem[]> {
   } catch {
     return [];
   }
+}
+
+export async function updatePickSummary(articleId: string, aiSummary: string): Promise<{ ok: boolean }> {
+  const response = await fetch("/api/v1/user-picks", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ article_id: articleId, ai_summary: aiSummary }),
+  });
+  return (await response.json()) as { ok: boolean };
 }
