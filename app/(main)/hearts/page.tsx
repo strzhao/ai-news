@@ -129,6 +129,12 @@ function HeartsContent(): React.ReactNode {
   }
 
   if (!authUser) {
+    // 未登录但有 summary 参数 → 重定向到公共总结页
+    const summaryId = new URLSearchParams(window.location.search).get("summary");
+    if (summaryId) {
+      window.location.replace(`/summary/${encodeURIComponent(summaryId)}`);
+      return <div className="page-header"><p className="empty-note">跳转中...</p></div>;
+    }
     return (
       <div className="page-header">
         <h1 className="page-title">我的收藏</h1>
