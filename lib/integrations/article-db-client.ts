@@ -249,17 +249,19 @@ export async function fetchArticleDetail(articleId: string): Promise<ArticleDeta
       },
     )) as Record<string, unknown>;
 
-    if (!raw.title) return null;
+    const item = (raw.item && typeof raw.item === "object" ? raw.item : raw) as Record<string, unknown>;
+
+    if (!item.title) return null;
 
     return {
       ok: true,
-      article_id: String(raw.article_id || articleId),
-      title: String(raw.title || ""),
-      url: String(raw.url || ""),
-      original_url: String(raw.original_url || ""),
-      source_host: String(raw.source_host || ""),
-      summary: String(raw.summary || ""),
-      image_url: String(raw.image_url || ""),
+      article_id: String(item.article_id || articleId),
+      title: String(item.title || ""),
+      url: String(item.canonical_url || item.url || ""),
+      original_url: String(item.original_url || ""),
+      source_host: String(item.source_host || ""),
+      summary: String(item.summary_raw || item.summary || ""),
+      image_url: String(item.image_url || ""),
     };
   } catch {
     return null;
