@@ -221,6 +221,51 @@ export async function markFlomoPushBatchSent(batchKey: string): Promise<{ consum
   };
 }
 
+export interface ArticleDetailResult {
+  ok: boolean;
+  article_id: string;
+  title: string;
+  url: string;
+  original_url: string;
+  source_host: string;
+  summary: string;
+  image_url: string;
+}
+
+export async function fetchArticleDetail(articleId: string): Promise<ArticleDetailResult | null> {
+  const root = baseUrl();
+  if (!root) return null;
+
+  try {
+    const raw = (await fetchJson(
+      `${root}/api/v1/articles/${encodeURIComponent(articleId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          ...authHeaders(),
+        },
+        timeoutMs: 10_000,
+      },
+    )) as Record<string, unknown>;
+
+    if (!raw.title) return null;
+
+    return {
+      ok: true,
+      article_id: String(raw.article_id || articleId),
+      title: String(raw.title || ""),
+      url: String(raw.url || ""),
+      original_url: String(raw.original_url || ""),
+      source_host: String(raw.source_host || ""),
+      summary: String(raw.summary || ""),
+      image_url: String(raw.image_url || ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface ArticleSummaryResult {
   ok: boolean;
   status?: "completed" | "generating" | "failed" | "no_content";
