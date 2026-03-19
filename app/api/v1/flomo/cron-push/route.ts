@@ -1,8 +1,12 @@
 import { listArchiveArticles } from "@/lib/domain/archive-articles";
-import { FlomoClient } from "@/lib/integrations/flomo-client";
-import { FLOMO_SUBSCRIBERS_KEY, flomoConfigKey, flomoPushLogKey } from "@/lib/integrations/flomo-redis-keys";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
+import { FlomoClient } from "@/lib/integrations/flomo-client";
+import {
+  FLOMO_SUBSCRIBERS_KEY,
+  flomoConfigKey,
+  flomoPushLogKey,
+} from "@/lib/integrations/flomo-redis-keys";
 import { renderFlomoArchiveArticlesContent } from "@/lib/output/flomo-archive-articles-formatter";
 
 export const runtime = "nodejs";
@@ -17,7 +21,8 @@ function currentDateInTz(tz: string): string {
     month: "2-digit",
     day: "2-digit",
   });
-  const [{ value: year }, , { value: month }, , { value: day }] = formatter.formatToParts(new Date());
+  const [{ value: year }, , { value: month }, , { value: day }] =
+    formatter.formatToParts(new Date());
   return `${year}-${month}-${day}`;
 }
 
@@ -45,7 +50,13 @@ export async function GET(request: Request): Promise<Response> {
     // 1. Get all subscriber user IDs
     const userIds = await redis.smembers(FLOMO_SUBSCRIBERS_KEY);
     if (!userIds.length) {
-      return jsonResponse(200, { ok: true, subscribers: 0, sent: 0, skipped: 0, failed: 0 });
+      return jsonResponse(200, {
+        ok: true,
+        subscribers: 0,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+      });
     }
 
     // 2. Fetch articles once for all users
@@ -94,7 +105,12 @@ export async function GET(request: Request): Promise<Response> {
         // Log the push
         const lk = flomoPushLogKey(userId);
         await redis.pipeline([
-          ["ZADD", lk, String(now), `${todayDate}:${allArticles.length}:${now}`],
+          [
+            "ZADD",
+            lk,
+            String(now),
+            `${todayDate}:${allArticles.length}:${now}`,
+          ],
           ["EXPIRE", lk, LOG_TTL_SECONDS],
         ]);
 
@@ -113,6 +129,9 @@ export async function GET(request: Request): Promise<Response> {
       article_count: allArticles.length,
     });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

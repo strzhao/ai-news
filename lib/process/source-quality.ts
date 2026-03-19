@@ -1,4 +1,10 @@
-import { Article, ArticleAssessment, SourceConfig, SourceQualityScore, WORTH_MUST_READ } from "@/lib/domain/models";
+import {
+  type Article,
+  type ArticleAssessment,
+  type SourceConfig,
+  type SourceQualityScore,
+  WORTH_MUST_READ,
+} from "@/lib/domain/models";
 
 function behaviorPriorityScore(multiplier: number): number {
   const clipped = Math.max(0.85, Math.min(1.2, Number(multiplier) || 1));
@@ -21,7 +27,12 @@ export function rankSourcesByPriority(
     const behaviorPriority = behaviorPriorityScore(behaviorMultiplier);
     const index = indexMap.get(source.id) ?? total - 1;
     const curatedPriority = ((total - index) / total) * 100;
-    return curatedPriority * 0.45 + source.sourceWeight * 100 * 0.25 + sourceQuality * 0.15 + behaviorPriority * 0.15;
+    return (
+      curatedPriority * 0.45 +
+      source.sourceWeight * 100 * 0.25 +
+      sourceQuality * 0.15 +
+      behaviorPriority * 0.15
+    );
   };
 
   return [...sources].sort((a, b) => priority(b) - priority(a));
@@ -35,7 +46,10 @@ export function buildSourceFetchLimits(
 ): Record<string, number> {
   if (!sources.length) return {};
   const highCutoff = Math.max(1, Math.trunc(sources.length / 3));
-  const mediumCutoff = Math.max(highCutoff + 1, Math.trunc((sources.length * 2) / 3));
+  const mediumCutoff = Math.max(
+    highCutoff + 1,
+    Math.trunc((sources.length * 2) / 3),
+  );
   const limits: Record<string, number> = {};
   sources.forEach((source, index) => {
     if (index < highCutoff) {
@@ -70,21 +84,32 @@ export function buildBudgetedSourceLimits(
     return limited;
   }
 
-  const base = totalBudget >= count * minPerSource ? minPerSource : Math.max(1, Math.trunc(totalBudget / count));
+  const base =
+    totalBudget >= count * minPerSource
+      ? minPerSource
+      : Math.max(1, Math.trunc(totalBudget / count));
   const allocated: Record<string, number> = {};
   prioritizedSources.forEach((source) => {
     const cap = Math.trunc(sourceLimits[source.id] ?? base);
     allocated[source.id] = Math.min(base, Math.max(0, cap));
   });
 
-  let remaining = Math.max(0, totalBudget - Object.values(allocated).reduce((sum, value) => sum + value, 0));
+  let remaining = Math.max(
+    0,
+    totalBudget -
+      Object.values(allocated).reduce((sum, value) => sum + value, 0),
+  );
   if (remaining <= 0) {
     return allocated;
   }
 
   const rooms: Record<string, number> = {};
   prioritizedSources.forEach((source) => {
-    rooms[source.id] = Math.max(0, Math.trunc(sourceLimits[source.id] ?? allocated[source.id]) - allocated[source.id]);
+    rooms[source.id] = Math.max(
+      0,
+      Math.trunc(sourceLimits[source.id] ?? allocated[source.id]) -
+        allocated[source.id],
+    );
   });
 
   const totalRoom = Object.values(rooms).reduce((sum, value) => sum + value, 0);
@@ -95,7 +120,10 @@ export function buildBudgetedSourceLimits(
   for (const source of prioritizedSources) {
     const room = rooms[source.id];
     if (room <= 0 || remaining <= 0) continue;
-    const add = Math.min(room, Math.trunc((remaining * room) / Math.max(totalRoom, 1)));
+    const add = Math.min(
+      room,
+      Math.trunc((remaining * room) / Math.max(totalRoom, 1)),
+    );
     if (add <= 0) continue;
     allocated[source.id] += add;
     rooms[source.id] -= add;
@@ -116,7 +144,9 @@ export function buildBudgetedSourceLimits(
     return allocated;
   }
 
-  const exploratoryIds = prioritizedSources.map((source) => source.id).filter((id) => !preferredSourceIds.has(id));
+  const exploratoryIds = prioritizedSources
+    .map((source) => source.id)
+    .filter((id) => !preferredSourceIds.has(id));
   if (!exploratoryIds.length) {
     return allocated;
   }
@@ -126,17 +156,27 @@ export function buildBudgetedSourceLimits(
     return allocated;
   }
 
-  const currentExploration = exploratoryIds.reduce((sum, id) => sum + (allocated[id] || 0), 0);
+  const currentExploration = exploratoryIds.reduce(
+    (sum, id) => sum + (allocated[id] || 0),
+    0,
+  );
   let needed = Math.max(0, targetExploration - currentExploration);
   if (needed <= 0) {
     return allocated;
   }
 
-  const donors = [...prioritizedSources].reverse().map((source) => source.id).filter((id) => preferredSourceIds.has(id));
-  const recipients = prioritizedSources.map((source) => source.id).filter((id) => exploratoryIds.includes(id));
+  const donors = [...prioritizedSources]
+    .reverse()
+    .map((source) => source.id)
+    .filter((id) => preferredSourceIds.has(id));
+  const recipients = prioritizedSources
+    .map((source) => source.id)
+    .filter((id) => exploratoryIds.includes(id));
 
   while (needed > 0) {
-    const recipient = recipients.find((id) => (allocated[id] || 0) < Math.trunc(sourceLimits[id] || 0));
+    const recipient = recipients.find(
+      (id) => (allocated[id] || 0) < Math.trunc(sourceLimits[id] || 0),
+    );
     if (!recipient) break;
     const donor = donors.find((id) => (allocated[id] || 0) > 1);
     if (!donor) break;
@@ -156,10 +196,15 @@ export function computeSourceQualityScores(
   minArticlesForReliableScore = 8,
   nowUtc: Date = new Date(),
 ): SourceQualityScore[] {
-  const lookbackThreshold = new Date(nowUtc.getTime() - lookbackDays * 86_400_000);
+  const lookbackThreshold = new Date(
+    nowUtc.getTime() - lookbackDays * 86_400_000,
+  );
   const recentThreshold = new Date(nowUtc.getTime() - 7 * 86_400_000);
 
-  const grouped = new Map<string, Array<{ article: Article; assessment: ArticleAssessment }>>();
+  const grouped = new Map<
+    string,
+    Array<{ article: Article; assessment: ArticleAssessment }>
+  >();
   for (const article of articles) {
     if (article.publishedAt && article.publishedAt < lookbackThreshold) {
       continue;
@@ -180,19 +225,35 @@ export function computeSourceQualityScores(
     const count = rows.length;
     if (!count) continue;
 
-    const avgQuality = rows.reduce((sum, row) => sum + row.assessment.qualityScore, 0) / count;
+    const avgQuality =
+      rows.reduce((sum, row) => sum + row.assessment.qualityScore, 0) / count;
     const avgImpact =
       rows.reduce(
-        (sum, row) => sum + (row.assessment.companyImpact + row.assessment.teamImpact + row.assessment.personalImpact) / 3,
+        (sum, row) =>
+          sum +
+          (row.assessment.companyImpact +
+            row.assessment.teamImpact +
+            row.assessment.personalImpact) /
+            3,
         0,
       ) / count;
-    const mustReadRate = rows.filter((row) => row.assessment.worth === WORTH_MUST_READ).length / count;
-    const avgConfidence = rows.reduce((sum, row) => sum + row.assessment.confidence, 0) / count;
+    const mustReadRate =
+      rows.filter((row) => row.assessment.worth === WORTH_MUST_READ).length /
+      count;
+    const avgConfidence =
+      rows.reduce((sum, row) => sum + row.assessment.confidence, 0) / count;
     const freshness =
-      rows.filter((row) => row.article.publishedAt && row.article.publishedAt >= recentThreshold).length / count;
+      rows.filter(
+        (row) =>
+          row.article.publishedAt && row.article.publishedAt >= recentThreshold,
+      ).length / count;
 
     const batchQuality =
-      avgQuality * 0.4 + avgImpact * 0.25 + mustReadRate * 100 * 0.2 + avgConfidence * 100 * 0.1 + freshness * 100 * 0.05;
+      avgQuality * 0.4 +
+      avgImpact * 0.25 +
+      mustReadRate * 100 * 0.2 +
+      avgConfidence * 100 * 0.1 +
+      freshness * 100 * 0.05;
 
     const historical = historicalScores[sourceId];
     let quality = batchQuality;

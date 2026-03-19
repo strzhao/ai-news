@@ -14,10 +14,17 @@ describe("auth proxy routes", () => {
 
   it("proxies /api/auth/me to auth center with forwarded headers", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "usr_1", email: "user@example.com", status: "ACTIVE" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          id: "usr_1",
+          email: "user@example.com",
+          status: "ACTIVE",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
     );
 
     const response = await me(
@@ -53,7 +60,10 @@ describe("auth proxy routes", () => {
         status: 200,
         headers: new Headers([
           ["content-type", "application/json"],
-          ["set-cookie", "refresh_token=; Max-Age=0; Path=/; Domain=.stringzhao.life; HttpOnly; Secure"],
+          [
+            "set-cookie",
+            "refresh_token=; Max-Age=0; Path=/; Domain=.stringzhao.life; HttpOnly; Secure",
+          ],
         ]),
       }),
     );
@@ -73,14 +83,20 @@ describe("auth proxy routes", () => {
     expect(init.method).toBe("POST");
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("set-cookie") || "").toContain("refresh_token=");
+    expect(response.headers.get("set-cookie") || "").toContain(
+      "refresh_token=",
+    );
     await expect(response.json()).resolves.toEqual({ success: true });
   });
 
   it("returns 502 when auth center is unavailable", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("upstream timeout"));
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("upstream timeout"),
+    );
 
-    const response = await me(new Request("https://ai-news.stringzhao.life/api/auth/me"));
+    const response = await me(
+      new Request("https://ai-news.stringzhao.life/api/auth/me"),
+    );
     const payload = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(502);

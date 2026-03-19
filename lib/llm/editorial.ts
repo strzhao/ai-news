@@ -1,5 +1,5 @@
-import { DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
-import { UpstashClient } from "@/lib/infra/upstash";
+import type { UpstashClient } from "@/lib/infra/upstash";
+import { type DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
 
 export type EditorialEdition = "morning" | "noon" | "evening";
 
@@ -102,7 +102,10 @@ const EDITION_INSTRUCTIONS: Record<string, string> = {
   evening: "请基于今日全天的精选文章，撰写晚间编辑综述，做好今日总结和前瞻。",
 };
 
-function buildSystemPrompt(editor: EditorPersona, edition?: EditorialEdition): string {
+function buildSystemPrompt(
+  editor: EditorPersona,
+  edition?: EditorialEdition,
+): string {
   const task =
     EDITION_INSTRUCTIONS[edition || ""] ||
     "请基于今日精选文章列表，以你的视角撰写今日编辑综述。";
@@ -139,7 +142,11 @@ export class EditorialGenerator {
     this.forceRefresh = Boolean(options.forceRefresh);
   }
 
-  async getDailyEditorial(date: string, articles: ArticleBrief[], edition?: EditorialEdition): Promise<DailyEditorial | null> {
+  async getDailyEditorial(
+    date: string,
+    articles: ArticleBrief[],
+    edition?: EditorialEdition,
+  ): Promise<DailyEditorial | null> {
     if (!articles.length) {
       return null;
     }
@@ -166,7 +173,12 @@ export class EditorialGenerator {
       const raw = await this.redis!.get(`${CACHE_KEY_PREFIX}${date}`);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object" && parsed.headline && parsed.editor_name) {
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        parsed.headline &&
+        parsed.editor_name
+      ) {
         return parsed as DailyEditorial;
       }
       return null;
@@ -175,15 +187,26 @@ export class EditorialGenerator {
     }
   }
 
-  private async tryCacheResult(date: string, editorial: DailyEditorial): Promise<void> {
+  private async tryCacheResult(
+    date: string,
+    editorial: DailyEditorial,
+  ): Promise<void> {
     try {
-      await this.redis!.set(`${CACHE_KEY_PREFIX}${date}`, JSON.stringify(editorial), CACHE_TTL_SECONDS);
+      await this.redis!.set(
+        `${CACHE_KEY_PREFIX}${date}`,
+        JSON.stringify(editorial),
+        CACHE_TTL_SECONDS,
+      );
     } catch {
       // Silently ignore cache write failures
     }
   }
 
-  private async generate(date: string, articles: ArticleBrief[], edition?: EditorialEdition): Promise<DailyEditorial> {
+  private async generate(
+    date: string,
+    articles: ArticleBrief[],
+    edition?: EditorialEdition,
+  ): Promise<DailyEditorial> {
     const editor = getEditorForDate(date);
 
     const inputs = articles.slice(0, 20).map((a) => ({
@@ -193,7 +216,12 @@ export class EditorialGenerator {
       tags: this.flattenTags(a.tag_groups),
     }));
 
-    const userPrompt = JSON.stringify({ date, edition: edition || "default", article_count: articles.length, articles: inputs });
+    const userPrompt = JSON.stringify({
+      date,
+      edition: edition || "default",
+      article_count: articles.length,
+      articles: inputs,
+    });
 
     const result = await this.llmClient.chatJson(
       [
@@ -209,12 +237,18 @@ export class EditorialGenerator {
     }
 
     const bodyParagraphs = Array.isArray(result.body_paragraphs)
-      ? result.body_paragraphs.map((p: unknown) => String(p || "").trim()).filter(Boolean)
+      ? result.body_paragraphs
+          .map((p: unknown) => String(p || "").trim())
+          .filter(Boolean)
       : [];
 
     const tags = Array.isArray(result.tags)
       ? result.tags
-          .map((t: unknown) => String(t || "").trim().replace(/^#+/, ""))
+          .map((t: unknown) =>
+            String(t || "")
+              .trim()
+              .replace(/^#+/, ""),
+          )
           .filter(Boolean)
           .slice(0, 10)
       : [];

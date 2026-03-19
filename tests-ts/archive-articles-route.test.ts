@@ -63,7 +63,9 @@ describe("archive_articles route", () => {
       groups: [],
     });
 
-    const request = new Request("https://example.com/api/archive_articles?article_limit_per_day=0");
+    const request = new Request(
+      "https://example.com/api/archive_articles?article_limit_per_day=0",
+    );
     const response = await GET(request);
     const payload = (await response.json()) as Record<string, unknown>;
 
@@ -84,7 +86,9 @@ describe("archive_articles route", () => {
       groups: [],
     });
 
-    const request = new Request("https://example.com/api/archive_articles?quality_tier=general");
+    const request = new Request(
+      "https://example.com/api/archive_articles?quality_tier=general",
+    );
     const response = await GET(request);
     const payload = (await response.json()) as Record<string, unknown>;
 

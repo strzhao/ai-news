@@ -1,7 +1,11 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClientOrNone } from "@/lib/infra/upstash";
-import { WEB_PUSH_SUBSCRIBERS_KEY, webPushSubscriptionKey, webPushConfigKey } from "@/lib/integrations/web-push-redis-keys";
+import {
+  WEB_PUSH_SUBSCRIBERS_KEY,
+  webPushConfigKey,
+  webPushSubscriptionKey,
+} from "@/lib/integrations/web-push-redis-keys";
 
 export const runtime = "nodejs";
 
@@ -21,11 +25,18 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const body = (await request.json()) as {
-      subscription?: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+      subscription?: {
+        endpoint?: string;
+        keys?: { p256dh?: string; auth?: string };
+      };
     };
     const sub = body.subscription;
     if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
-      return jsonResponse(400, { ok: false, error: "invalid_subscription" }, true);
+      return jsonResponse(
+        400,
+        { ok: false, error: "invalid_subscription" },
+        true,
+      );
     }
 
     const subKey = webPushSubscriptionKey(auth.user.id);
@@ -33,7 +44,18 @@ export async function POST(request: Request): Promise<Response> {
     const now = new Date().toISOString();
 
     await redis.pipeline([
-      ["HSET", subKey, "endpoint", sub.endpoint, "p256dh", sub.keys.p256dh, "auth", sub.keys.auth, "updated_at", now],
+      [
+        "HSET",
+        subKey,
+        "endpoint",
+        sub.endpoint,
+        "p256dh",
+        sub.keys.p256dh,
+        "auth",
+        sub.keys.auth,
+        "updated_at",
+        now,
+      ],
       ["EXPIRE", subKey, TTL_SECONDS],
       ["HSET", configKey, "enabled", "true", "updated_at", now],
       ["EXPIRE", configKey, TTL_SECONDS],
@@ -42,7 +64,14 @@ export async function POST(request: Request): Promise<Response> {
 
     return jsonResponse(200, { ok: true }, true);
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) }, true);
+    return jsonResponse(
+      500,
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      true,
+    );
   }
 }
 
@@ -71,6 +100,13 @@ export async function DELETE(request: Request): Promise<Response> {
 
     return jsonResponse(200, { ok: true }, true);
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) }, true);
+    return jsonResponse(
+      500,
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      true,
+    );
   }
 }

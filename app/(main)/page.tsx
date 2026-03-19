@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DailyEditorial } from "@/lib/llm/editorial";
-import { fetchAuthUser } from "@/lib/client/auth";
-import { fetchHeartedIds, toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
-import type { AuthUser } from "@/lib/client/types";
 import { SummaryDrawer } from "@/app/components/summary-drawer";
+import { fetchAuthUser } from "@/lib/client/auth";
+import {
+  fetchHeartedIds,
+  toggleHeart as toggleHeartApi,
+} from "@/lib/client/hearts";
+import type { AuthUser } from "@/lib/client/types";
+import type { DailyEditorial } from "@/lib/llm/editorial";
 
 const ARCHIVE_TZ = "Asia/Shanghai";
 const READ_STORAGE_KEY = "ai_news_read_article_ids_v1";
@@ -66,7 +69,8 @@ function currentDateInTz(): string {
     month: "2-digit",
     day: "2-digit",
   });
-  const [{ value: year }, , { value: month }, , { value: day }] = formatter.formatToParts(new Date());
+  const [{ value: year }, , { value: month }, , { value: day }] =
+    formatter.formatToParts(new Date());
   return `${year}-${month}-${day}`;
 }
 
@@ -89,7 +93,9 @@ function loadReadSet(): Set<string> {
     if (!raw) return new Set();
     const list = JSON.parse(raw);
     if (!Array.isArray(list)) return new Set();
-    return new Set(list.map((item) => String(item || "").trim()).filter(Boolean));
+    return new Set(
+      list.map((item) => String(item || "").trim()).filter(Boolean),
+    );
   } catch {
     return new Set();
   }
@@ -97,7 +103,10 @@ function loadReadSet(): Set<string> {
 
 function saveReadSet(set: Set<string>): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  window.localStorage.setItem(
+    READ_STORAGE_KEY,
+    JSON.stringify(Array.from(set)),
+  );
 }
 
 function renderTags(tagGroups: Record<string, string[]>): React.ReactNode {
@@ -135,7 +144,9 @@ export default function HomePage(): React.ReactNode {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("正在更新");
   const [groups, setGroups] = useState<ArchiveGroup[]>([]);
-  const [hasMoreByDate, setHasMoreByDate] = useState<Record<string, boolean>>({});
+  const [hasMoreByDate, setHasMoreByDate] = useState<Record<string, boolean>>(
+    {},
+  );
   const [error, setError] = useState("");
   const [authError, setAuthError] = useState("");
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
@@ -149,7 +160,8 @@ export default function HomePage(): React.ReactNode {
 
   // Summary drawer state
   const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
-  const [summaryArticle, setSummaryArticle] = useState<ArchiveArticleSummary | null>(null);
+  const [summaryArticle, setSummaryArticle] =
+    useState<ArchiveArticleSummary | null>(null);
   const summaryAutoOpenedRef = useRef(false);
 
   // Heart state
@@ -161,16 +173,37 @@ export default function HomePage(): React.ReactNode {
   // Init from URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setDays(Math.max(1, Math.min(180, Number.parseInt(params.get("days") || "30", 10) || 30)));
+    setDays(
+      Math.max(
+        1,
+        Math.min(180, Number.parseInt(params.get("days") || "30", 10) || 30),
+      ),
+    );
     setLimitPerDay(
-      Math.max(1, Math.min(LIMIT_PER_DAY_MAX, Number.parseInt(params.get("limit_per_day") || "10", 10) || 10)),
+      Math.max(
+        1,
+        Math.min(
+          LIMIT_PER_DAY_MAX,
+          Number.parseInt(params.get("limit_per_day") || "10", 10) || 10,
+        ),
+      ),
     );
     setArticleLimitPerDay(
-      Math.max(0, Math.min(5000, Number.parseInt(params.get("article_limit_per_day") || "0", 10) || 0)),
+      Math.max(
+        0,
+        Math.min(
+          5000,
+          Number.parseInt(params.get("article_limit_per_day") || "0", 10) || 0,
+        ),
+      ),
     );
     setReadSet(loadReadSet());
     const authErrorCode = params.get("auth_error") ?? "";
-    setAuthError(authErrorCode ? AUTH_ERROR_MESSAGES[authErrorCode] ?? "登录流程异常，请重试。" : "");
+    setAuthError(
+      authErrorCode
+        ? (AUTH_ERROR_MESSAGES[authErrorCode] ?? "登录流程异常，请重试。")
+        : "",
+    );
   }, []);
 
   // Load editorial (parallel with articles)
@@ -178,7 +211,9 @@ export default function HomePage(): React.ReactNode {
     let cancelled = false;
     async function loadEditorial(): Promise<void> {
       try {
-        const response = await fetch("/api/daily_editorial", { cache: "no-store" });
+        const response = await fetch("/api/daily_editorial", {
+          cache: "no-store",
+        });
         const data = await response.json();
         if (!cancelled && data.ok && data.editorial) {
           setEditorial(data.editorial);
@@ -190,7 +225,9 @@ export default function HomePage(): React.ReactNode {
       }
     }
     void loadEditorial();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [todayDate]);
 
   // Load auth + hearted IDs
@@ -206,7 +243,9 @@ export default function HomePage(): React.ReactNode {
       }
     }
     void loadHearts();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load articles
@@ -225,9 +264,14 @@ export default function HomePage(): React.ReactNode {
           throw new Error("加载文章归档失败");
         }
         if (!cancelled) {
-          const nextGroups = Array.isArray(payload.groups) ? payload.groups : [];
+          const nextGroups = Array.isArray(payload.groups)
+            ? payload.groups
+            : [];
           const nextHasMoreByDate =
-            payload.has_more_by_date && typeof payload.has_more_by_date === "object" ? payload.has_more_by_date : {};
+            payload.has_more_by_date &&
+            typeof payload.has_more_by_date === "object"
+              ? payload.has_more_by_date
+              : {};
           setGroups(nextGroups);
           setHasMoreByDate(nextHasMoreByDate);
           const count = Number(payload.total_articles || 0);
@@ -244,16 +288,23 @@ export default function HomePage(): React.ReactNode {
       }
     }
     void loadArchiveArticles();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [days, limitPerDay, articleLimitPerDay]);
 
   const todayGroup = useMemo(
-    () => groups.find((group) => String(group.date || "").trim() === todayDate) || null,
+    () =>
+      groups.find((group) => String(group.date || "").trim() === todayDate) ||
+      null,
     [groups, todayDate],
   );
   const todayItems = useMemo(() => todayGroup?.items || [], [todayGroup]);
   const hasMoreTodayItems = !loading && Boolean(hasMoreByDate[todayDate]);
-  const historyGroups = useMemo(() => groups.filter((group) => group.date !== todayDate), [groups, todayDate]);
+  const historyGroups = useMemo(
+    () => groups.filter((group) => group.date !== todayDate),
+    [groups, todayDate],
+  );
 
   function markArticleRead(articleId: string): void {
     const normalized = String(articleId || "").trim();
@@ -323,13 +374,18 @@ export default function HomePage(): React.ReactNode {
 
   /* ── Render Helpers ── */
 
-  function renderHeartButton(articleId: string, item: HeartableArticle): React.ReactNode {
+  function renderHeartButton(
+    articleId: string,
+    item: HeartableArticle,
+  ): React.ReactNode {
     const hearted = heartedIds.has(articleId);
     return (
       <button
         type="button"
         className={`heart-btn${hearted ? " is-hearted" : ""}`}
-        onClick={() => { void handleToggleHeart(item); }}
+        onClick={() => {
+          void handleToggleHeart(item);
+        }}
         aria-label={hearted ? "取消收藏" : "收藏"}
       >
         {hearted ? "♥" : "♡"}
@@ -343,7 +399,10 @@ export default function HomePage(): React.ReactNode {
     const articleUrl = item.original_url || item.url;
 
     return (
-      <article key={articleId} className={`article-row hero-card${read ? " is-read" : ""}`}>
+      <article
+        key={articleId}
+        className={`article-row hero-card${read ? " is-read" : ""}`}
+      >
         {item.image_url ? (
           <div className="hero-image-wrap">
             <img
@@ -351,7 +410,10 @@ export default function HomePage(): React.ReactNode {
               alt=""
               className="hero-image"
               loading="eager"
-              onError={(e) => { const wrap = (e.target as HTMLImageElement).parentElement; if (wrap) wrap.style.display = "none"; }}
+              onError={(e) => {
+                const wrap = (e.target as HTMLImageElement).parentElement;
+                if (wrap) wrap.style.display = "none";
+              }}
             />
           </div>
         ) : null}
@@ -363,22 +425,39 @@ export default function HomePage(): React.ReactNode {
             {read ? <span className="article-read">已读</span> : null}
           </div>
           <h3 className="article-headline hero-headline">
-            <a href={articleUrl} target="_blank" rel="noreferrer noopener" onClick={() => markArticleRead(articleId)}>
+            <a
+              href={articleUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={() => markArticleRead(articleId)}
+            >
               {item.title || "无标题"}
             </a>
           </h3>
-          {item.summary ? <p className="article-dek hero-dek">{item.summary}</p> : null}
+          {item.summary ? (
+            <p className="article-dek hero-dek">{item.summary}</p>
+          ) : null}
           {renderTags(item.tag_groups)}
           <div className="article-actions">
             {renderHeartButton(articleId, item)}
-            <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
+            <button
+              type="button"
+              className="article-cta"
+              onClick={() => handleOpenSummary(item)}
+            >
+              AI 总结
+            </button>
           </div>
         </div>
       </article>
     );
   }
 
-  function renderNumberedArticle(item: ArchiveArticleSummary, index: number, options: { compact?: boolean } = {}): React.ReactNode {
+  function renderNumberedArticle(
+    item: ArchiveArticleSummary,
+    index: number,
+    options: { compact?: boolean } = {},
+  ): React.ReactNode {
     const articleId = String(item.article_id || "").trim();
     const read = readSet.has(articleId);
     const articleUrl = item.original_url || item.url;
@@ -399,7 +478,12 @@ export default function HomePage(): React.ReactNode {
             {read ? <span className="article-read">已读</span> : null}
           </div>
           <h3 className="article-headline">
-            <a href={articleUrl} target="_blank" rel="noreferrer noopener" onClick={() => markArticleRead(articleId)}>
+            <a
+              href={articleUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={() => markArticleRead(articleId)}
+            >
               {item.title || "无标题"}
             </a>
           </h3>
@@ -409,7 +493,13 @@ export default function HomePage(): React.ReactNode {
         <div className="article-right-col">
           <div className="article-actions">
             {renderHeartButton(articleId, item)}
-            <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
+            <button
+              type="button"
+              className="article-cta"
+              onClick={() => handleOpenSummary(item)}
+            >
+              AI 总结
+            </button>
           </div>
         </div>
       </article>
@@ -435,14 +525,24 @@ export default function HomePage(): React.ReactNode {
             <div className="editorial-byline">
               {editorial.edition ? (
                 <span className="editorial-edition-label">
-                  {{ morning: "晨报", noon: "午报", evening: "晚报" }[editorial.edition]}
+                  {
+                    { morning: "晨报", noon: "午报", evening: "晚报" }[
+                      editorial.edition
+                    ]
+                  }
                 </span>
               ) : null}
               <span className="editorial-byline-label">主编</span>
-              <span className="editorial-editor-name">{editorial.editor_name}</span>
-              <span className="editorial-editor-title">{editorial.editor_title}</span>
+              <span className="editorial-editor-name">
+                {editorial.editor_name}
+              </span>
+              <span className="editorial-editor-title">
+                {editorial.editor_title}
+              </span>
             </div>
-            <h1 className="page-title newsletter-title">{editorial.headline}</h1>
+            <h1 className="page-title newsletter-title">
+              {editorial.headline}
+            </h1>
             <div className="editorial-body">
               {editorial.body_paragraphs.map((p, i) => (
                 <p key={i}>{p}</p>
@@ -451,7 +551,9 @@ export default function HomePage(): React.ReactNode {
             {editorial.tags.length > 0 ? (
               <div className="editorial-tags">
                 {editorial.tags.map((tag) => (
-                  <span key={tag} className="editorial-tag">#{tag}</span>
+                  <span key={tag} className="editorial-tag">
+                    #{tag}
+                  </span>
                 ))}
               </div>
             ) : null}
@@ -465,7 +567,9 @@ export default function HomePage(): React.ReactNode {
         </p>
       </div>
 
-      {authError ? <div className="error-banner auth-error-banner">{authError}</div> : null}
+      {authError ? (
+        <div className="error-banner auth-error-banner">{authError}</div>
+      ) : null}
       {error ? <div className="error-banner">{error}</div> : null}
 
       {/* ── Today's Picks ── */}
@@ -474,7 +578,12 @@ export default function HomePage(): React.ReactNode {
           <h2>今日精选</h2>
           <span className="block-head-actions">
             {authUser ? (
-              <button className="pick-submit-btn" onClick={() => window.dispatchEvent(new CustomEvent("url-submit-open"))}>
+              <button
+                className="pick-submit-btn"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("url-submit-open"))
+                }
+              >
                 + 收录文章
               </button>
             ) : null}
@@ -486,7 +595,9 @@ export default function HomePage(): React.ReactNode {
           {todayItems.length ? (
             <>
               {renderHeroArticle(todayItems[0])}
-              {todayItems.slice(1).map((item, i) => renderNumberedArticle(item, i + 1))}
+              {todayItems
+                .slice(1)
+                .map((item, i) => renderNumberedArticle(item, i + 1))}
             </>
           ) : (
             <p className="empty-note">今日暂无文章。</p>
@@ -497,10 +608,18 @@ export default function HomePage(): React.ReactNode {
             <button
               type="button"
               className="load-more-btn"
-              onClick={() => setLimitPerDay((prev) => Math.min(LIMIT_PER_DAY_MAX, prev + TODAY_PAGE_SIZE))}
+              onClick={() =>
+                setLimitPerDay((prev) =>
+                  Math.min(LIMIT_PER_DAY_MAX, prev + TODAY_PAGE_SIZE),
+                )
+              }
               disabled={!hasMoreTodayItems || loading}
             >
-              {loading ? "加载中..." : hasMoreTodayItems ? "查看更多" : "没有更多精选文章"}
+              {loading
+                ? "加载中..."
+                : hasMoreTodayItems
+                  ? "查看更多"
+                  : "没有更多精选文章"}
             </button>
           </div>
         ) : null}
@@ -516,13 +635,19 @@ export default function HomePage(): React.ReactNode {
         <div className="archive-days">
           {historyGroups.length ? (
             historyGroups.map((group, idx) => (
-              <details key={group.date} className="archive-day" open={idx === 0}>
+              <details
+                key={group.date}
+                className="archive-day"
+                open={idx === 0}
+              >
                 <summary className="archive-day-summary">
                   <span className="archive-date">{group.date}</span>
                   <span className="archive-count">{group.items.length} 篇</span>
                 </summary>
                 <div className="archive-day-items">
-                  {group.items.map((item, i) => renderNumberedArticle(item, i, { compact: true }))}
+                  {group.items.map((item, i) =>
+                    renderNumberedArticle(item, i, { compact: true }),
+                  )}
                 </div>
               </details>
             ))
@@ -540,14 +665,18 @@ export default function HomePage(): React.ReactNode {
 
       {/* ── Summary Drawer ── */}
       <SummaryDrawer
-        article={summaryArticle ? {
-          article_id: summaryArticle.article_id,
-          title: summaryArticle.title,
-          url: summaryArticle.url,
-          original_url: summaryArticle.original_url,
-          source_host: summaryArticle.source_host,
-          generated_at: summaryArticle.generated_at,
-        } : null}
+        article={
+          summaryArticle
+            ? {
+                article_id: summaryArticle.article_id,
+                title: summaryArticle.title,
+                url: summaryArticle.url,
+                original_url: summaryArticle.original_url,
+                source_host: summaryArticle.source_host,
+                generated_at: summaryArticle.generated_at,
+              }
+            : null
+        }
         open={summaryDrawerOpen}
         onClose={() => {
           setSummaryDrawerOpen(false);
@@ -559,7 +688,6 @@ export default function HomePage(): React.ReactNode {
           }
         }}
       />
-
     </>
   );
 }

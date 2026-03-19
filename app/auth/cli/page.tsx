@@ -63,22 +63,39 @@ export default function CLIAuthPage() {
     }
 
     void authorize();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+      }}
+    >
       <div style={{ textAlign: "center", maxWidth: 360, padding: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 650, marginBottom: 12 }}>AI News CLI</h1>
-        <p style={{ color: "var(--muted)", fontSize: 14, marginBottom: 16 }}>{message}</p>
+        <h1 style={{ fontSize: 24, fontWeight: 650, marginBottom: 12 }}>
+          AI News CLI
+        </h1>
+        <p style={{ color: "var(--muted)", fontSize: 14, marginBottom: 16 }}>
+          {message}
+        </p>
         {status === "authorizing" && (
           <p style={{ fontSize: 13, color: "var(--muted)" }}>请稍候...</p>
         )}
         {status === "success" && (
-          <p style={{ fontSize: 13, color: "#16a34a" }}>已完成，可安全关闭此窗口。</p>
+          <p style={{ fontSize: 13, color: "#16a34a" }}>
+            已完成，可安全关闭此窗口。
+          </p>
         )}
         {status === "error" && (
-          <p style={{ fontSize: 13, color: "#dc2626" }}>请在终端运行 `ai-news login` 重试。</p>
+          <p style={{ fontSize: 13, color: "#dc2626" }}>
+            请在终端运行 `ai-news login` 重试。
+          </p>
         )}
       </div>
     </div>

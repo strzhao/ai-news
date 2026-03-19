@@ -5,7 +5,9 @@ import { jsonResponse } from "@/lib/infra/route-utils";
 export const runtime = "nodejs";
 
 function articleDbBaseUrl(): string {
-  return String(process.env.ARTICLE_DB_BASE_URL || "").trim().replace(/\/$/, "");
+  return String(process.env.ARTICLE_DB_BASE_URL || "")
+    .trim()
+    .replace(/\/$/, "");
 }
 
 function articleDbAuthHeaders(): HeadersInit {
@@ -41,6 +43,13 @@ export async function GET(request: Request): Promise<Response> {
 
     return jsonResponse(200, result as Record<string, unknown>, true);
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) }, true);
+    return jsonResponse(
+      500,
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      true,
+    );
   }
 }

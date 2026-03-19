@@ -50,7 +50,10 @@ function absolutizeUrl(raw: string, baseUrl: string): string {
   }
 }
 
-export function extractFirstImageUrlFromHtml(html: string, pageUrl: string): string {
+export function extractFirstImageUrlFromHtml(
+  html: string,
+  pageUrl: string,
+): string {
   const source = String(html || "");
   const base = String(pageUrl || "").trim();
   if (!source || !base) {
@@ -64,13 +67,17 @@ export function extractFirstImageUrlFromHtml(html: string, pageUrl: string): str
     metaTags.push(parseTagAttributes(match[0]));
   }
 
-  const ogImage = metaTags.find((tag) => tag.property?.toLowerCase() === "og:image")?.content || "";
+  const ogImage =
+    metaTags.find((tag) => tag.property?.toLowerCase() === "og:image")
+      ?.content || "";
   const ogResolved = absolutizeUrl(ogImage, base);
   if (ogResolved) {
     return ogResolved;
   }
 
-  const twitterImage = metaTags.find((tag) => tag.name?.toLowerCase() === "twitter:image")?.content || "";
+  const twitterImage =
+    metaTags.find((tag) => tag.name?.toLowerCase() === "twitter:image")
+      ?.content || "";
   const twitterResolved = absolutizeUrl(twitterImage, base);
   if (twitterResolved) {
     return twitterResolved;
@@ -92,7 +99,10 @@ export function clearArticleImageCache(): void {
   imageCache.clear();
 }
 
-export async function resolveFirstImageUrl(rawUrl: string, options: ResolveFirstImageOptions = {}): Promise<string> {
+export async function resolveFirstImageUrl(
+  rawUrl: string,
+  options: ResolveFirstImageOptions = {},
+): Promise<string> {
   const pageUrl = normalizedCacheKey(rawUrl);
   if (!pageUrl) {
     return "";
@@ -103,8 +113,14 @@ export async function resolveFirstImageUrl(rawUrl: string, options: ResolveFirst
     return cached === NO_IMAGE_SENTINEL ? "" : cached;
   }
 
-  const timeoutMs = Math.max(300, Number(options.timeoutMs || DEFAULT_TIMEOUT_MS));
-  const maxHtmlBytes = Math.max(1_024, Number(options.maxHtmlBytes || DEFAULT_MAX_HTML_BYTES));
+  const timeoutMs = Math.max(
+    300,
+    Number(options.timeoutMs || DEFAULT_TIMEOUT_MS),
+  );
+  const maxHtmlBytes = Math.max(
+    1_024,
+    Number(options.maxHtmlBytes || DEFAULT_MAX_HTML_BYTES),
+  );
   const fetchImpl = options.fetchImpl || fetch;
 
   const controller = new AbortController();
@@ -125,14 +141,21 @@ export async function resolveFirstImageUrl(rawUrl: string, options: ResolveFirst
       return "";
     }
 
-    const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-    if (contentType && !contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
+    const contentType = String(
+      response.headers.get("content-type") || "",
+    ).toLowerCase();
+    if (
+      contentType &&
+      !contentType.includes("text/html") &&
+      !contentType.includes("application/xhtml+xml")
+    ) {
       imageCache.set(pageUrl, NO_IMAGE_SENTINEL, { ttl: NEGATIVE_TTL_MS });
       return "";
     }
 
     const rawHtml = await response.text();
-    const html = rawHtml.length > maxHtmlBytes ? rawHtml.slice(0, maxHtmlBytes) : rawHtml;
+    const html =
+      rawHtml.length > maxHtmlBytes ? rawHtml.slice(0, maxHtmlBytes) : rawHtml;
     const resolvedBase = String(response.url || pageUrl).trim() || pageUrl;
     const firstImage = extractFirstImageUrlFromHtml(html, resolvedBase);
 

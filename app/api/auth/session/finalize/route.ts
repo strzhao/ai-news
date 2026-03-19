@@ -52,13 +52,18 @@ export async function POST(request: Request): Promise<Response> {
   const body = await parseBody(request);
   const state = String(body.state || "").trim();
   if (!state) {
-    return noStore(NextResponse.json({ ok: false, error: "invalid_input" }, { status: 400 }));
+    return noStore(
+      NextResponse.json({ ok: false, error: "invalid_input" }, { status: 400 }),
+    );
   }
 
   const authStateCookie = readAuthStateCookie(request);
   const authState = verifyAuthStateCookieValue(authStateCookie, state);
   if (!authState) {
-    const response = NextResponse.json({ ok: false, error: "invalid_state" }, { status: 400 });
+    const response = NextResponse.json(
+      { ok: false, error: "invalid_state" },
+      { status: 400 },
+    );
     clearAuthStateCookie(response);
     return noStore(response);
   }
@@ -68,7 +73,11 @@ export async function POST(request: Request): Promise<Response> {
     console.warn("[finalize] missing access_token cookie");
     return noStore(
       NextResponse.json(
-        { ok: false, error: "missing_access_token", message: "missing_access_token_cookie" },
+        {
+          ok: false,
+          error: "missing_access_token",
+          message: "missing_access_token_cookie",
+        },
         { status: 401 },
       ),
     );
@@ -80,14 +89,20 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     console.warn("[finalize] invalid access_token, could not resolve user");
     return noStore(
-      NextResponse.json({ ok: false, error: "invalid_access_token" }, { status: 401 }),
+      NextResponse.json(
+        { ok: false, error: "invalid_access_token" },
+        { status: 401 },
+      ),
     );
   }
 
   if (!user || !user.sub || !user.email) {
     console.warn("[finalize] invalid user payload from access_token");
     return noStore(
-      NextResponse.json({ ok: false, error: "invalid_access_token" }, { status: 401 }),
+      NextResponse.json(
+        { ok: false, error: "invalid_access_token" },
+        { status: 401 },
+      ),
     );
   }
 
@@ -102,6 +117,9 @@ export async function POST(request: Request): Promise<Response> {
     { status: 200 },
   );
   clearAuthStateCookie(response);
-  applyGatewaySessionCookie(response, createGatewaySessionCookieValue(user.sub, user.email));
+  applyGatewaySessionCookie(
+    response,
+    createGatewaySessionCookieValue(user.sub, user.email),
+  );
   return noStore(response);
 }

@@ -1,4 +1,4 @@
-import { Article, DedupeStats } from "@/lib/domain/models";
+import type { Article, DedupeStats } from "@/lib/domain/models";
 
 const TRACKING_PARAM_PREFIXES = ["utm_", "spm", "fbclid", "gclid", "ref"];
 const NON_ALNUM_RE = /[^a-z0-9]+/g;
@@ -8,7 +8,11 @@ export function normalizeUrl(url: string): string {
     const parsed = new URL(String(url || "").trim());
     const kept: Array<[string, string]> = [];
     parsed.searchParams.forEach((value, key) => {
-      if (TRACKING_PARAM_PREFIXES.some((prefix) => key.toLowerCase().startsWith(prefix))) {
+      if (
+        TRACKING_PARAM_PREFIXES.some((prefix) =>
+          key.toLowerCase().startsWith(prefix),
+        )
+      ) {
         return;
       }
       kept.push([key, value]);
@@ -26,7 +30,10 @@ export function normalizeUrl(url: string): string {
 }
 
 function normalizedTitle(title: string): string {
-  return String(title || "").toLowerCase().replace(NON_ALNUM_RE, " ").trim();
+  return String(title || "")
+    .toLowerCase()
+    .replace(NON_ALNUM_RE, " ")
+    .trim();
 }
 
 function levenshteinRatio(a: string, b: string): number {

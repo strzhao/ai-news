@@ -17,9 +17,28 @@ const manifest = {
       method: "GET",
       path: "/api/archive_articles",
       params: [
-        { name: "days", in: "query", type: "number", required: false, description: "Number of days to fetch (1-180, default 30)" },
-        { name: "limit_per_day", in: "query", type: "number", required: false, description: "Max articles per day (1-200, default 10)" },
-        { name: "quality_tier", in: "query", type: "string", enum: ["high", "general", "all"], required: false, description: "Quality filter [high|general|all]" },
+        {
+          name: "days",
+          in: "query",
+          type: "number",
+          required: false,
+          description: "Number of days to fetch (1-180, default 30)",
+        },
+        {
+          name: "limit_per_day",
+          in: "query",
+          type: "number",
+          required: false,
+          description: "Max articles per day (1-200, default 10)",
+        },
+        {
+          name: "quality_tier",
+          in: "query",
+          type: "string",
+          enum: ["high", "general", "all"],
+          required: false,
+          description: "Quality filter [high|general|all]",
+        },
       ],
     },
     {
@@ -29,7 +48,13 @@ const manifest = {
       method: "GET",
       path: "/api/article_summary/:article_id",
       params: [
-        { name: "article_id", in: "path", type: "string", required: true, description: "Article ID" },
+        {
+          name: "article_id",
+          in: "path",
+          type: "string",
+          required: true,
+          description: "Article ID",
+        },
       ],
     },
     {
@@ -39,7 +64,13 @@ const manifest = {
       method: "POST",
       path: "/api/v1/analyze-url",
       params: [
-        { name: "url", in: "body", type: "string", required: true, description: "URL to analyze" },
+        {
+          name: "url",
+          in: "body",
+          type: "string",
+          required: true,
+          description: "URL to analyze",
+        },
       ],
     },
     {
@@ -49,7 +80,13 @@ const manifest = {
       method: "GET",
       path: "/api/v1/analyze-url",
       params: [
-        { name: "task_id", in: "query", type: "string", required: true, description: "Task ID to check" },
+        {
+          name: "task_id",
+          in: "query",
+          type: "string",
+          required: true,
+          description: "Task ID to check",
+        },
       ],
     },
     {
@@ -75,7 +112,13 @@ const manifest = {
       method: "POST",
       path: "/api/v1/flomo/config",
       params: [
-        { name: "webhook_url", in: "body", type: "string", required: true, description: "Flomo webhook URL (must be HTTPS)" },
+        {
+          name: "webhook_url",
+          in: "body",
+          type: "string",
+          required: true,
+          description: "Flomo webhook URL (must be HTTPS)",
+        },
       ],
     },
     {
@@ -85,7 +128,13 @@ const manifest = {
       method: "GET",
       path: "/api/v1/flomo/push-log",
       params: [
-        { name: "limit", in: "query", type: "number", required: false, description: "Number of entries (1-50, default 20)" },
+        {
+          name: "limit",
+          in: "query",
+          type: "number",
+          required: false,
+          description: "Number of entries (1-50, default 20)",
+        },
       ],
     },
     {
@@ -95,7 +144,13 @@ const manifest = {
       method: "GET",
       path: "/api/v1/flomo/click-stats",
       params: [
-        { name: "days", in: "query", type: "number", required: false, description: "Number of days (1-120, default 30)" },
+        {
+          name: "days",
+          in: "query",
+          type: "number",
+          required: false,
+          description: "Number of days (1-120, default 30)",
+        },
       ],
     },
     {
@@ -105,7 +160,13 @@ const manifest = {
       method: "GET",
       path: "/api/stats/sources",
       params: [
-        { name: "days", in: "query", type: "number", required: false, description: "Number of days (1-120, default 90)" },
+        {
+          name: "days",
+          in: "query",
+          type: "number",
+          required: false,
+          description: "Number of days (1-120, default 90)",
+        },
       ],
     },
     {
@@ -115,7 +176,13 @@ const manifest = {
       method: "GET",
       path: "/api/stats/types",
       params: [
-        { name: "days", in: "query", type: "number", required: false, description: "Number of days (1-120, default 90)" },
+        {
+          name: "days",
+          in: "query",
+          type: "number",
+          required: false,
+          description: "Number of days (1-120, default 90)",
+        },
       ],
     },
   ],

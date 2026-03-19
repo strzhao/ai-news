@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
-import { buildUpstashClient, buildUpstashClientOrNone } from "@/lib/domain/tracker-common";
+import {
+  buildUpstashClient,
+  buildUpstashClientOrNone,
+} from "@/lib/domain/tracker-common";
 
 function unwrapPipelineResult(item: unknown): unknown {
   if (item && typeof item === "object" && "result" in item) {
@@ -24,7 +27,9 @@ function parseHashPayload(raw: unknown): Record<string, string> {
   }
   if (typeof payload === "object") {
     const result: Record<string, string> = {};
-    for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      payload as Record<string, unknown>,
+    )) {
       const normalized = String(key).trim();
       if (!normalized) continue;
       result[normalized] = String(value ?? "");
@@ -61,15 +66,25 @@ function dateScore(reportDate: string): number {
 }
 
 function preview(text: string, maxChars = 140): string {
-  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  const normalized = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!normalized) return "";
   if (normalized.length <= maxChars) return normalized;
   return `${normalized.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
 }
 
-export function buildDigestId(reportDate: string, generatedAt: string, markdown: string): string {
+export function buildDigestId(
+  reportDate: string,
+  generatedAt: string,
+  markdown: string,
+): string {
   const epochMs = isoToEpochMs(generatedAt);
-  const digestHash = crypto.createHash("sha256").update(String(markdown || "")).digest("hex").slice(0, 8);
+  const digestHash = crypto
+    .createHash("sha256")
+    .update(String(markdown || ""))
+    .digest("hex")
+    .slice(0, 8);
   return `${reportDate}_${epochMs}_${digestHash}`;
 }
 
@@ -94,8 +109,16 @@ export async function saveDigestArchive(params: {
     summary_preview: preview(params.summaryPreview, 180),
     markdown: params.markdown,
   });
-  await upstash.zadd(dateKey, isoToEpochMs(params.generatedAt), params.digestId);
-  await upstash.zadd("digest:dates", dateScore(params.reportDate), params.reportDate);
+  await upstash.zadd(
+    dateKey,
+    isoToEpochMs(params.generatedAt),
+    params.digestId,
+  );
+  await upstash.zadd(
+    "digest:dates",
+    dateScore(params.reportDate),
+    params.reportDate,
+  );
 }
 
 export async function saveAnalysisArchive(params: {
@@ -107,8 +130,12 @@ export async function saveAnalysisArchive(params: {
 }): Promise<void> {
   const upstash = buildUpstashClient();
   const analysisKey = `digest:analysis:${params.digestId}`;
-  const improvement = params.analysisJson.improvement_actions as Record<string, unknown> | undefined;
-  const previewSource = String(improvement?.ai_summary || params.analysisMarkdown || "");
+  const improvement = params.analysisJson.improvement_actions as
+    | Record<string, unknown>
+    | undefined;
+  const previewSource = String(
+    improvement?.ai_summary || params.analysisMarkdown || "",
+  );
   await upstash.hset(analysisKey, {
     digest_id: params.digestId,
     date: params.reportDate,
@@ -119,7 +146,10 @@ export async function saveAnalysisArchive(params: {
   });
 }
 
-export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<Record<string, unknown>>> {
+export async function listArchives(
+  days = 30,
+  limitPerDay = 10,
+): Promise<Array<Record<string, unknown>>> {
   const boundedDays = Math.max(1, Math.min(Math.trunc(days), 180));
   const boundedLimit = Math.max(1, Math.min(Math.trunc(limitPerDay), 200));
   const upstash = buildUpstashClientOrNone();
@@ -127,13 +157,20 @@ export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<R
     return [];
   }
 
-  const dateRows = await upstash.pipeline([["ZREVRANGE", "digest:dates", 0, boundedDays - 1]]);
+  const dateRows = await upstash.pipeline([
+    ["ZREVRANGE", "digest:dates", 0, boundedDays - 1],
+  ]);
   const dates = parseListPayload(dateRows[0]);
   if (!dates.length) {
     return [];
   }
 
-  const idCommands: Array<Array<string | number>> = dates.map((date) => ["ZREVRANGE", `digest:date:${date}`, 0, boundedLimit - 1]);
+  const idCommands: Array<Array<string | number>> = dates.map((date) => [
+    "ZREVRANGE",
+    `digest:date:${date}`,
+    0,
+    boundedLimit - 1,
+  ]);
   const idRows = await upstash.pipeline(idCommands);
 
   const allDigestIds: string[] = [];
@@ -148,8 +185,12 @@ export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<R
     return [];
   }
 
-  const entryRows = await upstash.pipeline(allDigestIds.map((digestId) => ["HGETALL", `digest:entry:${digestId}`]));
-  const analysisRows = await upstash.pipeline(allDigestIds.map((digestId) => ["HGETALL", `digest:analysis:${digestId}`]));
+  const entryRows = await upstash.pipeline(
+    allDigestIds.map((digestId) => ["HGETALL", `digest:entry:${digestId}`]),
+  );
+  const analysisRows = await upstash.pipeline(
+    allDigestIds.map((digestId) => ["HGETALL", `digest:analysis:${digestId}`]),
+  );
 
   const entries: Record<string, Record<string, string>> = {};
   const analysisEntries: Record<string, Record<string, string>> = {};
@@ -168,15 +209,20 @@ export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<R
       const row = entries[digestId];
       if (!row) continue;
       const highlightCount = Number(row.highlight_count || 0);
-      const hasHighlights = ["1", "true", "yes", "on"].includes(String(row.has_highlights || "").toLowerCase());
+      const hasHighlights = ["1", "true", "yes", "on"].includes(
+        String(row.has_highlights || "").toLowerCase(),
+      );
       items.push({
         digest_id: digestId,
         date: row.date || date,
         generated_at: row.generated_at || "",
-        highlight_count: Number.isFinite(highlightCount) ? Math.trunc(highlightCount) : 0,
+        highlight_count: Number.isFinite(highlightCount)
+          ? Math.trunc(highlightCount)
+          : 0,
         has_highlights: hasHighlights,
         summary_preview: row.summary_preview || "",
-        analysis_preview: (analysisEntries[digestId] || {}).analysis_preview || "",
+        analysis_preview:
+          (analysisEntries[digestId] || {}).analysis_preview || "",
       });
     }
     if (items.length) {
@@ -187,7 +233,9 @@ export async function listArchives(days = 30, limitPerDay = 10): Promise<Array<R
   return groups;
 }
 
-export async function getArchiveMarkdownMap(digestIds: string[]): Promise<Record<string, string>> {
+export async function getArchiveMarkdownMap(
+  digestIds: string[],
+): Promise<Record<string, string>> {
   const normalizedIds = Array.from(
     new Set(
       digestIds
@@ -204,7 +252,11 @@ export async function getArchiveMarkdownMap(digestIds: string[]): Promise<Record
     return {};
   }
 
-  const commands: Array<Array<string>> = normalizedIds.map((digestId) => ["HGET", `digest:entry:${digestId}`, "markdown"]);
+  const commands: Array<Array<string>> = normalizedIds.map((digestId) => [
+    "HGET",
+    `digest:entry:${digestId}`,
+    "markdown",
+  ]);
   const rows = await upstash.pipeline(commands);
 
   const markdownMap: Record<string, string> = {};

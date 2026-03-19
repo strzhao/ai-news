@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 /**
  * Acceptance tests for hearts page SummaryDrawer integration.
@@ -36,18 +36,10 @@ function directoryContainsString(dir: string, needle: string): boolean {
 }
 
 /** All candidate directories where the hearts page might live */
-const HEARTS_DIRS = [
-  "app/hearts",
-  "app/(main)/hearts",
-  "app/(routes)/hearts",
-];
+const HEARTS_DIRS = ["app/hearts", "app/(main)/hearts", "app/(routes)/hearts"];
 
 /** All candidate directories where the homepage might live */
-const HOMEPAGE_DIRS = [
-  "app",
-  "app/(main)",
-  "app/(routes)",
-];
+const HOMEPAGE_DIRS = ["app", "app/(main)", "app/(routes)"];
 
 /* ------------------------------------------------------------------ */
 /*  Requirement 2 & 3: Hearts page imports SummaryDrawer               */
@@ -84,7 +76,9 @@ describe("Homepage – SummaryDrawer integration preserved", () => {
         // Only check page files in homepage dirs (not all components)
         if (
           (file === "page.tsx" || file === "page.ts") &&
-          readFileSync(resolve(fullDir, file), "utf-8").includes("SummaryDrawer")
+          readFileSync(resolve(fullDir, file), "utf-8").includes(
+            "SummaryDrawer",
+          )
         ) {
           found = true;
           break;

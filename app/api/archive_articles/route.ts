@@ -4,7 +4,12 @@ import { jsonResponse } from "@/lib/infra/route-utils";
 export const runtime = "nodejs";
 export const preferredRegion = ["sin1"];
 
-function boundedInt(raw: string | null, fallback: number, min: number, max: number): number {
+function boundedInt(
+  raw: string | null,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
   const parsed = Number.parseInt(String(raw || fallback), 10);
   if (!Number.isFinite(parsed)) {
     return fallback;
@@ -12,7 +17,11 @@ function boundedInt(raw: string | null, fallback: number, min: number, max: numb
   return Math.max(min, Math.min(parsed, max));
 }
 
-function boundedIntAllowZero(raw: string | null, fallback: number, max: number): number {
+function boundedIntAllowZero(
+  raw: string | null,
+  fallback: number,
+  max: number,
+): number {
   const parsed = Number.parseInt(String(raw || fallback), 10);
   if (!Number.isFinite(parsed)) {
     return fallback;
@@ -24,8 +33,11 @@ function boundedIntAllowZero(raw: string | null, fallback: number, max: number):
 }
 
 function normalizeQualityTier(raw: string | null): "high" | "general" | "all" {
-  const value = String(raw || "").trim().toLowerCase();
-  if (["general", "normal", "common", "non_high"].includes(value)) return "general";
+  const value = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (["general", "normal", "common", "non_high"].includes(value))
+    return "general";
   if (["all", "any"].includes(value)) return "all";
   return "high";
 }
@@ -33,10 +45,16 @@ function normalizeQualityTier(raw: string | null): "high" | "general" | "all" {
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
 
-  const days = boundedInt(url.searchParams.get("days"), Number.parseInt(process.env.ARCHIVE_DEFAULT_DAYS || "30", 10) || 30, 1, 180);
+  const days = boundedInt(
+    url.searchParams.get("days"),
+    Number.parseInt(process.env.ARCHIVE_DEFAULT_DAYS || "30", 10) || 30,
+    1,
+    180,
+  );
   const limitPerDay = boundedInt(
     url.searchParams.get("limit_per_day"),
-    Number.parseInt(process.env.ARCHIVE_DEFAULT_LIMIT_PER_DAY || "10", 10) || 10,
+    Number.parseInt(process.env.ARCHIVE_DEFAULT_LIMIT_PER_DAY || "10", 10) ||
+      10,
     1,
     200,
   );
@@ -51,7 +69,9 @@ export async function GET(request: Request): Promise<Response> {
     0,
     100,
   );
-  const qualityTier = normalizeQualityTier(url.searchParams.get("quality_tier"));
+  const qualityTier = normalizeQualityTier(
+    url.searchParams.get("quality_tier"),
+  );
 
   try {
     const probeLimitPerDay = Math.min(200, limitPerDay + 1);
@@ -71,7 +91,10 @@ export async function GET(request: Request): Promise<Response> {
         items: items.slice(0, limitPerDay),
       };
     });
-    const totalArticles = groups.reduce((sum, group) => sum + group.items.length, 0);
+    const totalArticles = groups.reduce(
+      (sum, group) => sum + group.items.length,
+      0,
+    );
 
     return jsonResponse(
       200,
@@ -90,6 +113,13 @@ export async function GET(request: Request): Promise<Response> {
       true,
     );
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) }, true);
+    return jsonResponse(
+      500,
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      true,
+    );
   }
 }

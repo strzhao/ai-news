@@ -44,7 +44,8 @@ vi.mock("@/lib/infra/upstash", () => {
   return {
     buildUpstashClient: () => ({
       zadd: (...args: unknown[]) => zaddMock(...args),
-      zrevrangeWithScores: (...args: unknown[]) => zrevrangeWithScoresMock(...args),
+      zrevrangeWithScores: (...args: unknown[]) =>
+        zrevrangeWithScoresMock(...args),
       hset: (...args: unknown[]) => hsetMock(...args),
       hgetall: (...args: unknown[]) => hgetallMock(...args),
       expire: (...args: unknown[]) => expireMock(...args),
@@ -53,7 +54,7 @@ vi.mock("@/lib/infra/upstash", () => {
   };
 });
 
-import { POST, GET } from "@/app/api/v1/user-picks/route";
+import { GET, POST } from "@/app/api/v1/user-picks/route";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -93,7 +94,10 @@ const REQUIRED_ITEM_FIELDS = [
 ] as const;
 
 function authenticatedUser(id = "usr_contract") {
-  resolveUserMock.mockResolvedValue({ ok: true, user: { id, email: "u@example.com" } });
+  resolveUserMock.mockResolvedValue({
+    ok: true,
+    user: { id, email: "u@example.com" },
+  });
 }
 
 function unauthenticated() {
@@ -130,7 +134,9 @@ describe("user-picks API contract (design-doc acceptance)", () => {
       ]);
       hgetallMock.mockResolvedValue({ ...FULL_PICK });
 
-      const response = await GET(new Request("https://example.com/api/v1/user-picks"));
+      const response = await GET(
+        new Request("https://example.com/api/v1/user-picks"),
+      );
       const payload = (await response.json()) as {
         ok: boolean;
         items: Array<Record<string, unknown>>;
@@ -153,7 +159,9 @@ describe("user-picks API contract (design-doc acceptance)", () => {
       authenticatedUser();
       zrevrangeWithScoresMock.mockResolvedValue([]);
 
-      const response = await GET(new Request("https://example.com/api/v1/user-picks"));
+      const response = await GET(
+        new Request("https://example.com/api/v1/user-picks"),
+      );
       const payload = (await response.json()) as {
         ok: boolean;
         items: Array<Record<string, unknown>>;
@@ -169,7 +177,9 @@ describe("user-picks API contract (design-doc acceptance)", () => {
       authenticatedUser();
       zrevrangeWithScoresMock.mockResolvedValue([]);
 
-      const response = await GET(new Request("https://example.com/api/v1/user-picks"));
+      const response = await GET(
+        new Request("https://example.com/api/v1/user-picks"),
+      );
       const payload = await response.json();
 
       expect(payload).toHaveProperty("ok");
@@ -201,7 +211,8 @@ describe("user-picks API contract (design-doc acceptance)", () => {
       const hsetCalls = hsetMock.mock.calls;
       const userPicksMetaCall = hsetCalls.find(
         (call: unknown[]) =>
-          typeof call[0] === "string" && (call[0] as string).includes("user_picks:meta"),
+          typeof call[0] === "string" &&
+          (call[0] as string).includes("user_picks:meta"),
       );
       expect(userPicksMetaCall).toBeDefined();
 

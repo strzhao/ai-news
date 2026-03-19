@@ -1,4 +1,8 @@
-import { DailyDigest, ScoredArticle, WORTH_MUST_READ } from "@/lib/domain/models";
+import {
+  type DailyDigest,
+  type ScoredArticle,
+  WORTH_MUST_READ,
+} from "@/lib/domain/models";
 
 export function renderDigestMarkdown(
   digest: DailyDigest,
@@ -19,7 +23,9 @@ export function renderDigestMarkdown(
   digest.highlights.forEach((taggedArticle, index) => {
     const article = taggedArticle.article;
     const marker = article.worth === WORTH_MUST_READ ? "⭐ " : "";
-    lines.push(`### ${index + 1}. ${marker}[${article.title}](${resolver(article)})`);
+    lines.push(
+      `### ${index + 1}. ${marker}[${article.title}](${resolver(article)})`,
+    );
     lines.push(`- ${article.leadParagraph}`);
   });
 
@@ -27,7 +33,9 @@ export function renderDigestMarkdown(
     lines.push("## 其他可关注");
     digest.extras.forEach((taggedArticle) => {
       const article = taggedArticle.article;
-      lines.push(`- [${article.title}](${resolver(article)})（${article.worth}）`);
+      lines.push(
+        `- [${article.title}](${resolver(article)})（${article.worth}）`,
+      );
     });
     lines.push("");
   }

@@ -51,11 +51,15 @@ export class UpstashClient {
   }
 
   async hincrby(key: string, field: string, increment = 1): Promise<void> {
-    await this.call(`/hincrby/${encodeSegment(key)}/${encodeSegment(field)}/${toInt(increment, 1)}`);
+    await this.call(
+      `/hincrby/${encodeSegment(key)}/${encodeSegment(field)}/${toInt(increment, 1)}`,
+    );
   }
 
   async expire(key: string, ttlSeconds = DEFAULT_TTL_SECONDS): Promise<void> {
-    await this.call(`/expire/${encodeSegment(key)}/${toInt(ttlSeconds, DEFAULT_TTL_SECONDS)}`);
+    await this.call(
+      `/expire/${encodeSegment(key)}/${toInt(ttlSeconds, DEFAULT_TTL_SECONDS)}`,
+    );
   }
 
   async pipeline(commands: Array<Array<string | number>>): Promise<unknown[]> {
@@ -74,7 +78,10 @@ export class UpstashClient {
     return unwrapPipelineResult(responses[0]);
   }
 
-  async hset(key: string, mapping: Record<string, string | number | boolean>): Promise<number> {
+  async hset(
+    key: string,
+    mapping: Record<string, string | number | boolean>,
+  ): Promise<number> {
     const entries = Object.entries(mapping);
     if (!entries.length) {
       return 0;
@@ -105,7 +112,9 @@ export class UpstashClient {
     }
     if (typeof payload === "object") {
       const result: Record<string, string> = {};
-      for (const [field, value] of Object.entries(payload as Record<string, unknown>)) {
+      for (const [field, value] of Object.entries(
+        payload as Record<string, unknown>,
+      )) {
         const normalized = String(field).trim();
         if (!normalized) continue;
         result[normalized] = String(value ?? "");
@@ -141,12 +150,16 @@ export class UpstashClient {
   }
 
   async zadd(key: string, score: number, member: string): Promise<number> {
-    const responses = await this.pipeline([["ZADD", key, String(score), member]]);
+    const responses = await this.pipeline([
+      ["ZADD", key, String(score), member],
+    ]);
     return toInt(unwrapPipelineResult(responses[0]), 0);
   }
 
   async zrevrange(key: string, start: number, stop: number): Promise<string[]> {
-    const responses = await this.pipeline([["ZREVRANGE", key, Math.trunc(start), Math.trunc(stop)]]);
+    const responses = await this.pipeline([
+      ["ZREVRANGE", key, Math.trunc(start), Math.trunc(stop)],
+    ]);
     const payload = unwrapPipelineResult(responses[0]);
     if (!Array.isArray(payload)) {
       return [];
@@ -174,8 +187,14 @@ export class UpstashClient {
     return Number.isFinite(n) ? n : null;
   }
 
-  async zrevrangeWithScores(key: string, start: number, stop: number): Promise<Array<{ member: string; score: number }>> {
-    const responses = await this.pipeline([["ZREVRANGE", key, Math.trunc(start), Math.trunc(stop), "WITHSCORES"]]);
+  async zrevrangeWithScores(
+    key: string,
+    start: number,
+    stop: number,
+  ): Promise<Array<{ member: string; score: number }>> {
+    const responses = await this.pipeline([
+      ["ZREVRANGE", key, Math.trunc(start), Math.trunc(stop), "WITHSCORES"],
+    ]);
     const payload = unwrapPipelineResult(responses[0]);
     if (!Array.isArray(payload)) {
       return [];
@@ -193,11 +212,15 @@ export class UpstashClient {
 }
 
 export function resolveRedisRestUrl(): string {
-  return String(process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "").trim();
+  return String(
+    process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "",
+  ).trim();
 }
 
 export function resolveRedisRestToken(): string {
-  return String(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "").trim();
+  return String(
+    process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "",
+  ).trim();
 }
 
 export function buildUpstashClientOrNone(): UpstashClient | null {

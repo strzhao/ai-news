@@ -6,7 +6,8 @@ function ensureConfigured(): void {
   if (configured) return;
   const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
   const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
-  const subject = process.env.VAPID_SUBJECT?.trim() || "mailto:noreply@example.com";
+  const subject =
+    process.env.VAPID_SUBJECT?.trim() || "mailto:noreply@example.com";
   if (!publicKey || !privateKey) throw new Error("Missing VAPID keys");
   webPush.setVapidDetails(subject, publicKey, privateKey);
   configured = true;

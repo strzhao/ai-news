@@ -54,7 +54,11 @@ function TabBarItem({
   );
 }
 
-export default function AppShell({ children }: { children: React.ReactNode }): React.ReactNode {
+export default function AppShell({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.ReactNode {
   const pathname = usePathname();
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);

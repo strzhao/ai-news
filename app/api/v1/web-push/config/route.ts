@@ -1,7 +1,10 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClientOrNone } from "@/lib/infra/upstash";
-import { WEB_PUSH_SUBSCRIBERS_KEY, webPushConfigKey } from "@/lib/integrations/web-push-redis-keys";
+import {
+  WEB_PUSH_SUBSCRIBERS_KEY,
+  webPushConfigKey,
+} from "@/lib/integrations/web-push-redis-keys";
 
 export const runtime = "nodejs";
 
@@ -57,6 +60,13 @@ export async function POST(request: Request): Promise<Response> {
 
     return jsonResponse(200, { ok: true, config: { enabled } }, true);
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) }, true);
+    return jsonResponse(
+      500,
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      true,
+    );
   }
 }

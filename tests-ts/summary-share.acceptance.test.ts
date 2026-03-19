@@ -6,9 +6,10 @@
  *
  * These tests are BLACK-BOX — written solely from the design document.
  */
-import { describe, expect, it } from "vitest";
+
 import fs from "node:fs";
 import path from "node:path";
+import { describe, expect, it } from "vitest";
 
 /* ------------------------------------------------------------------ */
 /*  1. File-existence checks — verifying the design's file footprint  */
@@ -18,9 +19,9 @@ const root = path.resolve(__dirname, "..");
 
 describe("file structure matches design doc", () => {
   it("hearts page exists (URL sync target)", () => {
-    expect(
-      fs.existsSync(path.join(root, "app/(main)/hearts/page.tsx")),
-    ).toBe(true);
+    expect(fs.existsSync(path.join(root, "app/(main)/hearts/page.tsx"))).toBe(
+      true,
+    );
   });
 
   it("public summary page route exists at /summary/[article_id]", () => {
@@ -34,10 +35,7 @@ describe("file structure matches design doc", () => {
   it("public article-meta API route exists", () => {
     expect(
       fs.existsSync(
-        path.join(
-          root,
-          "app/api/v1/article-meta/[article_id]/route.ts",
-        ),
+        path.join(root, "app/api/v1/article-meta/[article_id]/route.ts"),
       ),
     ).toBe(true);
   });
@@ -80,7 +78,9 @@ describe("hearts page URL sync", () => {
     );
     const hasPushState = /pushState/.test(heartsSource);
     const hasReplaceState = /replaceState/.test(heartsSource);
-    const hasSearchParams = /searchParams|useSearchParams|URLSearchParams/.test(heartsSource);
+    const hasSearchParams = /searchParams|useSearchParams|URLSearchParams/.test(
+      heartsSource,
+    );
     expect(hasPushState || hasReplaceState || hasSearchParams).toBe(true);
   });
 });
@@ -152,10 +152,7 @@ describe("public article-meta API /api/v1/article-meta/[article_id]", () => {
 
   it("API route source can be read", () => {
     apiSource = fs.readFileSync(
-      path.join(
-        root,
-        "app/api/v1/article-meta/[article_id]/route.ts",
-      ),
+      path.join(root, "app/api/v1/article-meta/[article_id]/route.ts"),
       "utf-8",
     );
     expect(apiSource.length).toBeGreaterThan(0);
@@ -163,21 +160,17 @@ describe("public article-meta API /api/v1/article-meta/[article_id]", () => {
 
   it("exports a GET handler", () => {
     apiSource ??= fs.readFileSync(
-      path.join(
-        root,
-        "app/api/v1/article-meta/[article_id]/route.ts",
-      ),
+      path.join(root, "app/api/v1/article-meta/[article_id]/route.ts"),
       "utf-8",
     );
-    expect(apiSource).toMatch(/export\s+(async\s+)?function\s+GET|export\s+const\s+GET/);
+    expect(apiSource).toMatch(
+      /export\s+(async\s+)?function\s+GET|export\s+const\s+GET/,
+    );
   });
 
   it("reads from hearts:meta or user_picks:meta Redis keys", () => {
     apiSource ??= fs.readFileSync(
-      path.join(
-        root,
-        "app/api/v1/article-meta/[article_id]/route.ts",
-      ),
+      path.join(root, "app/api/v1/article-meta/[article_id]/route.ts"),
       "utf-8",
     );
     const readsRedis =
@@ -189,27 +182,21 @@ describe("public article-meta API /api/v1/article-meta/[article_id]", () => {
 
   it("returns JSON response", () => {
     apiSource ??= fs.readFileSync(
-      path.join(
-        root,
-        "app/api/v1/article-meta/[article_id]/route.ts",
-      ),
+      path.join(root, "app/api/v1/article-meta/[article_id]/route.ts"),
       "utf-8",
     );
-    expect(apiSource).toMatch(/NextResponse\.json|Response\.json|JSON\.stringify/);
+    expect(apiSource).toMatch(
+      /NextResponse\.json|Response\.json|JSON\.stringify/,
+    );
   });
 
   it("does NOT require authentication", () => {
     apiSource ??= fs.readFileSync(
-      path.join(
-        root,
-        "app/api/v1/article-meta/[article_id]/route.ts",
-      ),
+      path.join(root, "app/api/v1/article-meta/[article_id]/route.ts"),
       "utf-8",
     );
     const hasAuthGuard =
-      /requireAuth|resolveStatsAuth|verifyAccessToken|Bearer/.test(
-        apiSource,
-      );
+      /requireAuth|resolveStatsAuth|verifyAccessToken|Bearer/.test(apiSource);
     expect(hasAuthGuard).toBe(false);
   });
 });

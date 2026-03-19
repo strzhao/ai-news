@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import { SourceConfig } from "@/lib/domain/models";
+import type { SourceConfig } from "@/lib/domain/models";
 
 const DEFAULT_CONFIG_DIR = path.join(process.cwd(), "config");
 
@@ -16,7 +16,9 @@ export function loadYaml(filePath: string): Record<string, unknown> {
 
 function joinBaseAndRoute(baseUrl: string, route: string): string {
   const base = baseUrl.trim().replace(/\/$/, "");
-  const clean = route.trim().startsWith("/") ? route.trim() : `/${route.trim()}`;
+  const clean = route.trim().startsWith("/")
+    ? route.trim()
+    : `/${route.trim()}`;
   return `${base}${clean}`;
 }
 
@@ -24,12 +26,16 @@ function normalizeSourceUrl(rawUrl: string): string {
   const url = rawUrl.trim();
   try {
     const parsed = new URL(url);
-    const entries = Array.from(parsed.searchParams.entries()).map(([k, v]) => [k.toLowerCase(), v] as [string, string]);
+    const entries = Array.from(parsed.searchParams.entries()).map(
+      ([k, v]) => [k.toLowerCase(), v] as [string, string],
+    );
     entries.sort(([a], [b]) => a.localeCompare(b));
     const normalized = new URL(parsed.toString());
     normalized.protocol = parsed.protocol.toLowerCase();
     normalized.hostname = parsed.hostname.toLowerCase();
-    normalized.pathname = (parsed.pathname.replace(/\/$/, "") || "/").toLowerCase();
+    normalized.pathname = (
+      parsed.pathname.replace(/\/$/, "") || "/"
+    ).toLowerCase();
     normalized.hash = "";
     normalized.search = new URLSearchParams(entries).toString();
     return normalized.toString();
@@ -39,7 +45,8 @@ function normalizeSourceUrl(rawUrl: string): string {
 }
 
 export function loadSources(sourcePath?: string): SourceConfig[] {
-  const configPath = sourcePath || path.join(DEFAULT_CONFIG_DIR, "sources.yaml");
+  const configPath =
+    sourcePath || path.join(DEFAULT_CONFIG_DIR, "sources.yaml");
   const raw = loadYaml(configPath);
   const sourceRows = Array.isArray(raw.sources) ? raw.sources : [];
 
@@ -93,17 +100,20 @@ export function loadSources(sourcePath?: string): SourceConfig[] {
 }
 
 export function loadScoring(scoringPath?: string): Record<string, unknown> {
-  const configPath = scoringPath || path.join(DEFAULT_CONFIG_DIR, "scoring.yaml");
+  const configPath =
+    scoringPath || path.join(DEFAULT_CONFIG_DIR, "scoring.yaml");
   return loadYaml(configPath);
 }
 
 export function loadTagging(taggingPath?: string): Record<string, unknown> {
-  const configPath = taggingPath || path.join(DEFAULT_CONFIG_DIR, "tagging.yaml");
+  const configPath =
+    taggingPath || path.join(DEFAULT_CONFIG_DIR, "tagging.yaml");
   return loadYaml(configPath);
 }
 
 export function loadArticleTypes(articleTypesPath?: string): string[] {
-  const configPath = articleTypesPath || path.join(DEFAULT_CONFIG_DIR, "article_types.yaml");
+  const configPath =
+    articleTypesPath || path.join(DEFAULT_CONFIG_DIR, "article_types.yaml");
   const raw = loadYaml(configPath);
   const rows = Array.isArray(raw.types) ? raw.types : null;
   if (!rows) {

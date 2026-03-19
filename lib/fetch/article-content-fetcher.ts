@@ -102,7 +102,10 @@ function selectContentHtml(rawHtml: string): string {
 function htmlToText(html: string, maxChars: number): string {
   const withBreaks = String(html || "")
     .replace(/<\s*br\s*\/?>/gi, "\n")
-    .replace(/<\/\s*(p|div|article|section|li|h[1-6]|blockquote|pre|tr|td)\s*>/gi, "\n");
+    .replace(
+      /<\/\s*(p|div|article|section|li|h[1-6]|blockquote|pre|tr|td)\s*>/gi,
+      "\n",
+    );
   const stripped = withBreaks.replace(/<[^>]+>/g, " ");
   const decoded = decodeHtmlEntities(stripped);
   const normalized = normalizeWhitespace(decoded);
@@ -156,14 +159,20 @@ function normalizeImageCandidate(raw: string): string {
   return firstToken.trim();
 }
 
-function collectMetaImages(html: string, baseUrl: string, maxImages: number): ArticleImageResource[] {
+function collectMetaImages(
+  html: string,
+  baseUrl: string,
+  maxImages: number,
+): ArticleImageResource[] {
   const result: ArticleImageResource[] = [];
   const metaRe = /<meta\b[^>]*>/gi;
   let match: RegExpExecArray | null = null;
   while ((match = metaRe.exec(html)) !== null) {
     const attrs = parseTagAttributes(match[0]);
     const property = String(attrs.property || attrs.name || "").toLowerCase();
-    if (!["og:image", "twitter:image", "twitter:image:src"].includes(property)) {
+    if (
+      !["og:image", "twitter:image", "twitter:image:src"].includes(property)
+    ) {
       continue;
     }
     const imageUrl = normalizeImageUrl(attrs.content || "", baseUrl);
@@ -238,10 +247,22 @@ export async function fetchArticleContent(
     throw new Error("Invalid url");
   }
 
-  const timeoutMs = Math.max(300, Number(options.timeoutMs || DEFAULT_TIMEOUT_MS));
-  const maxHtmlBytes = Math.max(2_048, Number(options.maxHtmlBytes || DEFAULT_MAX_HTML_BYTES));
-  const maxTextChars = Math.max(1_000, Number(options.maxTextChars || DEFAULT_MAX_TEXT_CHARS));
-  const maxImages = Math.max(1, Math.min(200, Math.trunc(options.maxImages || DEFAULT_MAX_IMAGES)));
+  const timeoutMs = Math.max(
+    300,
+    Number(options.timeoutMs || DEFAULT_TIMEOUT_MS),
+  );
+  const maxHtmlBytes = Math.max(
+    2_048,
+    Number(options.maxHtmlBytes || DEFAULT_MAX_HTML_BYTES),
+  );
+  const maxTextChars = Math.max(
+    1_000,
+    Number(options.maxTextChars || DEFAULT_MAX_TEXT_CHARS),
+  );
+  const maxImages = Math.max(
+    1,
+    Math.min(200, Math.trunc(options.maxImages || DEFAULT_MAX_IMAGES)),
+  );
   const fetchImpl = options.fetchImpl || fetch;
 
   const controller = new AbortController();
@@ -261,14 +282,22 @@ export async function fetchArticleContent(
       throw new Error(`Fetch failed: ${response.status}`);
     }
 
-    const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-    if (contentType && !contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
+    const contentType = String(
+      response.headers.get("content-type") || "",
+    ).toLowerCase();
+    if (
+      contentType &&
+      !contentType.includes("text/html") &&
+      !contentType.includes("application/xhtml+xml")
+    ) {
       throw new Error(`Unsupported content-type: ${contentType}`);
     }
 
-    const responseUrl = String(response.url || normalizedUrl).trim() || normalizedUrl;
+    const responseUrl =
+      String(response.url || normalizedUrl).trim() || normalizedUrl;
     const rawHtml = await response.text();
-    const html = rawHtml.length > maxHtmlBytes ? rawHtml.slice(0, maxHtmlBytes) : rawHtml;
+    const html =
+      rawHtml.length > maxHtmlBytes ? rawHtml.slice(0, maxHtmlBytes) : rawHtml;
     const contentHtml = selectContentHtml(html);
 
     let text = htmlToText(contentHtml, maxTextChars);
@@ -279,7 +308,12 @@ export async function fetchArticleContent(
       }
     }
 
-    const images = extractRelatedImagesFromHtml(html, contentHtml, responseUrl, maxImages);
+    const images = extractRelatedImagesFromHtml(
+      html,
+      contentHtml,
+      responseUrl,
+      maxImages,
+    );
     return {
       sourceUrl,
       resolvedUrl: responseUrl,

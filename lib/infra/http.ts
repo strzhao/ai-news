@@ -1,4 +1,7 @@
-export async function fetchJson(url: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<unknown> {
+export async function fetchJson(
+  url: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+): Promise<unknown> {
   const timeoutMs = init.timeoutMs ?? 15_000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

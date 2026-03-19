@@ -1,15 +1,21 @@
-import { ScoredArticle } from "@/lib/domain/models";
+import type { ScoredArticle } from "@/lib/domain/models";
 import { buildSignedTrackingUrl } from "@/lib/tracking/signed-url";
 
 function envEnabled(name: string, defaultValue = "false"): boolean {
-  const value = String(process.env[name] || defaultValue || "").trim().toLowerCase();
+  const value = String(process.env[name] || defaultValue || "")
+    .trim()
+    .toLowerCase();
   return !["0", "false", "no", "off"].includes(value);
 }
 
 export class LinkTracker {
   constructor(
-    public readonly baseUrl = String(process.env.TRACKER_BASE_URL || "").trim().replace(/\/$/, ""),
-    public readonly signingSecret = String(process.env.TRACKER_SIGNING_SECRET || "").trim(),
+    public readonly baseUrl = String(process.env.TRACKER_BASE_URL || "")
+      .trim()
+      .replace(/\/$/, ""),
+    public readonly signingSecret = String(
+      process.env.TRACKER_SIGNING_SECRET || "",
+    ).trim(),
   ) {}
 
   static fromEnv(): LinkTracker {
@@ -20,7 +26,10 @@ export class LinkTracker {
     return Boolean(this.baseUrl && this.signingSecret);
   }
 
-  buildTrackingUrl(article: ScoredArticle, options: { digestDate: string; channel: string }): string {
+  buildTrackingUrl(
+    article: ScoredArticle,
+    options: { digestDate: string; channel: string },
+  ): string {
     const targetUrl = String(article.url || "").trim();
     if (!targetUrl || !this.enabled()) {
       return targetUrl;

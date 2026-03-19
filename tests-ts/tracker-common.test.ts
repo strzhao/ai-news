@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeUrl, signParams, verifySignature } from "@/lib/domain/tracker-common";
+import {
+  normalizeUrl,
+  signParams,
+  verifySignature,
+} from "@/lib/domain/tracker-common";
 
 describe("tracker common", () => {
   it("verifySignature is compatible with signParams", () => {
@@ -16,7 +20,9 @@ describe("tracker common", () => {
   });
 
   it("normalizeUrl removes tracking params and normalizes host", () => {
-    const normalized = normalizeUrl("https://Example.com/Path/?utm_source=x&fbclid=y&id=1");
+    const normalized = normalizeUrl(
+      "https://Example.com/Path/?utm_source=x&fbclid=y&id=1",
+    );
     expect(normalized).toContain("example.com");
     expect(normalized).toContain("id=1");
     expect(normalized).not.toContain("utm_source");

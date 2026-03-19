@@ -17,24 +17,36 @@ export async function GET(request: Request): Promise<Response> {
 
   const redis = buildUpstashClientOrNone();
   if (!redis) {
-    return jsonResponse(200, {
-      ok: true,
-      config: { enabled: true, email: auth.user.email },
-    }, true);
+    return jsonResponse(
+      200,
+      {
+        ok: true,
+        config: { enabled: true, email: auth.user.email },
+      },
+      true,
+    );
   }
 
   try {
     const raw = await redis.hgetall(emailConfigKey(auth.user.id));
     const enabled = raw.enabled !== "false";
-    return jsonResponse(200, {
-      ok: true,
-      config: { enabled, email: auth.user.email },
-    }, true);
+    return jsonResponse(
+      200,
+      {
+        ok: true,
+        config: { enabled, email: auth.user.email },
+      },
+      true,
+    );
   } catch {
-    return jsonResponse(200, {
-      ok: true,
-      config: { enabled: true, email: auth.user.email },
-    }, true);
+    return jsonResponse(
+      200,
+      {
+        ok: true,
+        config: { enabled: true, email: auth.user.email },
+      },
+      true,
+    );
   }
 }
 
@@ -60,11 +72,22 @@ export async function POST(request: Request): Promise<Response> {
     });
     await redis.expire(emailConfigKey(auth.user.id), 120 * 24 * 3600);
 
-    return jsonResponse(200, {
-      ok: true,
-      config: { enabled, email: auth.user.email },
-    }, true);
+    return jsonResponse(
+      200,
+      {
+        ok: true,
+        config: { enabled, email: auth.user.email },
+      },
+      true,
+    );
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) }, true);
+    return jsonResponse(
+      500,
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      true,
+    );
   }
 }

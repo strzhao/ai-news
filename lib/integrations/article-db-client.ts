@@ -27,7 +27,9 @@ export interface HighQualityArticleGroup {
 }
 
 function baseUrl(): string {
-  return String(process.env.ARTICLE_DB_BASE_URL || "").trim().replace(/\/$/, "");
+  return String(process.env.ARTICLE_DB_BASE_URL || "")
+    .trim()
+    .replace(/\/$/, "");
 }
 
 function authHeaders(): HeadersInit {
@@ -89,14 +91,17 @@ export async function fetchHighQualityRange(
     quality_tier: String(params.qualityTier || "high"),
   });
 
-  const raw = (await fetchJson(`${root}/api/v1/articles/high-quality/range?${query.toString()}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...authHeaders(),
+  const raw = (await fetchJson(
+    `${root}/api/v1/articles/high-quality/range?${query.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        ...authHeaders(),
+      },
+      timeoutMs: 20_000,
     },
-    timeoutMs: 20_000,
-  })) as Record<string, unknown>;
+  )) as Record<string, unknown>;
 
   const groupsRaw = Array.isArray(raw.groups) ? raw.groups : [];
   const groups: HighQualityArticleGroup[] = groupsRaw
@@ -124,24 +129,39 @@ export async function fetchHighQualityRange(
             digest_id: String(entry.digest_id || ""),
             generated_at: String(entry.generated_at || ""),
             quality_score: Number(entry.quality_score || 0),
-            quality_tier: String(entry.quality_tier || "high") as "high" | "general" | "all",
+            quality_tier: String(entry.quality_tier || "high") as
+              | "high"
+              | "general"
+              | "all",
             confidence: Number(entry.confidence || 0),
             primary_type: String(entry.primary_type || "other"),
             secondary_types: Array.isArray(entry.secondary_types)
-              ? entry.secondary_types.map((value) => String(value || "")).filter(Boolean)
+              ? entry.secondary_types
+                  .map((value) => String(value || ""))
+                  .filter(Boolean)
               : [],
             tag_groups:
-              entry.tag_groups && typeof entry.tag_groups === "object" && !Array.isArray(entry.tag_groups)
+              entry.tag_groups &&
+              typeof entry.tag_groups === "object" &&
+              !Array.isArray(entry.tag_groups)
                 ? Object.fromEntries(
-                    Object.entries(entry.tag_groups as Record<string, unknown>).map(([groupKey, tags]) => [
+                    Object.entries(
+                      entry.tag_groups as Record<string, unknown>,
+                    ).map(([groupKey, tags]) => [
                       String(groupKey || "").trim(),
-                      Array.isArray(tags) ? tags.map((value) => String(value || "").trim()).filter(Boolean) : [],
+                      Array.isArray(tags)
+                        ? tags
+                            .map((value) => String(value || "").trim())
+                            .filter(Boolean)
+                        : [],
                     ]),
                   )
                 : {},
           };
         })
-        .filter((item): item is HighQualityArticleGroup["items"][number] => Boolean(item));
+        .filter((item): item is HighQualityArticleGroup["items"][number] =>
+          Boolean(item),
+        );
 
       return {
         date,
@@ -156,7 +176,9 @@ export async function fetchHighQualityRange(
   };
 }
 
-export async function fetchFlomoNextPushBatch(params: FetchFlomoNextBatchParams): Promise<FetchFlomoNextBatchResult> {
+export async function fetchFlomoNextPushBatch(
+  params: FetchFlomoNextBatchParams,
+): Promise<FetchFlomoNextBatchResult> {
   const root = baseUrl();
   if (!root) {
     throw new Error("ARTICLE_DB_BASE_URL is not configured");
@@ -186,7 +208,10 @@ export async function fetchFlomoNextPushBatch(params: FetchFlomoNextBatchParams)
     reportDate: String(raw.report_date || ""),
     sourceDate: String(raw.source_date || ""),
     timezone: String(raw.timezone || ""),
-    qualityTier: String(raw.quality_tier || "high") as "high" | "general" | "all",
+    qualityTier: String(raw.quality_tier || "high") as
+      | "high"
+      | "general"
+      | "all",
     hasBatch: Boolean(raw.has_batch),
     retryingBatch: Boolean(raw.retrying_batch),
     batchKey: String(raw.batch_key || ""),
@@ -197,7 +222,9 @@ export async function fetchFlomoNextPushBatch(params: FetchFlomoNextBatchParams)
   };
 }
 
-export async function markFlomoPushBatchSent(batchKey: string): Promise<{ consumedCount: number }> {
+export async function markFlomoPushBatchSent(
+  batchKey: string,
+): Promise<{ consumedCount: number }> {
   const root = baseUrl();
   if (!root) {
     throw new Error("ARTICLE_DB_BASE_URL is not configured");
@@ -207,14 +234,17 @@ export async function markFlomoPushBatchSent(batchKey: string): Promise<{ consum
     throw new Error("Missing batchKey");
   }
 
-  const raw = (await fetchJson(`${root}/api/v1/flomo/push-batches/${encodeURIComponent(normalizedBatchKey)}/sent`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      ...authHeaders(),
+  const raw = (await fetchJson(
+    `${root}/api/v1/flomo/push-batches/${encodeURIComponent(normalizedBatchKey)}/sent`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...authHeaders(),
+      },
+      timeoutMs: 20_000,
     },
-    timeoutMs: 20_000,
-  })) as Record<string, unknown>;
+  )) as Record<string, unknown>;
 
   return {
     consumedCount: Number(raw.consumed_count || 0),
@@ -232,7 +262,9 @@ export interface ArticleDetailResult {
   image_url: string;
 }
 
-export async function fetchArticleDetail(articleId: string): Promise<ArticleDetailResult | null> {
+export async function fetchArticleDetail(
+  articleId: string,
+): Promise<ArticleDetailResult | null> {
   const root = baseUrl();
   if (!root) return null;
 
@@ -249,7 +281,9 @@ export async function fetchArticleDetail(articleId: string): Promise<ArticleDeta
       },
     )) as Record<string, unknown>;
 
-    const item = (raw.item && typeof raw.item === "object" ? raw.item : raw) as Record<string, unknown>;
+    const item = (
+      raw.item && typeof raw.item === "object" ? raw.item : raw
+    ) as Record<string, unknown>;
 
     if (!item.title) return null;
 
@@ -277,7 +311,9 @@ export interface ArticleSummaryResult {
   error?: string;
 }
 
-export async function fetchArticleSummary(articleId: string): Promise<ArticleSummaryResult> {
+export async function fetchArticleSummary(
+  articleId: string,
+): Promise<ArticleSummaryResult> {
   const root = baseUrl();
   if (!root) {
     throw new Error("ARTICLE_DB_BASE_URL is not configured");
@@ -298,14 +334,19 @@ export async function fetchArticleSummary(articleId: string): Promise<ArticleSum
   return {
     ok: Boolean(raw.ok),
     status: String(raw.status || "") as ArticleSummaryResult["status"],
-    summary_markdown: raw.summary_markdown ? String(raw.summary_markdown) : undefined,
+    summary_markdown: raw.summary_markdown
+      ? String(raw.summary_markdown)
+      : undefined,
     model_name: raw.model_name ? String(raw.model_name) : undefined,
     updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
     error: raw.error ? String(raw.error) : undefined,
   };
 }
 
-export async function markFlomoPushBatchFailed(batchKey: string, errorMessage: string): Promise<void> {
+export async function markFlomoPushBatchFailed(
+  batchKey: string,
+  errorMessage: string,
+): Promise<void> {
   const root = baseUrl();
   if (!root) {
     throw new Error("ARTICLE_DB_BASE_URL is not configured");
@@ -315,16 +356,19 @@ export async function markFlomoPushBatchFailed(batchKey: string, errorMessage: s
     throw new Error("Missing batchKey");
   }
 
-  await fetchJson(`${root}/api/v1/flomo/push-batches/${encodeURIComponent(normalizedBatchKey)}/failed`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...authHeaders(),
+  await fetchJson(
+    `${root}/api/v1/flomo/push-batches/${encodeURIComponent(normalizedBatchKey)}/failed`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        error_message: String(errorMessage || "").slice(0, 2000),
+      }),
+      timeoutMs: 20_000,
     },
-    body: JSON.stringify({
-      error_message: String(errorMessage || "").slice(0, 2000),
-    }),
-    timeoutMs: 20_000,
-  });
+  );
 }

@@ -8,7 +8,11 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export function isPushSupported(): boolean {
-  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  return (
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window
+  );
 }
 
 export async function subscribeToPush(): Promise<boolean> {
@@ -22,7 +26,8 @@ export async function subscribeToPush(): Promise<boolean> {
 
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey).buffer as ArrayBuffer,
+    applicationServerKey: urlBase64ToUint8Array(publicKey)
+      .buffer as ArrayBuffer,
   });
 
   const saveRes = await fetch("/api/v1/web-push/subscribe", {

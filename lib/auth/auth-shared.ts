@@ -1,7 +1,9 @@
 const DEFAULT_AUTH_ISSUER = "https://user.stringzhao.life";
 
 export function getAuthIssuer(): string {
-  const fromEnv = String(process.env.AUTH_ISSUER || process.env.NEXT_PUBLIC_AUTH_ISSUER || "").trim();
+  const fromEnv = String(
+    process.env.AUTH_ISSUER || process.env.NEXT_PUBLIC_AUTH_ISSUER || "",
+  ).trim();
   return fromEnv || DEFAULT_AUTH_ISSUER;
 }
 

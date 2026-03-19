@@ -21,7 +21,9 @@ export interface UserPickPayload {
   ai_summary?: string;
 }
 
-export async function saveUserPick(payload: UserPickPayload): Promise<{ ok: boolean }> {
+export async function saveUserPick(
+  payload: UserPickPayload,
+): Promise<{ ok: boolean }> {
   const response = await fetch("/api/v1/user-picks", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -38,14 +40,20 @@ export async function fetchUserPicks(): Promise<UserPickItem[]> {
       credentials: "include",
     });
     if (!response.ok) return [];
-    const data = (await response.json()) as { ok: boolean; items?: UserPickItem[] };
+    const data = (await response.json()) as {
+      ok: boolean;
+      items?: UserPickItem[];
+    };
     return data.ok && Array.isArray(data.items) ? data.items : [];
   } catch {
     return [];
   }
 }
 
-export async function updatePickSummary(articleId: string, aiSummary: string): Promise<{ ok: boolean }> {
+export async function updatePickSummary(
+  articleId: string,
+  aiSummary: string,
+): Promise<{ ok: boolean }> {
   const response = await fetch("/api/v1/user-picks", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

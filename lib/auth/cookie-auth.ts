@@ -1,5 +1,8 @@
 import { readGatewaySessionFromRequest } from "@/lib/auth/gateway-session";
-import { extractBearerToken, verifyUnifiedAccessToken } from "@/lib/auth/unified-auth";
+import {
+  extractBearerToken,
+  verifyUnifiedAccessToken,
+} from "@/lib/auth/unified-auth";
 
 export interface AuthenticatedUser {
   id: string;
@@ -17,7 +20,10 @@ export async function resolveUserFromRequest(request: Request): Promise<{
     try {
       const tokenUser = await verifyUnifiedAccessToken(bearer);
       if (tokenUser?.sub && tokenUser?.email) {
-        return { ok: true, user: { id: tokenUser.sub, email: tokenUser.email } };
+        return {
+          ok: true,
+          user: { id: tokenUser.sub, email: tokenUser.email },
+        };
       }
     } catch {
       return { ok: false, error: "invalid_access_token" };

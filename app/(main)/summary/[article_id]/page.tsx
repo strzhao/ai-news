@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 interface ArticleMeta {
@@ -29,8 +29,12 @@ export default function SummaryPage(): React.ReactNode {
       try {
         // Fetch meta + summary in parallel
         const [metaRes, summaryRes] = await Promise.all([
-          fetch(`/api/v1/article-meta/${encodeURIComponent(articleId)}`, { cache: "no-store" }),
-          fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, { cache: "no-store" }),
+          fetch(`/api/v1/article-meta/${encodeURIComponent(articleId)}`, {
+            cache: "no-store",
+          }),
+          fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, {
+            cache: "no-store",
+          }),
         ]);
 
         if (cancelled) return;
@@ -47,7 +51,11 @@ export default function SummaryPage(): React.ReactNode {
         setMeta(metaData);
 
         // Use ai_summary from meta as fallback
-        if (summaryData.ok && summaryData.status === "completed" && summaryData.summary_markdown) {
+        if (
+          summaryData.ok &&
+          summaryData.status === "completed" &&
+          summaryData.summary_markdown
+        ) {
           setSummaryMarkdown(summaryData.summary_markdown);
         } else if (metaData.ai_summary) {
           setSummaryMarkdown(metaData.ai_summary);
@@ -65,7 +73,9 @@ export default function SummaryPage(): React.ReactNode {
     }
 
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [articleId]);
 
   if (loading) {
@@ -94,7 +104,12 @@ export default function SummaryPage(): React.ReactNode {
         {articleUrl ? (
           <>
             <span> · </span>
-            <a href={articleUrl} target="_blank" rel="noreferrer noopener" className="summary-page-origin-link">
+            <a
+              href={articleUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="summary-page-origin-link"
+            >
               阅读原文
             </a>
           </>
@@ -106,7 +121,14 @@ export default function SummaryPage(): React.ReactNode {
           <ReactMarkdown
             components={{
               a: ({ children, href, ...props }) => (
-                <a href={href} target="_blank" rel="noreferrer noopener" {...props}>{children}</a>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  {...props}
+                >
+                  {children}
+                </a>
               ),
             }}
           >

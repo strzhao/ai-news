@@ -12,7 +12,11 @@ export const viewport: Viewport = {
   themeColor: "#2d8a5e",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }): React.ReactNode {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.ReactNode {
   return (
     <html lang="zh-CN">
       <body>

@@ -1,10 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import { SummaryDrawer } from "@/app/components/summary-drawer";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
 import type { AuthUser } from "@/lib/client/types";
-import { SummaryDrawer } from "@/app/components/summary-drawer";
 
 interface HeartedArticle {
   article_id: string;
@@ -22,7 +22,13 @@ const PAGE_SIZE = 20;
 
 export default function HeartsPage(): React.ReactNode {
   return (
-    <Suspense fallback={<div className="page-header"><p className="empty-note">加载中...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="page-header">
+          <p className="empty-note">加载中...</p>
+        </div>
+      }
+    >
       <HeartsContent />
     </Suspense>
   );
@@ -37,7 +43,9 @@ function HeartsContent(): React.ReactNode {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [summaryArticle, setSummaryArticle] = useState<HeartedArticle | null>(null);
+  const [summaryArticle, setSummaryArticle] = useState<HeartedArticle | null>(
+    null,
+  );
   const summaryAutoOpenedRef = useRef(false);
 
   useEffect(() => {
@@ -62,17 +70,22 @@ function HeartsContent(): React.ReactNode {
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error("加载收藏失败");
         if (!cancelled) {
-          setItems((prev) => page === 0 ? data.items : [...prev, ...data.items]);
+          setItems((prev) =>
+            page === 0 ? data.items : [...prev, ...data.items],
+          );
           setTotal(data.total);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authUser, page]);
 
   function handleOpenSummary(item: HeartedArticle): void {
@@ -100,7 +113,8 @@ function HeartsContent(): React.ReactNode {
   }, [loading, items]);
 
   async function handleUnheart(item: HeartedArticle): Promise<void> {
-    if (!window.confirm(`确定取消收藏「${item.title || "无标题"}」吗？`)) return;
+    if (!window.confirm(`确定取消收藏「${item.title || "无标题"}」吗？`))
+      return;
     const prev = [...items];
     setItems((list) => list.filter((i) => i.article_id !== item.article_id));
     setTotal((t) => Math.max(0, t - 1));
@@ -134,17 +148,25 @@ function HeartsContent(): React.ReactNode {
 
   if (!authUser) {
     // 未登录但有 summary 参数 → 重定向到公共总结页
-    const summaryId = new URLSearchParams(window.location.search).get("summary");
+    const summaryId = new URLSearchParams(window.location.search).get(
+      "summary",
+    );
     if (summaryId) {
       window.location.replace(`/summary/${encodeURIComponent(summaryId)}`);
-      return <div className="page-header"><p className="empty-note">跳转中...</p></div>;
+      return (
+        <div className="page-header">
+          <p className="empty-note">跳转中...</p>
+        </div>
+      );
     }
     return (
       <div className="page-header">
         <h1 className="page-title">我的收藏</h1>
         <p className="empty-note">请先登录后查看收藏。</p>
         <div style={{ textAlign: "center", marginTop: 20 }}>
-          <a href="/api/auth/login" className="article-cta">登录</a>
+          <a href="/api/auth/login" className="article-cta">
+            登录
+          </a>
         </div>
       </div>
     );
@@ -167,30 +189,47 @@ function HeartsContent(): React.ReactNode {
             items.map((item) => {
               const articleUrl = item.original_url || item.url;
               return (
-                <article key={item.article_id} className="article-row numbered-article">
+                <article
+                  key={item.article_id}
+                  className="article-row numbered-article"
+                >
                   <div className="article-copy">
                     <div className="article-meta">
                       <span>{item.source_host || "未知来源"}</span>
                       <span>收藏于 {formatHeartedTime(item.hearted_at)}</span>
                     </div>
                     <h3 className="article-headline">
-                      <a href={articleUrl} target="_blank" rel="noreferrer noopener">
+                      <a
+                        href={articleUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                      >
                         {item.title || "无标题"}
                       </a>
                     </h3>
-                    {item.summary ? <p className="article-dek">{item.summary}</p> : null}
+                    {item.summary ? (
+                      <p className="article-dek">{item.summary}</p>
+                    ) : null}
                   </div>
                   <div className="article-right-col">
                     <div className="article-actions">
                       <button
                         type="button"
                         className="heart-btn is-hearted"
-                        onClick={() => { void handleUnheart(item); }}
+                        onClick={() => {
+                          void handleUnheart(item);
+                        }}
                         aria-label="取消收藏"
                       >
                         ♥
                       </button>
-                      <button type="button" className="article-cta" onClick={() => handleOpenSummary(item)}>AI 总结</button>
+                      <button
+                        type="button"
+                        className="article-cta"
+                        onClick={() => handleOpenSummary(item)}
+                      >
+                        AI 总结
+                      </button>
                     </div>
                   </div>
                 </article>
@@ -214,14 +253,18 @@ function HeartsContent(): React.ReactNode {
       </section>
 
       <SummaryDrawer
-        article={summaryArticle ? {
-          article_id: summaryArticle.article_id,
-          title: summaryArticle.title,
-          url: summaryArticle.url,
-          original_url: summaryArticle.original_url,
-          source_host: summaryArticle.source_host,
-          metaLabel: `收藏于 ${formatHeartedTime(summaryArticle.hearted_at)}`,
-        } : null}
+        article={
+          summaryArticle
+            ? {
+                article_id: summaryArticle.article_id,
+                title: summaryArticle.title,
+                url: summaryArticle.url,
+                original_url: summaryArticle.original_url,
+                source_host: summaryArticle.source_host,
+                metaLabel: `收藏于 ${formatHeartedTime(summaryArticle.hearted_at)}`,
+              }
+            : null
+        }
         open={summaryArticle !== null}
         onClose={() => {
           setSummaryArticle(null);
@@ -235,7 +278,9 @@ function HeartsContent(): React.ReactNode {
         onSummaryRegenerated={(articleId, newSummary) => {
           setItems((prev) =>
             prev.map((item) =>
-              item.article_id === articleId ? { ...item, ai_summary: newSummary } : item,
+              item.article_id === articleId
+                ? { ...item, ai_summary: newSummary }
+                : item,
             ),
           );
         }}

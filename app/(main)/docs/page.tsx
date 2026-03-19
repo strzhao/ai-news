@@ -31,15 +31,26 @@ const desc = {
 export default function DocsPage(): React.ReactNode {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 16px" }}>
-      <h1 style={{ fontSize: 24, fontWeight: 650, marginBottom: 8 }}>AI News CLI</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 650, marginBottom: 8 }}>
+        AI News CLI
+      </h1>
       <p style={{ ...desc, fontSize: 14, marginBottom: 32 }}>
         为 AI Agent 设计的命令行工具，通过终端访问 AI News 的全部能力。
       </p>
 
-      <div style={{ ...card, borderColor: "var(--accent, #3b82f6)", background: "color-mix(in srgb, var(--accent, #3b82f6) 5%, var(--surface))" }}>
+      <div
+        style={{
+          ...card,
+          borderColor: "var(--accent, #3b82f6)",
+          background:
+            "color-mix(in srgb, var(--accent, #3b82f6) 5%, var(--surface))",
+        }}
+      >
         <h2 style={cardTitle}>AI-First 设计</h2>
         <p style={desc}>
-          所有命令输出 JSON，退出码语义化（<code>0</code> 成功 / <code>1</code> 错误 / <code>2</code> 需登录），业务命令从服务端动态加载，无需更新 CLI 即可获得新功能。
+          所有命令输出 JSON，退出码语义化（<code>0</code> 成功 / <code>1</code>{" "}
+          错误 / <code>2</code> 需登录），业务命令从服务端动态加载，无需更新 CLI
+          即可获得新功能。
         </p>
       </div>
 
@@ -51,11 +62,15 @@ export default function DocsPage(): React.ReactNode {
       <div style={card}>
         <h2 style={cardTitle}>Claude Code Skill</h2>
         <p style={{ ...desc, marginBottom: 12 }}>
-          安装 skill 后，可在 Claude Code 中通过 <code>/ai-news</code> 命令调用 CLI 能力。
+          安装 skill 后，可在 Claude Code 中通过 <code>/ai-news</code> 命令调用
+          CLI 能力。
         </p>
-        <pre style={codeBlock}>{`npx skills add github.com/strzhao/ai-news-cli`}</pre>
+        <pre
+          style={codeBlock}
+        >{`npx skills add github.com/strzhao/ai-news-cli`}</pre>
         <p style={{ ...desc, marginTop: 12 }}>
-          安装后输入 <code>/ai-news</code> 即可让 agent 查询文章、分析 URL、管理 Flomo 等。
+          安装后输入 <code>/ai-news</code> 即可让 agent 查询文章、分析 URL、管理
+          Flomo 等。
         </p>
       </div>
 
@@ -77,7 +92,8 @@ ai-news logout`}</pre>
       <div style={card}>
         <h2 style={cardTitle}>命令示例</h2>
         <p style={{ ...desc, marginBottom: 12 }}>
-          所有业务命令从服务端动态加载，运行 <code>ai-news --help</code> 查看完整列表。
+          所有业务命令从服务端动态加载，运行 <code>ai-news --help</code>{" "}
+          查看完整列表。
         </p>
         <pre style={codeBlock}>{`# 文章
 ai-news articles:list --days 7 --quality_tier high

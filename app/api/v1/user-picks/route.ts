@@ -1,8 +1,11 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
-import { heartsKey, heartsMetaKey } from "@/lib/integrations/hearts-redis-keys";
-import { userPicksKey, userPicksMetaKey } from "@/lib/integrations/user-picks-redis-keys";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
+import { heartsKey, heartsMetaKey } from "@/lib/integrations/hearts-redis-keys";
+import {
+  userPicksKey,
+  userPicksMetaKey,
+} from "@/lib/integrations/user-picks-redis-keys";
 
 export const runtime = "nodejs";
 
@@ -10,13 +13,19 @@ const META_TTL_SECONDS = 365 * 24 * 3600;
 const MAX_PICKS = 50;
 
 function errorResponse(error: unknown): Response {
-  return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+  return jsonResponse(500, {
+    ok: false,
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 export async function POST(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {
@@ -73,7 +82,10 @@ export async function POST(request: Request): Promise<Response> {
 export async function GET(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {
@@ -110,7 +122,10 @@ export async function GET(request: Request): Promise<Response> {
 export async function PATCH(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {

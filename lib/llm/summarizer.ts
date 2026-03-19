@@ -1,5 +1,9 @@
-import { Article, ArticleAssessment, SourceQualityScore } from "@/lib/domain/models";
-import { DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
+import type {
+  Article,
+  ArticleAssessment,
+  SourceQualityScore,
+} from "@/lib/domain/models";
+import { type DeepSeekClient, DeepSeekError } from "@/lib/llm/deepseek-client";
 
 const VALID_WORTH = new Set(["必读", "可读", "跳过"]);
 const TAG_SPLIT_RE = /[,/\n，、;；|]+/;
@@ -39,7 +43,9 @@ export class DigestSummarizer {
       sourceQualityScores: options.sourceQualityScores,
     });
 
-    const summaryLines = Array.isArray(llmResult.top_summary) ? llmResult.top_summary : [];
+    const summaryLines = Array.isArray(llmResult.top_summary)
+      ? llmResult.top_summary
+      : [];
     const topSummary = summaryLines
       .map((line) => String(line).trim())
       .filter(Boolean)
@@ -69,7 +75,9 @@ export class DigestSummarizer {
         title: article.title,
         source: article.sourceName,
         url: article.url,
-        published_at: article.publishedAt ? article.publishedAt.toISOString() : "",
+        published_at: article.publishedAt
+          ? article.publishedAt.toISOString()
+          : "",
         summary: article.summaryRaw,
         lead_paragraph: article.leadParagraph,
       };
@@ -116,7 +124,11 @@ export class DigestSummarizer {
     assessments?: Record<string, ArticleAssessment>;
     sourceQualityScores?: Record<string, SourceQualityScore>;
   }): Promise<Record<string, unknown>> {
-    const inputs = this.buildInputs(options.articles, options.assessments, options.sourceQualityScores);
+    const inputs = this.buildInputs(
+      options.articles,
+      options.assessments,
+      options.sourceQualityScores,
+    );
     const systemPrompt =
       "你是顶级 AI 资讯主编，偏产业实战。" +
       "你将收到文章基础信息和单篇评估结果。" +
@@ -169,15 +181,26 @@ export class DigestSummarizer {
       if (!raw) return [];
       const normalized = raw.replace(/#/g, " ");
       if (TAG_SPLIT_RE.test(normalized)) {
-        return normalized.split(TAG_SPLIT_RE).map((part) => part.trim()).filter(Boolean);
+        return normalized
+          .split(TAG_SPLIT_RE)
+          .map((part) => part.trim())
+          .filter(Boolean);
       }
-      return normalized.split(/\s+/).map((part) => part.trim()).filter(Boolean);
+      return normalized
+        .split(/\s+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
     }
     return [];
   }
 
-  parseHighlights(result: Record<string, unknown>, topN: number): AIHighlight[] {
-    const rawHighlights = Array.isArray(result.highlights) ? result.highlights : [];
+  parseHighlights(
+    result: Record<string, unknown>,
+    topN: number,
+  ): AIHighlight[] {
+    const rawHighlights = Array.isArray(result.highlights)
+      ? result.highlights
+      : [];
     const parsed: AIHighlight[] = [];
 
     for (const row of rawHighlights) {

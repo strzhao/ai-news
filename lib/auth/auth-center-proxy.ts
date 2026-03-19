@@ -1,8 +1,13 @@
+import {
+  buildAuthCenterUrl,
+  buildForwardHeaders,
+} from "@/lib/auth/auth-shared";
 import { jsonResponse } from "@/lib/infra/route-utils";
-import { buildAuthCenterUrl, buildForwardHeaders } from "@/lib/auth/auth-shared";
 
 function getSetCookieValues(headers: Headers): string[] {
-  const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };
+  const withGetSetCookie = headers as Headers & {
+    getSetCookie?: () => string[];
+  };
   if (typeof withGetSetCookie.getSetCookie === "function") {
     return withGetSetCookie.getSetCookie();
   }
@@ -10,7 +15,11 @@ function getSetCookieValues(headers: Headers): string[] {
   return single ? [single] : [];
 }
 
-export async function proxyAuthCenter(request: Request, method: "GET" | "POST", pathname: string): Promise<Response> {
+export async function proxyAuthCenter(
+  request: Request,
+  method: "GET" | "POST",
+  pathname: string,
+): Promise<Response> {
   try {
     const upstream = await fetch(buildAuthCenterUrl(pathname), {
       method,
@@ -21,7 +30,10 @@ export async function proxyAuthCenter(request: Request, method: "GET" | "POST", 
 
     const bodyText = await upstream.text();
     const response = new Response(bodyText, { status: upstream.status });
-    response.headers.set("content-type", upstream.headers.get("content-type") || "application/json; charset=utf-8");
+    response.headers.set(
+      "content-type",
+      upstream.headers.get("content-type") || "application/json; charset=utf-8",
+    );
     response.headers.set("cache-control", "no-store, max-age=0");
 
     for (const setCookie of getSetCookieValues(upstream.headers)) {

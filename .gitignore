@@ -14,3 +14,4 @@ coverage/
 .vercel
 .env*.local
 .claude/dev-loop.local.md
+.claude/autopilot.local.md

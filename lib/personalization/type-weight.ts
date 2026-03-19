@@ -32,9 +32,14 @@ export function computeTypeMultipliers(
     for (const [dateText, count] of Object.entries(daily || {})) {
       const dt = parseDate(dateText);
       if (!dt) continue;
-      const ageDays = Math.max(0, Math.trunc((nowUtc.getTime() - dt.getTime()) / 86_400_000));
+      const ageDays = Math.max(
+        0,
+        Math.trunc((nowUtc.getTime() - dt.getTime()) / 86_400_000),
+      );
       if (ageDays > maxAge) continue;
-      score += Math.max(0, Math.trunc(count || 0)) * decayWeight(ageDays, halfLifeDays);
+      score +=
+        Math.max(0, Math.trunc(count || 0)) *
+        decayWeight(ageDays, halfLifeDays);
     }
     if (score > 0) {
       decayedScores[primaryType] = score;
@@ -45,9 +50,13 @@ export function computeTypeMultipliers(
     return {};
   }
 
-  const baseline = Object.values(decayedScores).reduce((sum, score) => sum + score, 0) / Object.keys(decayedScores).length;
+  const baseline =
+    Object.values(decayedScores).reduce((sum, score) => sum + score, 0) /
+    Object.keys(decayedScores).length;
   if (baseline <= 0) {
-    return Object.fromEntries(Object.keys(decayedScores).map((primaryType) => [primaryType, 1]));
+    return Object.fromEntries(
+      Object.keys(decayedScores).map((primaryType) => [primaryType, 1]),
+    );
   }
 
   const low = Math.min(minMultiplier, maxMultiplier);
@@ -56,7 +65,8 @@ export function computeTypeMultipliers(
   for (const [primaryType, score] of Object.entries(decayedScores)) {
     const centered = (score - baseline) / baseline;
     const raw = 1 + centered * 0.25;
-    multipliers[primaryType] = Math.round(Math.max(low, Math.min(high, raw)) * 10_000) / 10_000;
+    multipliers[primaryType] =
+      Math.round(Math.max(low, Math.min(high, raw)) * 10_000) / 10_000;
   }
 
   return multipliers;

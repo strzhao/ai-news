@@ -1,7 +1,10 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
-import { FLOMO_SUBSCRIBERS_KEY, flomoConfigKey } from "@/lib/integrations/flomo-redis-keys";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
+import {
+  FLOMO_SUBSCRIBERS_KEY,
+  flomoConfigKey,
+} from "@/lib/integrations/flomo-redis-keys";
 
 export const runtime = "nodejs";
 
@@ -27,7 +30,10 @@ function maskWebhookUrl(url: string): string {
 export async function GET(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {
@@ -51,14 +57,20 @@ export async function GET(request: Request): Promise<Response> {
       },
     });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
 export async function POST(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {
@@ -66,7 +78,10 @@ export async function POST(request: Request): Promise<Response> {
     const webhookUrl = String(body.webhook_url || "").trim();
 
     if (!isValidWebhookUrl(webhookUrl)) {
-      return jsonResponse(400, { ok: false, error: "webhook_url 必须是有效的 HTTPS URL" });
+      return jsonResponse(400, {
+        ok: false,
+        error: "webhook_url 必须是有效的 HTTPS URL",
+      });
     }
 
     const redis = buildUpstashClient();
@@ -91,6 +106,9 @@ export async function POST(request: Request): Promise<Response> {
       },
     });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

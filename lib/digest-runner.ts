@@ -1,38 +1,49 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { ArticleEvalCache } from "@/lib/cache/article-eval-cache";
+import { loadArticleTypes, loadSources } from "@/lib/config-loader";
 import {
-  DailyDigest,
-  DigestRunResult,
-  ScoredArticle,
-  TaggedArticle,
+  type DailyDigest,
+  type DigestRunResult,
+  type ScoredArticle,
+  type TaggedArticle,
   WORTH_MUST_READ,
   WORTH_SKIP,
   WORTH_WORTH_READING,
 } from "@/lib/domain/models";
-import { buildAnalysisJson, renderAnalysisMarkdown } from "@/lib/output/analysis-writer";
-import { renderDigestMarkdown } from "@/lib/output/markdown-writer";
-import { DeepSeekClient } from "@/lib/llm/deepseek-client";
-import { ArticleEvaluator } from "@/lib/llm/article-evaluator";
-import { DigestSummarizer } from "@/lib/llm/summarizer";
-import { ArticleEvalCache } from "@/lib/cache/article-eval-cache";
-import { loadArticleTypes, loadSources } from "@/lib/config-loader";
 import { fetchArticles } from "@/lib/fetch/rss-fetcher";
-import { normalizeArticles } from "@/lib/process/normalize";
+import { ArticleEvaluator } from "@/lib/llm/article-evaluator";
+import { DeepSeekClient } from "@/lib/llm/deepseek-client";
+import { DigestSummarizer } from "@/lib/llm/summarizer";
+import {
+  buildAnalysisJson,
+  renderAnalysisMarkdown,
+} from "@/lib/output/analysis-writer";
+import { renderDigestMarkdown } from "@/lib/output/markdown-writer";
+import {
+  computeBehaviorMultipliers,
+  selectPreferredSources,
+} from "@/lib/personalization/behavior-weight";
+import {
+  loadSourceDailyClicks,
+  loadTypeDailyClicks,
+} from "@/lib/personalization/consumption-client";
+import { computeTypeMultipliers } from "@/lib/personalization/type-weight";
 import { dedupeArticles } from "@/lib/process/dedupe";
+import { buildInfoKey } from "@/lib/process/info-cluster";
+import { normalizeArticles } from "@/lib/process/normalize";
 import {
   buildBudgetedSourceLimits,
   buildSourceFetchLimits,
   computeSourceQualityScores,
   rankSourcesByPriority,
 } from "@/lib/process/source-quality";
-import { buildInfoKey } from "@/lib/process/info-cluster";
-import { computeBehaviorMultipliers, selectPreferredSources } from "@/lib/personalization/behavior-weight";
-import { computeTypeMultipliers } from "@/lib/personalization/type-weight";
-import { loadSourceDailyClicks, loadTypeDailyClicks } from "@/lib/personalization/consumption-client";
 import { LinkTracker } from "@/lib/tracking/link-tracker";
 
 function isEnabled(name: string, defaultValue = "true"): boolean {
-  const value = String(process.env[name] || defaultValue || "").trim().toLowerCase();
+  const value = String(process.env[name] || defaultValue || "")
+    .trim()
+    .toLowerCase();
   return !["0", "false", "no", "off"].includes(value);
 }
 
@@ -56,13 +67,28 @@ function percentile(values: number[], p: number): number {
 function highlightCap(totalAssessed: number, topN: number): number {
   const defaultRatio = expandedDiscoveryModeEnabled() ? "1.0" : "0.45";
   const defaultMinimum = expandedDiscoveryModeEnabled() ? "8" : "4";
-  const ratio = Math.min(1, Math.max(0.05, Number(process.env.HIGHLIGHT_SELECTION_RATIO || defaultRatio) || 1));
-  const minimum = Math.max(1, Number.parseInt(String(process.env.HIGHLIGHT_MIN_COUNT || defaultMinimum), 10) || 1);
+  const ratio = Math.min(
+    1,
+    Math.max(
+      0.05,
+      Number(process.env.HIGHLIGHT_SELECTION_RATIO || defaultRatio) || 1,
+    ),
+  );
+  const minimum = Math.max(
+    1,
+    Number.parseInt(
+      String(process.env.HIGHLIGHT_MIN_COUNT || defaultMinimum),
+      10,
+    ) || 1,
+  );
   const capped = Math.max(minimum, Math.round(totalAssessed * ratio));
   return Math.max(1, Math.min(topN, capped));
 }
 
-function targetDate(dateValue: string | undefined, timezoneName: string): string {
+function targetDate(
+  dateValue: string | undefined,
+  timezoneName: string,
+): string {
   if (dateValue) return dateValue;
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezoneName,
@@ -70,12 +96,16 @@ function targetDate(dateValue: string | undefined, timezoneName: string): string
     month: "2-digit",
     day: "2-digit",
   });
-  const [{ value: year }, , { value: month }, , { value: day }] = formatter.formatToParts(new Date());
+  const [{ value: year }, , { value: month }, , { value: day }] =
+    formatter.formatToParts(new Date());
   return `${year}-${month}-${day}`;
 }
 
 function repeatLimitEnabled(options: RunDigestOptions): boolean {
-  return isEnabled("REPORT_ARTICLE_REPEAT_LIMIT_ENABLED", "true") && !options.ignoreRepeatLimit;
+  return (
+    isEnabled("REPORT_ARTICLE_REPEAT_LIMIT_ENABLED", "true") &&
+    !options.ignoreRepeatLimit
+  );
 }
 
 function personalizedQualityScore(
@@ -97,18 +127,28 @@ function reorderCandidatesByTypePreference(
     qualityGapGuard: number;
   },
 ): [Array<[number, ScoredArticle]>, number] {
-  if (!candidates.length || !Object.keys(options.typeMultipliers).length || options.blend <= 0) {
+  if (
+    !candidates.length ||
+    !Object.keys(options.typeMultipliers).length ||
+    options.blend <= 0
+  ) {
     return [candidates, 0];
   }
 
   const enriched = candidates.map(([index, article]) => {
-    const score = personalizedQualityScore(article.score, article.primaryType, options.typeMultipliers, options.blend);
+    const score = personalizedQualityScore(
+      article.score,
+      article.primaryType,
+      options.typeMultipliers,
+      options.blend,
+    );
     return { index, article, score };
   });
 
   const ordered = [...enriched].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    if (b.article.score !== a.article.score) return b.article.score - a.article.score;
+    if (b.article.score !== a.article.score)
+      return b.article.score - a.article.score;
     return a.index - b.index;
   });
 
@@ -131,12 +171,18 @@ function reorderCandidatesByTypePreference(
 
   const before = candidates.map((item) => item[1].id);
   const after = ordered.map((item) => item.article.id);
-  const reorderedCount = before.reduce((sum, articleId, index) => sum + (articleId === after[index] ? 0 : 1), 0);
+  const reorderedCount = before.reduce(
+    (sum, articleId, index) => sum + (articleId === after[index] ? 0 : 1),
+    0,
+  );
 
   return [ordered.map((item) => [item.index, item.article]), reorderedCount];
 }
 
-function summarizeMultipliers(values: Record<string, number>, topN = 5): Record<string, unknown> {
+function summarizeMultipliers(
+  values: Record<string, number>,
+  topN = 5,
+): Record<string, unknown> {
   const entries = Object.entries(values || {});
   if (!entries.length) {
     return {
@@ -151,18 +197,31 @@ function summarizeMultipliers(values: Record<string, number>, topN = 5): Record<
   const topPositive = [...entries]
     .sort((a, b) => Number(b[1]) - Number(a[1]))
     .slice(0, Math.max(1, topN))
-    .map(([id, multiplier]) => ({ id, multiplier: Math.round(Number(multiplier) * 10_000) / 10_000 }));
+    .map(([id, multiplier]) => ({
+      id,
+      multiplier: Math.round(Number(multiplier) * 10_000) / 10_000,
+    }));
   return {
     count: entries.length,
     min: Math.round(Math.min(...numeric) * 10_000) / 10_000,
     max: Math.round(Math.max(...numeric) * 10_000) / 10_000,
-    avg: Math.round((numeric.reduce((sum, value) => sum + value, 0) / numeric.length) * 10_000) / 10_000,
+    avg:
+      Math.round(
+        (numeric.reduce((sum, value) => sum + value, 0) / numeric.length) *
+          10_000,
+      ) / 10_000,
     top_positive: topPositive,
   };
 }
 
-function sourceQualityRows(rows: any[], limit = 5, reverse = true): Array<Record<string, unknown>> {
-  const sortedRows = [...rows].sort((a, b) => (reverse ? b.qualityScore - a.qualityScore : a.qualityScore - b.qualityScore));
+function sourceQualityRows(
+  rows: any[],
+  limit = 5,
+  reverse = true,
+): Array<Record<string, unknown>> {
+  const sortedRows = [...rows].sort((a, b) =>
+    reverse ? b.qualityScore - a.qualityScore : a.qualityScore - b.qualityScore,
+  );
   return sortedRows.slice(0, Math.max(1, limit)).map((item) => ({
     source_id: item.sourceId,
     quality_score: Math.round(Number(item.qualityScore || 0) * 100) / 100,
@@ -183,7 +242,12 @@ function articleBriefRow(article: any): Record<string, unknown> {
   };
 }
 
-async function writeOutput(content: string, reportDate: string, outputDir: string, suffix = "md"): Promise<string> {
+async function writeOutput(
+  content: string,
+  reportDate: string,
+  outputDir: string,
+  suffix = "md",
+): Promise<string> {
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, `${reportDate}.${suffix}`);
   await fs.writeFile(outputPath, content, "utf-8");
@@ -199,8 +263,11 @@ export interface RunDigestOptions {
   ignoreRepeatLimit?: boolean;
 }
 
-export async function runDigestWithResult(options: RunDigestOptions = {}): Promise<DigestRunResult> {
-  const timezoneName = String(options.tz || "Asia/Shanghai").trim() || "Asia/Shanghai";
+export async function runDigestWithResult(
+  options: RunDigestOptions = {},
+): Promise<DigestRunResult> {
+  const timezoneName =
+    String(options.tz || "Asia/Shanghai").trim() || "Asia/Shanghai";
   const reportDate = targetDate(options.date, timezoneName);
   const outputDir = String(options.outputDir || "reports").trim() || "reports";
 
@@ -230,7 +297,9 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
 
   let articleTypes: string[];
   try {
-    articleTypes = loadArticleTypes(process.env.ARTICLE_TYPES_CONFIG || undefined);
+    articleTypes = loadArticleTypes(
+      process.env.ARTICLE_TYPES_CONFIG || undefined,
+    );
   } catch {
     result.exitCode = 2;
     return result;
@@ -251,12 +320,32 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
   let preferredSourceIds = new Set<string>();
 
   const personalizationEnabled = isEnabled("PERSONALIZATION_ENABLED", "true");
-  const typePersonalizationEnabled = isEnabled("TYPE_PERSONALIZATION_ENABLED", "true");
+  const typePersonalizationEnabled = isEnabled(
+    "TYPE_PERSONALIZATION_ENABLED",
+    "true",
+  );
 
-  const lookbackDays = Math.max(1, Number.parseInt(String(process.env.PERSONALIZATION_LOOKBACK_DAYS || "90"), 10) || 90);
-  const halfLifeDays = Math.max(1, Number.parseFloat(String(process.env.PERSONALIZATION_HALF_LIFE_DAYS || "21")) || 21);
-  const minMultiplier = Number.parseFloat(String(process.env.PERSONALIZATION_MIN_MULTIPLIER || "0.85")) || 0.85;
-  const maxMultiplier = Number.parseFloat(String(process.env.PERSONALIZATION_MAX_MULTIPLIER || "1.2")) || 1.2;
+  const lookbackDays = Math.max(
+    1,
+    Number.parseInt(
+      String(process.env.PERSONALIZATION_LOOKBACK_DAYS || "90"),
+      10,
+    ) || 90,
+  );
+  const halfLifeDays = Math.max(
+    1,
+    Number.parseFloat(
+      String(process.env.PERSONALIZATION_HALF_LIFE_DAYS || "21"),
+    ) || 21,
+  );
+  const minMultiplier =
+    Number.parseFloat(
+      String(process.env.PERSONALIZATION_MIN_MULTIPLIER || "0.85"),
+    ) || 0.85;
+  const maxMultiplier =
+    Number.parseFloat(
+      String(process.env.PERSONALIZATION_MAX_MULTIPLIER || "1.2"),
+    ) || 1.2;
 
   if (personalizationEnabled) {
     try {
@@ -267,7 +356,10 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
         minMultiplier,
         maxMultiplier,
       });
-      preferredSourceIds = selectPreferredSources(sourceDailyClicks, { minClicks: 2, topQuantile: 0.3 });
+      preferredSourceIds = selectPreferredSources(sourceDailyClicks, {
+        minClicks: 2,
+        topQuantile: 0.3,
+      });
     } catch {
       behaviorMultipliers = {};
     }
@@ -275,18 +367,39 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
 
   const typeLookbackDays = Math.max(
     1,
-    Number.parseInt(String(process.env.TYPE_PERSONALIZATION_LOOKBACK_DAYS || "90"), 10) || 90,
+    Number.parseInt(
+      String(process.env.TYPE_PERSONALIZATION_LOOKBACK_DAYS || "90"),
+      10,
+    ) || 90,
   );
   const typeHalfLifeDays = Math.max(
     1,
-    Number.parseFloat(String(process.env.TYPE_PERSONALIZATION_HALF_LIFE_DAYS || "21")) || 21,
+    Number.parseFloat(
+      String(process.env.TYPE_PERSONALIZATION_HALF_LIFE_DAYS || "21"),
+    ) || 21,
   );
-  const typeMinMultiplier = Number.parseFloat(String(process.env.TYPE_PERSONALIZATION_MIN_MULTIPLIER || "0.9")) || 0.9;
-  const typeMaxMultiplier = Number.parseFloat(String(process.env.TYPE_PERSONALIZATION_MAX_MULTIPLIER || "1.15")) || 1.15;
-  const typeBlend = Math.max(0, Math.min(1, Number.parseFloat(String(process.env.TYPE_PERSONALIZATION_BLEND || "0.2")) || 0.2));
+  const typeMinMultiplier =
+    Number.parseFloat(
+      String(process.env.TYPE_PERSONALIZATION_MIN_MULTIPLIER || "0.9"),
+    ) || 0.9;
+  const typeMaxMultiplier =
+    Number.parseFloat(
+      String(process.env.TYPE_PERSONALIZATION_MAX_MULTIPLIER || "1.15"),
+    ) || 1.15;
+  const typeBlend = Math.max(
+    0,
+    Math.min(
+      1,
+      Number.parseFloat(
+        String(process.env.TYPE_PERSONALIZATION_BLEND || "0.2"),
+      ) || 0.2,
+    ),
+  );
   const typeQualityGapGuard = Math.max(
     0,
-    Number.parseFloat(String(process.env.TYPE_PERSONALIZATION_QUALITY_GAP_GUARD || "8")) || 8,
+    Number.parseFloat(
+      String(process.env.TYPE_PERSONALIZATION_QUALITY_GAP_GUARD || "8"),
+    ) || 8,
   );
 
   if (typePersonalizationEnabled) {
@@ -303,23 +416,40 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
     }
   }
 
-  const prioritizedSources = rankSourcesByPriority(sources, historicalSourceScores, behaviorMultipliers);
+  const prioritizedSources = rankSourcesByPriority(
+    sources,
+    historicalSourceScores,
+    behaviorMultipliers,
+  );
   let perSourceLimits = buildSourceFetchLimits(prioritizedSources);
 
-  const fetchBudget = Math.max(0, Number.parseInt(String(process.env.SOURCE_FETCH_BUDGET || "60"), 10) || 60);
-  const explorationRatio = Number.parseFloat(String(process.env.EXPLORATION_RATIO || "0.15")) || 0.15;
+  const fetchBudget = Math.max(
+    0,
+    Number.parseInt(String(process.env.SOURCE_FETCH_BUDGET || "60"), 10) || 60,
+  );
+  const explorationRatio =
+    Number.parseFloat(String(process.env.EXPLORATION_RATIO || "0.15")) || 0.15;
 
   perSourceLimits = buildBudgetedSourceLimits(
     prioritizedSources,
     perSourceLimits,
     fetchBudget,
-    Math.max(1, Number.parseInt(String(process.env.MIN_FETCH_PER_SOURCE || "3"), 10) || 3),
+    Math.max(
+      1,
+      Number.parseInt(String(process.env.MIN_FETCH_PER_SOURCE || "3"), 10) || 3,
+    ),
     preferredSourceIds,
     explorationRatio,
   );
 
   const defaultMaxEval = expandedDiscoveryModeEnabled() ? 120 : 60;
-  const maxEvalArticles = Math.max(1, Number.parseInt(String(process.env.MAX_EVAL_ARTICLES || defaultMaxEval), 10) || defaultMaxEval);
+  const maxEvalArticles = Math.max(
+    1,
+    Number.parseInt(
+      String(process.env.MAX_EVAL_ARTICLES || defaultMaxEval),
+      10,
+    ) || defaultMaxEval,
+  );
 
   const fetched = await fetchArticles(prioritizedSources, {
     perSourceLimits,
@@ -339,7 +469,16 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
 
   const deduped = rankedDeduped.slice(0, maxEvalArticles);
   const evalCapSkipped = rankedDeduped.slice(maxEvalArticles);
-  const analysisListLimit = Math.max(1, Math.min(Number.parseInt(String(process.env.ANALYSIS_DEDUPE_LIST_LIMIT || "300"), 10) || 300, 1000));
+  const analysisListLimit = Math.max(
+    1,
+    Math.min(
+      Number.parseInt(
+        String(process.env.ANALYSIS_DEDUPE_LIST_LIMIT || "300"),
+        10,
+      ) || 300,
+      1000,
+    ),
+  );
 
   if (!deduped.length) {
     result.exitCode = 3;
@@ -370,10 +509,16 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
     return result;
   }
 
-  const sourceQualityList = computeSourceQualityScores(deduped, assessments, historicalSourceScores);
+  const sourceQualityList = computeSourceQualityScores(
+    deduped,
+    assessments,
+    historicalSourceScores,
+  );
   await cache.upsertSourceScores(sourceQualityList);
 
-  const sourceQualityMap = Object.fromEntries(sourceQualityList.map((item) => [item.sourceId, item]));
+  const sourceQualityMap = Object.fromEntries(
+    sourceQualityList.map((item) => [item.sourceId, item]),
+  );
 
   let topSummary = "";
   let dailyTags: string[] = [];
@@ -401,16 +546,26 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
     repeat_limit_blocked: 0,
   };
 
-  const minHighlightScore = Number.parseFloat(String(process.env.MIN_HIGHLIGHT_SCORE || "62")) || 62;
-  const minWorthReadingScore = Number.parseFloat(String(process.env.MIN_WORTH_READING_SCORE || "58")) || 58;
-  const minHighlightConfidence = Number.parseFloat(String(process.env.MIN_HIGHLIGHT_CONFIDENCE || "0.55")) || 0.55;
-  const dynamicPercentile = Number.parseFloat(String(process.env.HIGHLIGHT_DYNAMIC_PERCENTILE || "70")) || 70;
+  const minHighlightScore =
+    Number.parseFloat(String(process.env.MIN_HIGHLIGHT_SCORE || "62")) || 62;
+  const minWorthReadingScore =
+    Number.parseFloat(String(process.env.MIN_WORTH_READING_SCORE || "58")) ||
+    58;
+  const minHighlightConfidence =
+    Number.parseFloat(String(process.env.MIN_HIGHLIGHT_CONFIDENCE || "0.55")) ||
+    0.55;
+  const dynamicPercentile =
+    Number.parseFloat(
+      String(process.env.HIGHLIGHT_DYNAMIC_PERCENTILE || "70"),
+    ) || 70;
 
   const scoredAssessments = Object.values(assessments)
     .filter((item) => item.worth !== WORTH_SKIP)
     .map((item) => Number(item.qualityScore));
 
-  const dynamicThreshold = scoredAssessments.length ? percentile(scoredAssessments, dynamicPercentile) : minHighlightScore;
+  const dynamicThreshold = scoredAssessments.length
+    ? percentile(scoredAssessments, dynamicPercentile)
+    : minHighlightScore;
   const effectiveThreshold = Math.max(minHighlightScore, dynamicThreshold);
   const selectionCap = highlightCap(scoredAssessments.length, topN);
 
@@ -418,8 +573,14 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
   let fallbackWorthReading: Array<[number, ScoredArticle]> = [];
 
   const limitEnabled = repeatLimitEnabled(options);
-  const maxInfoDup = Math.max(1, Number.parseInt(String(process.env.MAX_INFO_DUP_PER_DIGEST || "2"), 10) || 2);
-  const historicalArticleCounts = limitEnabled ? await cache.loadReportArticleCounts() : {};
+  const maxInfoDup = Math.max(
+    1,
+    Number.parseInt(String(process.env.MAX_INFO_DUP_PER_DIGEST || "2"), 10) ||
+      2,
+  );
+  const historicalArticleCounts = limitEnabled
+    ? await cache.loadReportArticleCounts()
+    : {};
   const articleKeyCounts: Record<string, number> = {};
   let repeatGuardSkips = 0;
 
@@ -451,11 +612,17 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
       gateSkips.low_confidence += 1;
       return;
     }
-    if (assessment.worth === WORTH_MUST_READ && assessment.qualityScore < effectiveThreshold) {
+    if (
+      assessment.worth === WORTH_MUST_READ &&
+      assessment.qualityScore < effectiveThreshold
+    ) {
       gateSkips.must_read_below_threshold += 1;
       return;
     }
-    if (assessment.worth === WORTH_WORTH_READING && assessment.qualityScore < minWorthReadingScore) {
+    if (
+      assessment.worth === WORTH_WORTH_READING &&
+      assessment.qualityScore < minWorthReadingScore
+    ) {
       gateSkips.worth_reading_below_threshold += 1;
       return;
     }
@@ -480,16 +647,20 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
 
   let mustReadReordered = 0;
   let worthReadingReordered = 0;
-  [mustReadCandidates, mustReadReordered] = reorderCandidatesByTypePreference(mustReadCandidates, {
-    typeMultipliers,
-    blend: typeBlend,
-    qualityGapGuard: typeQualityGapGuard,
-  });
-  [fallbackWorthReading, worthReadingReordered] = reorderCandidatesByTypePreference(fallbackWorthReading, {
-    typeMultipliers,
-    blend: typeBlend,
-    qualityGapGuard: typeQualityGapGuard,
-  });
+  [mustReadCandidates, mustReadReordered] = reorderCandidatesByTypePreference(
+    mustReadCandidates,
+    {
+      typeMultipliers,
+      blend: typeBlend,
+      qualityGapGuard: typeQualityGapGuard,
+    },
+  );
+  [fallbackWorthReading, worthReadingReordered] =
+    reorderCandidatesByTypePreference(fallbackWorthReading, {
+      typeMultipliers,
+      blend: typeBlend,
+      qualityGapGuard: typeQualityGapGuard,
+    });
 
   let selectedFromMustRead = 0;
   for (const [, scoredArticle] of mustReadCandidates) {
@@ -551,13 +722,18 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
     confidenceScores.push(Number(item.confidence));
   });
 
-  const skipRate = Object.values(assessments).length ? Number(worthCounts[WORTH_SKIP] || 0) / Object.values(assessments).length : 0;
+  const skipRate = Object.values(assessments).length
+    ? Number(worthCounts[WORTH_SKIP] || 0) / Object.values(assessments).length
+    : 0;
 
   const diagnosticFlags: string[] = [];
   if (!taggedHighlights.length) diagnosticFlags.push("无重点文章入选");
   if (skipRate >= 0.7) diagnosticFlags.push("跳过占比过高");
   if (repeatGuardSkips > 0) diagnosticFlags.push("重复限制阻塞了部分候选");
-  if (dedupeStats.urlDuplicates + dedupeStats.titleDuplicates > Math.max(10, Math.trunc(normalized.length / 3))) {
+  if (
+    dedupeStats.urlDuplicates + dedupeStats.titleDuplicates >
+    Math.max(10, Math.trunc(normalized.length / 3))
+  ) {
     diagnosticFlags.push("去重命中偏高，信息同质化明显");
   }
   if (personalizationEnabled && !Object.keys(behaviorMultipliers).length) {
@@ -599,7 +775,8 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
         dynamic_threshold: Math.round(dynamicThreshold * 100) / 100,
         effective_threshold: Math.round(effectiveThreshold * 100) / 100,
         min_worth_reading_score: Math.round(minWorthReadingScore * 100) / 100,
-        min_highlight_confidence: Math.round(minHighlightConfidence * 1000) / 1000,
+        min_highlight_confidence:
+          Math.round(minHighlightConfidence * 1000) / 1000,
         selection_cap: selectionCap,
       },
       gate_skips: gateSkips,
@@ -620,7 +797,9 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
       dropped_items_total: dedupeStats.droppedItems.length,
       analysis_list_limit: analysisListLimit,
       eval_cap_skipped_count: evalCapSkipped.length,
-      eval_cap_skipped_items: evalCapSkipped.slice(0, analysisListLimit).map((item) => articleBriefRow(item)),
+      eval_cap_skipped_items: evalCapSkipped
+        .slice(0, analysisListLimit)
+        .map((item) => articleBriefRow(item)),
       repeat_guard_enabled: limitEnabled,
       max_info_dup: maxInfoDup,
       historical_article_key_count: Object.keys(historicalArticleCounts).length,
@@ -657,7 +836,12 @@ export async function runDigestWithResult(options: RunDigestOptions = {}): Promi
   if (analysisEnabled) {
     analysisJson = buildAnalysisJson(analysisContext);
     analysisMarkdown = renderAnalysisMarkdown(analysisJson);
-    analysisPath = await writeOutput(analysisMarkdown, reportDate, outputDir, "analysis.md");
+    analysisPath = await writeOutput(
+      analysisMarkdown,
+      reportDate,
+      outputDir,
+      "analysis.md",
+    );
   }
 
   result.exitCode = 0;

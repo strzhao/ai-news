@@ -73,7 +73,9 @@ describe("flomo archive articles formatter", () => {
     expect(payload.content).toContain("- 第一篇摘要");
     expect(payload.content).toContain("【重点文章】");
     expect(payload.content).toContain("1. First");
-    expect(payload.content).toContain("链接：https://tracker.example.com/api/r?");
+    expect(payload.content).toContain(
+      "链接：https://tracker.example.com/api/r?",
+    );
     expect(payload.content).toContain("sid=example.com");
     expect(payload.content).toContain("aid=a1");
     expect(payload.content).toContain("d=2026-03-01");
@@ -93,7 +95,9 @@ describe("flomo archive articles formatter", () => {
     const lastLine = nonEmptyLines[nonEmptyLines.length - 1] || "";
     expect(lastLine.startsWith("#")).toBe(true);
     const tagTokens = lastLine.split(/\s+/);
-    expect(tagTokens.every((token) => token.startsWith("#") && !token.includes(" "))).toBe(true);
+    expect(
+      tagTokens.every((token) => token.startsWith("#") && !token.includes(" ")),
+    ).toBe(true);
     expect(tagTokens.length).toBeLessThanOrEqual(4);
   });
 

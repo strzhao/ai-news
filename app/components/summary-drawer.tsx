@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { submitExtraction, pollTaskStatus } from "@/lib/client/url-analysis";
+import { pollTaskStatus, submitExtraction } from "@/lib/client/url-analysis";
 import { updatePickSummary } from "@/lib/client/user-picks";
 
 export interface SummaryDrawerArticle {
@@ -37,7 +37,13 @@ function formatTime(value: string): string {
   }).format(date);
 }
 
-export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSummaryRegenerated }: SummaryDrawerProps): React.ReactNode {
+export function SummaryDrawer({
+  article,
+  open,
+  onClose,
+  preloadedSummary,
+  onSummaryRegenerated,
+}: SummaryDrawerProps): React.ReactNode {
   const [summaryMarkdown, setSummaryMarkdown] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState("");
@@ -56,7 +62,10 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
   const fetchSummary = useCallback(async (articleId: string, pollCount = 0) => {
     if (activeArticleIdRef.current !== articleId) return;
     try {
-      const response = await fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, { cache: "no-store" });
+      const response = await fetch(
+        `/api/article_summary/${encodeURIComponent(articleId)}`,
+        { cache: "no-store" },
+      );
       const data = await response.json();
       if (activeArticleIdRef.current !== articleId) return;
 
@@ -69,7 +78,9 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
       } else if (data.status === "failed") {
         setSummaryError(data.error || "AI 总结生成失败，请稍后重试");
       } else if (pollCount < 60) {
-        pollRef.current = setTimeout(() => { void fetchSummary(articleId, pollCount + 1); }, 5000);
+        pollRef.current = setTimeout(() => {
+          void fetchSummary(articleId, pollCount + 1);
+        }, 5000);
         return;
       } else {
         setSummaryError("总结生成超时，请稍后重试");
@@ -172,7 +183,9 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
 
   // Cleanup poll on unmount
   useEffect(() => {
-    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
   }, []);
 
   if (!open || !article) return null;
@@ -193,13 +206,18 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
         <div className="summary-drawer-meta">
           <span>{article.source_host || "未知来源"}</span>
           <span> · </span>
-          <span>{article.metaLabel ?? (article.generated_at ? formatTime(article.generated_at) : "-")}</span>
+          <span>
+            {article.metaLabel ??
+              (article.generated_at ? formatTime(article.generated_at) : "-")}
+          </span>
         </div>
 
         {summaryLoading && !showPreloaded ? (
           <div className="analyze-pending">
             <div className="analyze-spinner" />
-            <p className="analyze-pending-text">{regenerating ? "正在重新生成 AI 总结..." : "正在生成 AI 总结..."}</p>
+            <p className="analyze-pending-text">
+              {regenerating ? "正在重新生成 AI 总结..." : "正在生成 AI 总结..."}
+            </p>
             <p className="analyze-pending-hint">通常需要 30-60 秒，请稍候</p>
           </div>
         ) : null}
@@ -208,7 +226,13 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
           <div className="error-banner" style={{ marginTop: 20 }}>
             {summaryError}
             {!regenerating ? (
-              <button type="button" className="regen-btn" onClick={() => { void handleRegenerate(); }}>
+              <button
+                type="button"
+                className="regen-btn"
+                onClick={() => {
+                  void handleRegenerate();
+                }}
+              >
                 重新生成
               </button>
             ) : null}
@@ -220,7 +244,14 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
             <ReactMarkdown
               components={{
                 a: ({ children, href, ...props }) => (
-                  <a href={href} target="_blank" rel="noreferrer noopener" {...props}>{children}</a>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    {...props}
+                  >
+                    {children}
+                  </a>
                 ),
               }}
             >
@@ -234,7 +265,14 @@ export function SummaryDrawer({ article, open, onClose, preloadedSummary, onSumm
             <ReactMarkdown
               components={{
                 a: ({ children, href, ...props }) => (
-                  <a href={href} target="_blank" rel="noreferrer noopener" {...props}>{children}</a>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    {...props}
+                  >
+                    {children}
+                  </a>
                 ),
               }}
             >

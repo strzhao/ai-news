@@ -53,7 +53,9 @@ describe("archive articles", () => {
     const tracked =
       "https://ai-news.example.com/api/r?u=https%3A%2F%2Forigin.example.com%2Fpost%3Futm_source%3Dfeed%26id%3D7&sid=s1";
 
-    expect(resolveArchiveArticleUrl(tracked)).toBe("https://origin.example.com/post?id=7");
+    expect(resolveArchiveArticleUrl(tracked)).toBe(
+      "https://origin.example.com/post?id=7",
+    );
   });
 
   it("aggregateArchiveArticlesFromDigests applies global dedupe and keeps earliest item", () => {
@@ -98,11 +100,18 @@ describe("archive articles", () => {
     expect(result.totalArticles).toBe(3);
     expect(result.groups).toHaveLength(2);
 
-    const olderGroup = result.groups.find((group) => group.date === "2026-02-27");
+    const olderGroup = result.groups.find(
+      (group) => group.date === "2026-02-27",
+    );
     expect(olderGroup?.items).toHaveLength(2);
-    expect(olderGroup?.items.map((item) => item.title)).toEqual(["Same Story", "Only Old"]);
+    expect(olderGroup?.items.map((item) => item.title)).toEqual([
+      "Same Story",
+      "Only Old",
+    ]);
 
-    const latestGroup = result.groups.find((group) => group.date === "2026-02-28");
+    const latestGroup = result.groups.find(
+      (group) => group.date === "2026-02-28",
+    );
     expect(latestGroup?.items).toHaveLength(1);
     expect(latestGroup?.items[0].title).toBe("Only New");
 
@@ -121,16 +130,19 @@ describe("archive articles", () => {
       "",
     ].join("\n");
 
-    const result = aggregateArchiveArticlesFromDigests([
+    const result = aggregateArchiveArticlesFromDigests(
+      [
+        {
+          digest_id: "d_1",
+          date: "2026-02-28",
+          generated_at: "2026-02-28T09:00:00.000Z",
+          markdown,
+        },
+      ],
       {
-        digest_id: "d_1",
-        date: "2026-02-28",
-        generated_at: "2026-02-28T09:00:00.000Z",
-        markdown,
+        articleLimitPerDay: 0,
       },
-    ], {
-      articleLimitPerDay: 0,
-    });
+    );
 
     expect(result.totalArticles).toBe(3);
     expect(result.groups).toHaveLength(1);

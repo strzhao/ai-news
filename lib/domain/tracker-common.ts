@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 import { URL } from "node:url";
-import { buildUpstashClient, buildUpstashClientOrNone, parseHashResult as parseHashRaw } from "@/lib/infra/upstash";
+import {
+  buildUpstashClient,
+  buildUpstashClientOrNone,
+  parseHashResult as parseHashRaw,
+} from "@/lib/infra/upstash";
 
 export const DEFAULT_TTL_SECONDS = 120 * 24 * 3600;
 
@@ -36,7 +40,10 @@ export function parseBearerToken(headerValue: string | null): string {
   return token.trim();
 }
 
-export function shouldSkipTracking(method: string | null, userAgent: string | null): boolean {
+export function shouldSkipTracking(
+  method: string | null,
+  userAgent: string | null,
+): boolean {
   if (String(method || "").toUpperCase() === "HEAD") {
     return true;
   }
@@ -95,23 +102,36 @@ export function canonicalQuery(params: Record<string, string>): string {
   return Object.entries(params)
     .filter(([, value]) => String(value).trim())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .map(
+      ([key, value]) =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+    )
     .join("&");
 }
 
-export function signParams(params: Record<string, string>, secret: string): string {
+export function signParams(
+  params: Record<string, string>,
+  secret: string,
+): string {
   const payload = canonicalQuery(params);
   return crypto.createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-export function verifySignature(params: Record<string, string>, providedSig: string, secret: string): boolean {
+export function verifySignature(
+  params: Record<string, string>,
+  providedSig: string,
+  secret: string,
+): boolean {
   const normalized = String(providedSig || "").trim();
   if (normalized.length !== 64) {
     return false;
   }
   const expected = signParams(params, secret);
   try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(normalized));
+    return crypto.timingSafeEqual(
+      Buffer.from(expected),
+      Buffer.from(normalized),
+    );
   } catch {
     return false;
   }

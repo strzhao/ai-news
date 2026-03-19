@@ -5,7 +5,13 @@ import { useEffect, useState } from "react";
 
 import { fetchAuthUser } from "@/lib/client/auth";
 import { fetchFlomoData, saveFlomoWebhook } from "@/lib/client/flomo";
-import type { AuthUser, FlomoClickStats, FlomoConfig, FlomoPushStats, EmailNotifyConfig } from "@/lib/client/types";
+import type {
+  AuthUser,
+  EmailNotifyConfig,
+  FlomoClickStats,
+  FlomoConfig,
+  FlomoPushStats,
+} from "@/lib/client/types";
 
 function formatPushTime(value: string): string {
   if (!value) return "-";
@@ -29,10 +35,22 @@ export default function SettingsPage(): React.ReactNode {
   const [flomoWebhookInput, setFlomoWebhookInput] = useState("");
   const [flomoEditing, setFlomoEditing] = useState(false);
   const [flomoSaving, setFlomoSaving] = useState(false);
-  const [flomoMessage, setFlomoMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-  const [flomoPushStats, setFlomoPushStats] = useState<FlomoPushStats>({ total: 0, recent: [] });
-  const [flomoClickStats, setFlomoClickStats] = useState<FlomoClickStats>({ total_clicks: 0, days: 30, daily: [] });
-  const [emailNotify, setEmailNotify] = useState<EmailNotifyConfig | null>(null);
+  const [flomoMessage, setFlomoMessage] = useState<{
+    text: string;
+    type: "success" | "error";
+  } | null>(null);
+  const [flomoPushStats, setFlomoPushStats] = useState<FlomoPushStats>({
+    total: 0,
+    recent: [],
+  });
+  const [flomoClickStats, setFlomoClickStats] = useState<FlomoClickStats>({
+    total_clicks: 0,
+    days: 30,
+    daily: [],
+  });
+  const [emailNotify, setEmailNotify] = useState<EmailNotifyConfig | null>(
+    null,
+  );
   const [emailNotifyLoading, setEmailNotifyLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -59,8 +77,13 @@ export default function SettingsPage(): React.ReactNode {
       }
 
       try {
-        const emailRes = await fetch("/api/v1/email-notify/config", { credentials: "include" });
-        const emailPayload = (await emailRes.json()) as { ok: boolean; config?: EmailNotifyConfig };
+        const emailRes = await fetch("/api/v1/email-notify/config", {
+          credentials: "include",
+        });
+        const emailPayload = (await emailRes.json()) as {
+          ok: boolean;
+          config?: EmailNotifyConfig;
+        };
         if (emailPayload.ok && emailPayload.config) {
           setEmailNotify(emailPayload.config);
         }
@@ -72,8 +95,13 @@ export default function SettingsPage(): React.ReactNode {
         const { isPushSupported } = await import("@/lib/client/web-push");
         if (isPushSupported()) {
           setPushSupported(true);
-          const pushRes = await fetch("/api/v1/web-push/config", { credentials: "include" });
-          const pushPayload = (await pushRes.json()) as { ok: boolean; config?: { enabled: boolean } };
+          const pushRes = await fetch("/api/v1/web-push/config", {
+            credentials: "include",
+          });
+          const pushPayload = (await pushRes.json()) as {
+            ok: boolean;
+            config?: { enabled: boolean };
+          };
           if (pushPayload.ok && pushPayload.config) {
             setPushEnabled(pushPayload.config.enabled);
           }
@@ -119,7 +147,11 @@ export default function SettingsPage(): React.ReactNode {
         </div>
         <section className="settings-section">
           <p className="settings-empty">请先登录后访问设置页。</p>
-          <Link href="/" className="flomo-btn" style={{ display: "inline-flex", textDecoration: "none" }}>
+          <Link
+            href="/"
+            className="flomo-btn"
+            style={{ display: "inline-flex", textDecoration: "none" }}
+          >
             返回首页
           </Link>
         </section>
@@ -139,7 +171,11 @@ export default function SettingsPage(): React.ReactNode {
         </header>
         <div className="settings-account-row">
           <span className="settings-account-email">{authUser.email}</span>
-          <button type="button" className="flomo-btn flomo-btn-secondary" onClick={switchAccount}>
+          <button
+            type="button"
+            className="flomo-btn flomo-btn-secondary"
+            onClick={switchAccount}
+          >
             切换账号
           </button>
         </div>
@@ -152,7 +188,8 @@ export default function SettingsPage(): React.ReactNode {
           </header>
 
           <p className="flomo-description">
-            配置后，系统会在每天 7:00 和 19:00 自动将当日精选 AI 文章摘要推送到你的 Flomo。
+            配置后，系统会在每天 7:00 和 19:00 自动将当日精选 AI
+            文章摘要推送到你的 Flomo。
             内容包含文章标题、摘要和原文链接，方便稍后阅读。
           </p>
 
@@ -175,8 +212,8 @@ export default function SettingsPage(): React.ReactNode {
                   rel="noreferrer noopener"
                 >
                   v.flomoapp.com/mine
-                </a>
-                {" "}→ API &amp; Webhook → 复制你的 Webhook 地址
+                </a>{" "}
+                → API &amp; Webhook → 复制你的 Webhook 地址
               </p>
               <div className="flomo-action-row">
                 <button
@@ -220,7 +257,9 @@ export default function SettingsPage(): React.ReactNode {
           )}
 
           {flomoMessage ? (
-            <div className={`flomo-message ${flomoMessage.type === "success" ? "is-success" : "is-error"}`}>
+            <div
+              className={`flomo-message ${flomoMessage.type === "success" ? "is-success" : "is-error"}`}
+            >
               {flomoMessage.text}
             </div>
           ) : null}
@@ -249,7 +288,10 @@ export default function SettingsPage(): React.ReactNode {
                     credentials: "include",
                     body: JSON.stringify({ enabled: !emailNotify.enabled }),
                   });
-                  const payload = (await res.json()) as { ok: boolean; config?: EmailNotifyConfig };
+                  const payload = (await res.json()) as {
+                    ok: boolean;
+                    config?: EmailNotifyConfig;
+                  };
                   if (payload.ok && payload.config) {
                     setEmailNotify(payload.config);
                   }
@@ -274,7 +316,8 @@ export default function SettingsPage(): React.ReactNode {
             <h2>浏览器推送</h2>
           </header>
           <p className="flomo-description">
-            开启后，系统会在每天 7:00 和 19:00 通过浏览器推送通知提醒你查看当日精选 AI 文章。
+            开启后，系统会在每天 7:00 和 19:00
+            通过浏览器推送通知提醒你查看当日精选 AI 文章。
           </p>
           <div className="email-notify-row">
             <button
@@ -291,7 +334,9 @@ export default function SettingsPage(): React.ReactNode {
                       setPushMessage("请在浏览器设置中允许通知权限");
                       return;
                     }
-                    const { subscribeToPush } = await import("@/lib/client/web-push");
+                    const { subscribeToPush } = await import(
+                      "@/lib/client/web-push"
+                    );
                     const ok = await subscribeToPush();
                     if (ok) {
                       setPushEnabled(true);
@@ -299,7 +344,9 @@ export default function SettingsPage(): React.ReactNode {
                       setPushMessage("订阅失败，请重试");
                     }
                   } else {
-                    const { unsubscribeFromPush } = await import("@/lib/client/web-push");
+                    const { unsubscribeFromPush } = await import(
+                      "@/lib/client/web-push"
+                    );
                     await unsubscribeFromPush();
                     setPushEnabled(false);
                   }
@@ -322,7 +369,8 @@ export default function SettingsPage(): React.ReactNode {
         </section>
       ) : null}
 
-      {flomoConfigLoaded && (flomoPushStats.total > 0 || flomoClickStats.total_clicks > 0) ? (
+      {flomoConfigLoaded &&
+      (flomoPushStats.total > 0 || flomoClickStats.total_clicks > 0) ? (
         <section className="settings-section">
           <header className="block-head">
             <h2>使用统计</h2>
@@ -333,15 +381,22 @@ export default function SettingsPage(): React.ReactNode {
               <span className="stats-card-label">总推送</span>
             </div>
             <div className="stats-card">
-              <span className="stats-card-value">{flomoClickStats.total_clicks}</span>
+              <span className="stats-card-value">
+                {flomoClickStats.total_clicks}
+              </span>
               <span className="stats-card-label">总点击</span>
             </div>
             <div className="stats-card">
               <span className="stats-card-value">
                 {(() => {
-                  const totalArticles = flomoPushStats.recent.reduce((sum, e) => sum + e.article_count, 0);
+                  const totalArticles = flomoPushStats.recent.reduce(
+                    (sum, e) => sum + e.article_count,
+                    0,
+                  );
                   if (!totalArticles) return "-";
-                  return (flomoClickStats.total_clicks / totalArticles).toFixed(1);
+                  return (flomoClickStats.total_clicks / totalArticles).toFixed(
+                    1,
+                  );
                 })()}
               </span>
               <span className="stats-card-label">篇均点击</span>
@@ -359,7 +414,9 @@ export default function SettingsPage(): React.ReactNode {
                     <div
                       key={d.date}
                       className="stats-sparkline-bar"
-                      style={{ height: `${Math.max(4, (d.clicks / maxClicks) * 32)}px` }}
+                      style={{
+                        height: `${Math.max(4, (d.clicks / maxClicks) * 32)}px`,
+                      }}
                       title={`${d.date}: ${d.clicks} 次点击`}
                     />
                   ))}
@@ -378,10 +435,17 @@ export default function SettingsPage(): React.ReactNode {
           </header>
           <div className="push-log-list">
             {flomoPushStats.recent.map((entry, i) => (
-              <div key={`${entry.date}-${entry.pushed_at}-${i}`} className="push-log-item">
+              <div
+                key={`${entry.date}-${entry.pushed_at}-${i}`}
+                className="push-log-item"
+              >
                 <span className="push-log-date">{entry.date}</span>
-                <span className="push-log-count">{entry.article_count} 篇文章</span>
-                <span className="push-log-time">{formatPushTime(entry.pushed_at)}</span>
+                <span className="push-log-count">
+                  {entry.article_count} 篇文章
+                </span>
+                <span className="push-log-time">
+                  {formatPushTime(entry.pushed_at)}
+                </span>
               </div>
             ))}
           </div>

@@ -31,7 +31,9 @@ export interface FlomoTagDefinition {
 }
 
 function normalizeText(value: string, maxLen: number): string {
-  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  const normalized = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!normalized) {
     return "";
   }
@@ -53,7 +55,7 @@ function normalizeTagKey(value: string): string {
   return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9_\-]/g, "_")
+    .replace(/[^a-z0-9_-]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "");
 }
@@ -142,11 +144,16 @@ function collectFlomoTags(params: {
 }): string[] {
   const articles = Array.isArray(params.articles) ? params.articles : [];
   const tagLimit = Math.max(1, Math.min(Number(params.tagLimit || 20), 200));
-  const canonicalByGroup = buildCanonicalTagMap(params.activeTagDefinitions || []);
+  const canonicalByGroup = buildCanonicalTagMap(
+    params.activeTagDefinitions || [],
+  );
   const countByTag = new Map<string, number>();
 
   articles.forEach((article) => {
-    const tagGroups = article.tag_groups && typeof article.tag_groups === "object" ? article.tag_groups : {};
+    const tagGroups =
+      article.tag_groups && typeof article.tag_groups === "object"
+        ? article.tag_groups
+        : {};
     Object.entries(tagGroups)
       .sort(([left], [right]) => String(left).localeCompare(String(right)))
       .forEach(([groupKey, tags]) => {
@@ -157,7 +164,9 @@ function collectFlomoTags(params: {
         tags.forEach((rawTag) => {
           const normalizedTag = normalizeTagKey(String(rawTag || ""));
           if (!normalizedTag) return;
-          const canonicalTag = normalizeTagKey(canonicalMap[normalizedTag] || normalizedTag);
+          const canonicalTag = normalizeTagKey(
+            canonicalMap[normalizedTag] || normalizedTag,
+          );
           if (!canonicalTag) return;
           countByTag.set(canonicalTag, (countByTag.get(canonicalTag) || 0) + 1);
         });
@@ -174,7 +183,9 @@ function collectFlomoTags(params: {
 }
 
 function trackerBaseUrl(): string {
-  return String(process.env.TRACKER_BASE_URL || "").trim().replace(/\/$/, "");
+  return String(process.env.TRACKER_BASE_URL || "")
+    .trim()
+    .replace(/\/$/, "");
 }
 
 function trackerSigningSecret(): string {
@@ -235,7 +246,10 @@ export function renderFlomoArchiveArticlesContent(params: {
 }): string {
   const reportDate = normalizeDate(params.reportDate);
   const articles = Array.isArray(params.articles) ? params.articles : [];
-  const overviewLimit = Math.max(1, Math.min(Number(params.overviewLimit || 3), 8));
+  const overviewLimit = Math.max(
+    1,
+    Math.min(Number(params.overviewLimit || 3), 8),
+  );
   const skipTracking = Boolean(params.skipTracking);
   const userId = String(params.userId || "").trim();
   const lines: string[] = [];
@@ -261,9 +275,13 @@ export function renderFlomoArchiveArticlesContent(params: {
     lines.push("- 今日暂无满足阈值的重点文章。");
   } else {
     articles.forEach((article, index) => {
-      const title = normalizeText(article.title, 200) || `未命名文章 ${index + 1}`;
+      const title =
+        normalizeText(article.title, 200) || `未命名文章 ${index + 1}`;
       const summary = normalizeText(article.summary, 320);
-      const url = buildArchiveArticleLink(article, reportDate, { skipTracking, userId });
+      const url = buildArchiveArticleLink(article, reportDate, {
+        skipTracking,
+        userId,
+      });
       lines.push(`${index + 1}. ${title}`);
       if (summary) {
         lines.push(summary);
@@ -286,7 +304,10 @@ export function renderFlomoArchiveArticlesContent(params: {
     activeTagDefinitions: params.activeTagDefinitions || [],
     tagLimit: params.tagLimit || 3,
   });
-  const allTags = ["#AI新闻", ...dynamicTags.filter((t) => t !== "#ai新闻" && t !== "#ai___")].slice(0, 4);
+  const allTags = [
+    "#AI新闻",
+    ...dynamicTags.filter((t) => t !== "#ai新闻" && t !== "#ai___"),
+  ].slice(0, 4);
   if (allTags.length) {
     if (!homePageUrl) {
       lines.push("");
@@ -306,7 +327,8 @@ export function buildFlomoArchiveArticlesPayload(params: {
 }): FlomoArchiveArticlesPayload {
   const reportDate = normalizeDate(params.reportDate);
   const homePageUrl = resolveFlomoHomePageUrl();
-  const dedupeKey = String(params.dedupeKey || "").trim() || `archive-articles-${reportDate}`;
+  const dedupeKey =
+    String(params.dedupeKey || "").trim() || `archive-articles-${reportDate}`;
   return {
     content: renderFlomoArchiveArticlesContent({
       reportDate,

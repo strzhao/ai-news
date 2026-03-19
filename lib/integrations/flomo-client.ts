@@ -12,7 +12,11 @@ export class FlomoClient {
 
   private readonly maxRetries: number;
 
-  constructor(apiUrl = process.env.FLOMO_API_URL || "", timeoutSeconds = 20, maxRetries = 3) {
+  constructor(
+    apiUrl = process.env.FLOMO_API_URL || "",
+    timeoutSeconds = 20,
+    maxRetries = 3,
+  ) {
     this.apiUrl = String(apiUrl || "").trim();
     this.timeoutMs = Math.max(1_000, Math.trunc(timeoutSeconds * 1_000));
     this.maxRetries = Math.max(1, Math.trunc(maxRetries));
@@ -40,11 +44,15 @@ export class FlomoClient {
 
         if ([408, 429, 500, 502, 503, 504].includes(response.status)) {
           const text = await response.text();
-          throw new FlomoSyncError(`temporary error (${response.status}): ${text}`);
+          throw new FlomoSyncError(
+            `temporary error (${response.status}): ${text}`,
+          );
         }
         if (!response.ok) {
           const text = await response.text();
-          throw new FlomoSyncError(`Flomo request failed (${response.status}): ${text}`);
+          throw new FlomoSyncError(
+            `Flomo request failed (${response.status}): ${text}`,
+          );
         }
         return;
       } catch (error) {
@@ -58,6 +66,8 @@ export class FlomoClient {
       }
     }
 
-    throw new FlomoSyncError(`Flomo sync failed after retries: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+    throw new FlomoSyncError(
+      `Flomo sync failed after retries: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    );
   }
 }

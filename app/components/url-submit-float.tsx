@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { submitExtraction, pollTaskStatus } from "@/lib/client/url-analysis";
-import { saveUserPick } from "@/lib/client/user-picks";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuthUser } from "@/lib/client/types";
+import { pollTaskStatus, submitExtraction } from "@/lib/client/url-analysis";
+import { saveUserPick } from "@/lib/client/user-picks";
 
 type FloatState = "hidden" | "input" | "running" | "done" | "error";
 type RunStep = "submitting" | "extracting" | "summarizing" | "saving";
@@ -22,7 +22,11 @@ function stepClassName(idx: number, currentIdx: number): string {
   return "url-float-step pending";
 }
 
-export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null }): React.ReactNode {
+export default function UrlSubmitFloat({
+  authUser,
+}: {
+  authUser: AuthUser | null;
+}): React.ReactNode {
   const router = useRouter();
   const [state, setState] = useState<FloatState>("hidden");
   const [url, setUrl] = useState("");
@@ -132,11 +136,20 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
       setRunStep("saving");
 
       // Build article payload
-      const thumbResource = task.resources?.find((r) => r.type === "thumbnail" || r.type === "image");
-      const meta = task.metadata as unknown as Record<string, unknown> | undefined;
-      const articleId = String(meta?.article_id || "") || `pick-${task.task_id}`;
+      const thumbResource = task.resources?.find(
+        (r) => r.type === "thumbnail" || r.type === "image",
+      );
+      const meta = task.metadata as unknown as
+        | Record<string, unknown>
+        | undefined;
+      const articleId =
+        String(meta?.article_id || "") || `pick-${task.task_id}`;
       let sourceHost = "";
-      try { sourceHost = new URL(task.url).hostname; } catch { /* ignore */ }
+      try {
+        sourceHost = new URL(task.url).hostname;
+      } catch {
+        /* ignore */
+      }
       const payload = {
         article_id: articleId,
         title: task.metadata?.title || task.url,
@@ -188,14 +201,24 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
             {state === "done" && "收录完成"}
             {state === "error" && "收录失败"}
           </span>
-          <button type="button" className="url-float-close" onClick={handleClose} aria-label="关闭">
+          <button
+            type="button"
+            className="url-float-close"
+            onClick={handleClose}
+            aria-label="关闭"
+          >
             &times;
           </button>
         </div>
 
         {/* Input state */}
         {state === "input" ? (
-          <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleSubmit();
+            }}
+          >
             <input
               type="url"
               className="url-float-input"
@@ -205,7 +228,11 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
               autoFocus
               required
             />
-            <button type="submit" className="url-float-submit-btn" disabled={!url.trim()}>
+            <button
+              type="submit"
+              className="url-float-submit-btn"
+              disabled={!url.trim()}
+            >
               开始收录
             </button>
           </form>
@@ -215,7 +242,10 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
         {state === "running" ? (
           <div className="url-float-steps">
             {STEPS.map((step, idx) => (
-              <div key={step.key} className={stepClassName(idx, currentStepIdx)}>
+              <div
+                key={step.key}
+                className={stepClassName(idx, currentStepIdx)}
+              >
                 <span className="url-float-step-icon">
                   {idx < currentStepIdx ? "\u2713" : ""}
                 </span>
@@ -227,12 +257,32 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
 
         {/* Done state */}
         {state === "done" ? (
-          <div className="url-float-done-card" onClick={handleDoneClick} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") handleDoneClick(); }}>
-            <div className={doneMissingSummary ? "url-float-done-check url-float-done-warn" : "url-float-done-check"}>{doneMissingSummary ? "\u26A0" : "\u2713"}</div>
+          <div
+            className="url-float-done-card"
+            onClick={handleDoneClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleDoneClick();
+            }}
+          >
+            <div
+              className={
+                doneMissingSummary
+                  ? "url-float-done-check url-float-done-warn"
+                  : "url-float-done-check"
+              }
+            >
+              {doneMissingSummary ? "\u26A0" : "\u2713"}
+            </div>
             <div className="url-float-done-info">
-              <div className="url-float-done-title">{doneTitle || "文章已保存"}</div>
+              <div className="url-float-done-title">
+                {doneTitle || "文章已保存"}
+              </div>
               {doneMissingSummary ? (
-                <div className="url-float-done-hint url-float-done-hint-warn">AI 总结生成失败，仅保存了文章信息</div>
+                <div className="url-float-done-hint url-float-done-hint-warn">
+                  AI 总结生成失败，仅保存了文章信息
+                </div>
               ) : (
                 <div className="url-float-done-hint">点击查看收藏 &rarr;</div>
               )}
@@ -244,7 +294,11 @@ export default function UrlSubmitFloat({ authUser }: { authUser: AuthUser | null
         {state === "error" ? (
           <div className="url-float-error">
             <p className="url-float-error-msg">{errorMsg}</p>
-            <button type="button" className="url-float-submit-btn" onClick={handleRetry}>
+            <button
+              type="button"
+              className="url-float-submit-btn"
+              onClick={handleRetry}
+            >
               重试
             </button>
           </div>

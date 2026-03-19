@@ -1,5 +1,5 @@
-import { getVapidPublicKey } from "@/lib/integrations/web-push-server";
 import { jsonResponse } from "@/lib/infra/route-utils";
+import { getVapidPublicKey } from "@/lib/integrations/web-push-server";
 
 export const runtime = "nodejs";
 

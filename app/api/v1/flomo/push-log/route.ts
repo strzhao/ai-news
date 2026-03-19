@@ -1,19 +1,25 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
-import { flomoPushLogKey } from "@/lib/integrations/flomo-redis-keys";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
+import { flomoPushLogKey } from "@/lib/integrations/flomo-redis-keys";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {
     const url = new URL(request.url);
-    const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") || 20) || 20));
+    const limit = Math.max(
+      1,
+      Math.min(50, Number(url.searchParams.get("limit") || 20) || 20),
+    );
 
     const redis = buildUpstashClient();
     const lk = flomoPushLogKey(auth.user.id);
@@ -38,6 +44,9 @@ export async function GET(request: Request): Promise<Response> {
       recent,
     });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

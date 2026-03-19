@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-export function jsonResponse(status: number, payload: Record<string, unknown>, noStore = false): NextResponse {
+export function jsonResponse(
+  status: number,
+  payload: Record<string, unknown>,
+  noStore = false,
+): NextResponse {
   const response = NextResponse.json(payload, { status });
   if (noStore) {
     response.headers.set("Cache-Control", "no-store, max-age=0");
@@ -9,11 +13,17 @@ export function jsonResponse(status: number, payload: Record<string, unknown>, n
 }
 
 export function isTruthy(raw: string): boolean {
-  return ["1", "true", "yes", "on"].includes(String(raw || "").trim().toLowerCase());
+  return ["1", "true", "yes", "on"].includes(
+    String(raw || "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 export function isEnabled(envName: string, defaultValue = "true"): boolean {
-  const raw = String(process.env[envName] || defaultValue || "").trim().toLowerCase();
+  const raw = String(process.env[envName] || defaultValue || "")
+    .trim()
+    .toLowerCase();
   return !["0", "false", "no", "off"].includes(raw);
 }
 

@@ -32,9 +32,14 @@ export function computeBehaviorMultipliers(
     for (const [dateText, count] of Object.entries(daily || {})) {
       const dt = parseDate(dateText);
       if (!dt) continue;
-      const ageDays = Math.max(0, Math.trunc((nowUtc.getTime() - dt.getTime()) / 86_400_000));
+      const ageDays = Math.max(
+        0,
+        Math.trunc((nowUtc.getTime() - dt.getTime()) / 86_400_000),
+      );
       if (ageDays > maxAge) continue;
-      score += Math.max(0, Math.trunc(count || 0)) * decayWeight(ageDays, halfLifeDays);
+      score +=
+        Math.max(0, Math.trunc(count || 0)) *
+        decayWeight(ageDays, halfLifeDays);
     }
     if (score > 0) {
       decayedScores[sourceId] = score;
@@ -45,9 +50,13 @@ export function computeBehaviorMultipliers(
     return {};
   }
 
-  const baseline = Object.values(decayedScores).reduce((sum, score) => sum + score, 0) / Object.keys(decayedScores).length;
+  const baseline =
+    Object.values(decayedScores).reduce((sum, score) => sum + score, 0) /
+    Object.keys(decayedScores).length;
   if (baseline <= 0) {
-    return Object.fromEntries(Object.keys(decayedScores).map((sourceId) => [sourceId, 1]));
+    return Object.fromEntries(
+      Object.keys(decayedScores).map((sourceId) => [sourceId, 1]),
+    );
   }
 
   const low = Math.min(minMultiplier, maxMultiplier);
@@ -56,7 +65,8 @@ export function computeBehaviorMultipliers(
   for (const [sourceId, score] of Object.entries(decayedScores)) {
     const centered = (score - baseline) / baseline;
     const raw = 1 + centered * 0.25;
-    multipliers[sourceId] = Math.round(Math.max(low, Math.min(high, raw)) * 10_000) / 10_000;
+    multipliers[sourceId] =
+      Math.round(Math.max(low, Math.min(high, raw)) * 10_000) / 10_000;
   }
   return multipliers;
 }
@@ -70,7 +80,10 @@ export function selectPreferredSources(
 
   const totals: Array<[string, number]> = [];
   for (const [sourceId, daily] of Object.entries(sourceDailyClicks)) {
-    const total = Object.values(daily || {}).reduce((sum, value) => sum + Math.max(0, Math.trunc(value || 0)), 0);
+    const total = Object.values(daily || {}).reduce(
+      (sum, value) => sum + Math.max(0, Math.trunc(value || 0)),
+      0,
+    );
     if (total >= minClicks) {
       totals.push([sourceId, total]);
     }

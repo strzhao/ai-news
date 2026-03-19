@@ -1,15 +1,22 @@
 import crypto from "node:crypto";
-import { getArchiveMarkdownMap, listArchives } from "@/lib/domain/archive-store";
-import { normalizeUrl } from "@/lib/domain/tracker-common";
+import {
+  getArchiveMarkdownMap,
+  listArchives,
+} from "@/lib/domain/archive-store";
 import { resolveFirstImageUrl } from "@/lib/domain/article-image";
-import { articleDbClientEnabled, fetchHighQualityRange } from "@/lib/integrations/article-db-client";
+import { normalizeUrl } from "@/lib/domain/tracker-common";
+import {
+  articleDbClientEnabled,
+  fetchHighQualityRange,
+} from "@/lib/integrations/article-db-client";
 
 const MULTISPACE_RE = /\s+/g;
 const HEADING_RE = /^###\s+\d+\.\s*(.+)$/;
 const BULLET_LINK_RE = /^-\s+\[([^\]]+)\]\(([^)]+)\)/;
 const LINK_LINE_RE = /^-?\s*(?:原文链接|链接|URL|原文)\s*[:：]\s*(\S+)\s*$/i;
 const SUMMARY_LINE_RE = /^-?\s*(?:一句话总结|摘要|导语)\s*[:：]\s*(.+)$/;
-const IGNORE_SUMMARY_PREFIX_RE = /^(来源|阅读建议|阅读理由|链接|原文链接|URL|原文)\s*[:：]/;
+const IGNORE_SUMMARY_PREFIX_RE =
+  /^(来源|阅读建议|阅读理由|链接|原文链接|URL|原文)\s*[:：]/;
 
 const DEFAULT_DAYS = 30;
 const DEFAULT_LIMIT_PER_DAY = 10;
@@ -61,28 +68,44 @@ interface AggregatedArticleRow {
   item: ArchiveArticleSummary;
 }
 
-function boundedInt(value: number | undefined, min: number, max: number, fallback: number): number {
+function boundedInt(
+  value: number | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
   const normalized = Number.parseInt(String(value ?? fallback), 10);
   if (!Number.isFinite(normalized)) return fallback;
   return Math.max(min, Math.min(max, normalized));
 }
 
-function boundedIntAllowZero(value: number | undefined, max: number, fallback: number): number {
+function boundedIntAllowZero(
+  value: number | undefined,
+  max: number,
+  fallback: number,
+): number {
   const normalized = Number.parseInt(String(value ?? fallback), 10);
   if (!Number.isFinite(normalized)) return fallback;
   if (normalized <= 0) return 0;
   return Math.max(1, Math.min(max, normalized));
 }
 
-function normalizeQualityTier(value: string | undefined): "high" | "general" | "all" {
-  const raw = String(value || "").trim().toLowerCase();
-  if (["general", "normal", "common", "non_high"].includes(raw)) return "general";
+function normalizeQualityTier(
+  value: string | undefined,
+): "high" | "general" | "all" {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["general", "normal", "common", "non_high"].includes(raw))
+    return "general";
   if (["all", "any"].includes(raw)) return "all";
   return "high";
 }
 
 function normalizeText(value: string, maxLen = 280): string {
-  const normalized = String(value || "").replace(MULTISPACE_RE, " ").trim();
+  const normalized = String(value || "")
+    .replace(MULTISPACE_RE, " ")
+    .trim();
   if (normalized.length <= maxLen) {
     return normalized;
   }
@@ -97,7 +120,9 @@ function normalizeSummary(value: string): string {
   return normalizeText(value, 320);
 }
 
-function findFirstMarkdownLink(value: string): { text: string; url: string } | null {
+function findFirstMarkdownLink(
+  value: string,
+): { text: string; url: string } | null {
   const match = String(value || "").match(/\[([^\]]+)\]\(([^)]+)\)/);
   if (!match) {
     return null;
@@ -157,9 +182,7 @@ export function unwrapTrackedArticleUrl(rawUrl: string): string {
       if (target) {
         return target;
       }
-    } catch {
-      continue;
-    }
+    } catch {}
   }
 
   return value;
@@ -174,22 +197,34 @@ export function resolveArchiveArticleUrl(rawUrl: string): string {
   return String(normalized || unwrapped).trim();
 }
 
-export function buildArchiveArticleDedupeKey(params: { title: string; url: string; sourceHost: string }): string {
+export function buildArchiveArticleDedupeKey(params: {
+  title: string;
+  url: string;
+  sourceHost: string;
+}): string {
   const normalizedUrl = resolveArchiveArticleUrl(params.url);
   if (normalizedUrl) {
     return `url:${normalizedUrl}`;
   }
 
-  const normalizedTitle = normalizeText(String(params.title || "").toLowerCase(), 240);
+  const normalizedTitle = normalizeText(
+    String(params.title || "").toLowerCase(),
+    240,
+  );
   if (!normalizedTitle) {
     return "";
   }
 
-  const normalizedHost = normalizeText(String(params.sourceHost || "").toLowerCase(), 120);
+  const normalizedHost = normalizeText(
+    String(params.sourceHost || "").toLowerCase(),
+    120,
+  );
   return `title:${normalizedTitle}|host:${normalizedHost || "-"}`;
 }
 
-export function extractArchiveArticlesFromMarkdown(markdown: string): ParsedArticle[] {
+export function extractArchiveArticlesFromMarkdown(
+  markdown: string,
+): ParsedArticle[] {
   const lines = String(markdown || "").split(/\r?\n/);
   const parsed: ParsedArticle[] = [];
 
@@ -288,7 +323,11 @@ export function aggregateArchiveArticlesFromDigests(
   digests: DigestArchiveSnapshot[],
   options: { articleLimitPerDay?: number } = {},
 ): ListArchiveArticlesResult {
-  const articleLimitPerDay = boundedIntAllowZero(options.articleLimitPerDay, 5000, DEFAULT_ARTICLE_LIMIT_PER_DAY);
+  const articleLimitPerDay = boundedIntAllowZero(
+    options.articleLimitPerDay,
+    5000,
+    DEFAULT_ARTICLE_LIMIT_PER_DAY,
+  );
 
   const orderedDigests = [...digests].sort((left, right) => {
     const leftTs = generatedAtMs(left.generated_at);
@@ -303,7 +342,9 @@ export function aggregateArchiveArticlesFromDigests(
       return leftDate - rightDate;
     }
 
-    return String(left.digest_id || "").localeCompare(String(right.digest_id || ""));
+    return String(left.digest_id || "").localeCompare(
+      String(right.digest_id || ""),
+    );
   });
 
   const seen = new Set<string>();
@@ -348,7 +389,9 @@ export function aggregateArchiveArticlesFromDigests(
     });
   });
 
-  const dates = Array.from(grouped.keys()).sort((left, right) => String(right).localeCompare(String(left)));
+  const dates = Array.from(grouped.keys()).sort((left, right) =>
+    String(right).localeCompare(String(left)),
+  );
   const groups: ArchiveArticleGroup[] = dates
     .map((date) => {
       const rows = [...(grouped.get(date) || [])].sort((left, right) => {
@@ -358,7 +401,9 @@ export function aggregateArchiveArticlesFromDigests(
         return left.sequence - right.sequence;
       });
 
-      const items = (articleLimitPerDay > 0 ? rows.slice(0, articleLimitPerDay) : rows).map((row) => row.item);
+      const items = (
+        articleLimitPerDay > 0 ? rows.slice(0, articleLimitPerDay) : rows
+      ).map((row) => row.item);
       return {
         date,
         items,
@@ -366,7 +411,10 @@ export function aggregateArchiveArticlesFromDigests(
     })
     .filter((group) => group.items.length > 0);
 
-  const totalArticles = groups.reduce((sum, group) => sum + group.items.length, 0);
+  const totalArticles = groups.reduce(
+    (sum, group) => sum + group.items.length,
+    0,
+  );
 
   return {
     groups,
@@ -419,21 +467,41 @@ async function enrichFirstImages(
   await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
 }
 
-export async function listArchiveArticles(options: {
-  days?: number;
-  limitPerDay?: number;
-  articleLimitPerDay?: number;
-  imageProbeLimit?: number;
-  qualityTier?: string;
-} = {}): Promise<ListArchiveArticlesResult> {
+export async function listArchiveArticles(
+  options: {
+    days?: number;
+    limitPerDay?: number;
+    articleLimitPerDay?: number;
+    imageProbeLimit?: number;
+    qualityTier?: string;
+  } = {},
+): Promise<ListArchiveArticlesResult> {
   const days = boundedInt(options.days, 1, 180, DEFAULT_DAYS);
-  const limitPerDay = boundedInt(options.limitPerDay, 1, 200, DEFAULT_LIMIT_PER_DAY);
-  const articleLimitPerDay = boundedIntAllowZero(options.articleLimitPerDay, 5000, DEFAULT_ARTICLE_LIMIT_PER_DAY);
-  const imageProbeLimit = boundedInt(options.imageProbeLimit, 0, 100, DEFAULT_IMAGE_PROBE_LIMIT);
-  const qualityTier = normalizeQualityTier(options.qualityTier || DEFAULT_QUALITY_TIER);
+  const limitPerDay = boundedInt(
+    options.limitPerDay,
+    1,
+    200,
+    DEFAULT_LIMIT_PER_DAY,
+  );
+  const articleLimitPerDay = boundedIntAllowZero(
+    options.articleLimitPerDay,
+    5000,
+    DEFAULT_ARTICLE_LIMIT_PER_DAY,
+  );
+  const imageProbeLimit = boundedInt(
+    options.imageProbeLimit,
+    0,
+    100,
+    DEFAULT_IMAGE_PROBE_LIMIT,
+  );
+  const qualityTier = normalizeQualityTier(
+    options.qualityTier || DEFAULT_QUALITY_TIER,
+  );
 
   if (articleDbClientEnabled()) {
-    const timezoneName = String(process.env.DIGEST_TIMEZONE || "Asia/Shanghai").trim() || "Asia/Shanghai";
+    const timezoneName =
+      String(process.env.DIGEST_TIMEZONE || "Asia/Shanghai").trim() ||
+      "Asia/Shanghai";
     const now = new Date();
     const formatter = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezoneName,
@@ -442,17 +510,24 @@ export async function listArchiveArticles(options: {
       day: "2-digit",
     });
 
-    const [{ value: toYear }, , { value: toMonth }, , { value: toDay }] = formatter.formatToParts(now);
+    const [{ value: toYear }, , { value: toMonth }, , { value: toDay }] =
+      formatter.formatToParts(now);
     const toDate = `${toYear}-${toMonth}-${toDay}`;
 
-    const fromDateObj = new Date(now.getTime() - Math.max(0, days - 1) * 86_400_000);
-    const [{ value: fromYear }, , { value: fromMonth }, , { value: fromDay }] = formatter.formatToParts(fromDateObj);
+    const fromDateObj = new Date(
+      now.getTime() - Math.max(0, days - 1) * 86_400_000,
+    );
+    const [{ value: fromYear }, , { value: fromMonth }, , { value: fromDay }] =
+      formatter.formatToParts(fromDateObj);
     const fromDate = `${fromYear}-${fromMonth}-${fromDay}`;
 
     const remote = await fetchHighQualityRange({
       fromDate: fromDate <= toDate ? fromDate : toDate,
       toDate: fromDate <= toDate ? toDate : fromDate,
-      limitPerDay: articleLimitPerDay > 0 ? Math.min(limitPerDay, articleLimitPerDay) : limitPerDay,
+      limitPerDay:
+        articleLimitPerDay > 0
+          ? Math.min(limitPerDay, articleLimitPerDay)
+          : limitPerDay,
       qualityTier,
     });
 
@@ -492,12 +567,18 @@ export async function listArchiveArticles(options: {
       })
       .map((group) => ({
         ...group,
-        items: articleLimitPerDay > 0 ? group.items.slice(0, articleLimitPerDay) : group.items,
+        items:
+          articleLimitPerDay > 0
+            ? group.items.slice(0, articleLimitPerDay)
+            : group.items,
       }));
 
     if (imageProbeLimit > 0) {
       const imageProbeConcurrency = boundedInt(
-        Number.parseInt(String(process.env.ARTICLE_IMAGE_PROBE_CONCURRENCY || "4"), 10),
+        Number.parseInt(
+          String(process.env.ARTICLE_IMAGE_PROBE_CONCURRENCY || "4"),
+          10,
+        ),
         1,
         8,
         4,
@@ -548,7 +629,9 @@ export async function listArchiveArticles(options: {
     };
   }
 
-  const markdownMap = await getArchiveMarkdownMap(digestRows.map((row) => row.digest_id));
+  const markdownMap = await getArchiveMarkdownMap(
+    digestRows.map((row) => row.digest_id),
+  );
   const digests: DigestArchiveSnapshot[] = digestRows
     .map((row) => {
       const markdown = String(markdownMap[row.digest_id] || "").trim();
@@ -566,7 +649,10 @@ export async function listArchiveArticles(options: {
   });
 
   const imageProbeConcurrency = boundedInt(
-    Number.parseInt(String(process.env.ARTICLE_IMAGE_PROBE_CONCURRENCY || "4"), 10),
+    Number.parseInt(
+      String(process.env.ARTICLE_IMAGE_PROBE_CONCURRENCY || "4"),
+      10,
+    ),
     1,
     8,
     4,

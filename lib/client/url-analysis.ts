@@ -1,8 +1,8 @@
 import type {
-  ExtractionPlatform,
-  ExtractionStatus,
   ExtractedResource,
   ExtractionMetadata,
+  ExtractionPlatform,
+  ExtractionStatus,
 } from "./types";
 
 export interface ExtractionTaskResponse {
@@ -25,7 +25,10 @@ interface SubmitResult {
   error?: string;
 }
 
-export async function submitExtraction(url: string, aiSummary?: boolean): Promise<SubmitResult> {
+export async function submitExtraction(
+  url: string,
+  aiSummary?: boolean,
+): Promise<SubmitResult> {
   const response = await fetch("/api/v1/analyze-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -37,10 +40,13 @@ export async function submitExtraction(url: string, aiSummary?: boolean): Promis
 }
 
 export async function pollTaskStatus(taskId: string): Promise<SubmitResult> {
-  const response = await fetch(`/api/v1/analyze-url?task_id=${encodeURIComponent(taskId)}`, {
-    method: "GET",
-    credentials: "include",
-  });
+  const response = await fetch(
+    `/api/v1/analyze-url?task_id=${encodeURIComponent(taskId)}`,
+    {
+      method: "GET",
+      credentials: "include",
+    },
+  );
   const payload = (await response.json()) as SubmitResult;
   return payload;
 }

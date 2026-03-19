@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import {
   applyAuthStateCookie,
@@ -11,11 +11,19 @@ const DEFAULT_AUTH_ISSUER = "https://user.stringzhao.life";
 const DEFAULT_APP_ORIGIN = "https://ai-news.stringzhao.life";
 
 function getAuthIssuer(): string {
-  return String(process.env.AUTH_ISSUER || process.env.NEXT_PUBLIC_AUTH_ISSUER || "").trim() || DEFAULT_AUTH_ISSUER;
+  return (
+    String(
+      process.env.AUTH_ISSUER || process.env.NEXT_PUBLIC_AUTH_ISSUER || "",
+    ).trim() || DEFAULT_AUTH_ISSUER
+  );
 }
 
 function getAppOrigin(): string {
-  return String(process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || "").trim() || DEFAULT_APP_ORIGIN;
+  return (
+    String(
+      process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || "",
+    ).trim() || DEFAULT_APP_ORIGIN
+  );
 }
 
 export async function GET(request: NextRequest): Promise<Response> {

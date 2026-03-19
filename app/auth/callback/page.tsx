@@ -9,7 +9,9 @@ const ERROR_MESSAGE_MAP: Record<string, string> = {
 };
 
 function redirectToHome(path?: string, errorCode?: string): void {
-  const target = errorCode ? `/?auth_error=${encodeURIComponent(errorCode)}` : (path || "/");
+  const target = errorCode
+    ? `/?auth_error=${encodeURIComponent(errorCode)}`
+    : path || "/";
   window.location.replace(target);
 }
 
@@ -22,7 +24,8 @@ export default function AuthCallbackPage(): React.ReactNode {
     const returnedState = callbackUrl.searchParams.get("state");
 
     if (authorized !== "1" || !returnedState) {
-      const code = authorized !== "1" ? "authorization_not_completed" : "state_mismatch";
+      const code =
+        authorized !== "1" ? "authorization_not_completed" : "state_mismatch";
       setStatusText(ERROR_MESSAGE_MAP[code]);
       redirectToHome(undefined, code);
       return;
@@ -37,10 +40,16 @@ export default function AuthCallbackPage(): React.ReactNode {
           body: JSON.stringify({ state: returnedState }),
         });
 
-        const payload = (await response.json()) as { ok: boolean; next?: string; error?: string };
+        const payload = (await response.json()) as {
+          ok: boolean;
+          next?: string;
+          error?: string;
+        };
         if (!response.ok || !payload.ok) {
           const code = payload.error || "finalize_failed";
-          setStatusText(ERROR_MESSAGE_MAP[code] || "登录会话创建失败，请重试。");
+          setStatusText(
+            ERROR_MESSAGE_MAP[code] || "登录会话创建失败，请重试。",
+          );
           redirectToHome(undefined, code);
           return;
         }
@@ -54,9 +63,18 @@ export default function AuthCallbackPage(): React.ReactNode {
   }, []);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+      }}
+    >
       <div style={{ textAlign: "center" }}>
-        <h1 style={{ fontSize: 24, fontWeight: 650, marginBottom: 12 }}>登录处理中</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 650, marginBottom: 12 }}>
+          登录处理中
+        </h1>
         <p style={{ color: "var(--muted)", fontSize: 14 }}>{statusText}</p>
       </div>
     </div>

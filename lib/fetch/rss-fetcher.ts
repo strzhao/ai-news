@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import Parser from "rss-parser";
-import { Article, SourceConfig } from "@/lib/domain/models";
+import type { Article, SourceConfig } from "@/lib/domain/models";
 
 const TAG_RE = /<[^>]+>/g;
 const MULTISPACE_RE = /\s+/g;
@@ -21,7 +21,10 @@ const parser = new Parser({
   },
 });
 
-async function fetchFeedWithTimeout(feedUrl: string, timeoutMs: number): Promise<Parser.Output<Parser.Item>> {
+async function fetchFeedWithTimeout(
+  feedUrl: string,
+  timeoutMs: number,
+): Promise<Parser.Output<Parser.Item>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -30,7 +33,8 @@ async function fetchFeedWithTimeout(feedUrl: string, timeoutMs: number): Promise
       method: "GET",
       redirect: "follow",
       headers: {
-        Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        Accept:
+          "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
       },
       signal: controller.signal,
     });
@@ -58,12 +62,16 @@ function cleanHtmlText(value: string): string {
 }
 
 function extractLeadParagraph(item: Parser.Item): string {
-  const content = cleanHtmlText(String(item.content || (item as any)["content:encoded"] || ""));
+  const content = cleanHtmlText(
+    String(item.content || (item as any)["content:encoded"] || ""),
+  );
   if (content) {
     return content.split(".")[0].slice(0, 280).trim();
   }
 
-  const summary = cleanHtmlText(String(item.summary || item.contentSnippet || item.content || ""));
+  const summary = cleanHtmlText(
+    String(item.summary || item.contentSnippet || item.content || ""),
+  );
   if (summary) {
     for (const token of ["。", ".", "!", "?", "\n"]) {
       if (summary.includes(token)) {
@@ -73,11 +81,18 @@ function extractLeadParagraph(item: Parser.Item): string {
     return summary.slice(0, 280).trim();
   }
 
-  return cleanHtmlText(String(item.title || "")).slice(0, 280).trim();
+  return cleanHtmlText(String(item.title || ""))
+    .slice(0, 280)
+    .trim();
 }
 
 function parsePublishedAt(item: Parser.Item): Date | null {
-  const candidates = [item.isoDate, item.pubDate, (item as any).published, (item as any).updated];
+  const candidates = [
+    item.isoDate,
+    item.pubDate,
+    (item as any).published,
+    (item as any).updated,
+  ];
   for (const candidate of candidates) {
     if (!candidate) continue;
     const parsed = new Date(String(candidate));
@@ -89,13 +104,23 @@ function parsePublishedAt(item: Parser.Item): Date | null {
 }
 
 function makeArticleId(sourceId: string, url: string, title: string): string {
-  const digest = crypto.createHash("sha256").update(`${sourceId}|${url}|${title}`).digest("hex").slice(0, 12);
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${sourceId}|${url}|${title}`)
+    .digest("hex")
+    .slice(0, 12);
   return `${sourceId}-${digest}`;
 }
 
 function collectEntryCandidateLinks(item: Parser.Item): string[] {
   const blocks: string[] = [];
-  [item.summary, item.contentSnippet, item.content, (item as any).description, (item as any)["content:encoded"]].forEach((value) => {
+  [
+    item.summary,
+    item.contentSnippet,
+    item.content,
+    (item as any).description,
+    (item as any)["content:encoded"],
+  ].forEach((value) => {
     if (typeof value === "string" && value.trim()) {
       blocks.push(value);
     }
@@ -121,7 +146,12 @@ function isExternalLink(value: string): boolean {
     if (!host) return false;
     if (host === "t.co") return true;
     if (X_INTERNAL_HOSTS.has(host)) return false;
-    if (host.endsWith(".twitter.com") || host.endsWith(".x.com") || host.endsWith(".twimg.com")) return false;
+    if (
+      host.endsWith(".twitter.com") ||
+      host.endsWith(".x.com") ||
+      host.endsWith(".twimg.com")
+    )
+      return false;
     return true;
   } catch {
     return false;
@@ -154,8 +184,14 @@ export async function fetchArticles(
 ): Promise<Article[]> {
   const timeoutSeconds = options.timeoutSeconds ?? 20;
   const timeoutMs = Math.max(1_000, Math.trunc(timeoutSeconds * 1_000));
-  const totalTimeoutMs = Math.max(timeoutMs, Math.trunc((options.totalTimeoutSeconds ?? 120) * 1_000));
-  const concurrency = Math.max(1, Math.min(12, Math.trunc(options.concurrency ?? 4)));
+  const totalTimeoutMs = Math.max(
+    timeoutMs,
+    Math.trunc((options.totalTimeoutSeconds ?? 120) * 1_000),
+  );
+  const concurrency = Math.max(
+    1,
+    Math.min(12, Math.trunc(options.concurrency ?? 4)),
+  );
   const maxPerSource = options.maxPerSource ?? 25;
   const perSourceLimits = options.perSourceLimits || {};
   const totalBudget = options.totalBudget ?? 0;
@@ -182,8 +218,13 @@ export async function fetchArticles(
       const source = sources[index];
       try {
         const remainingMs = Math.max(1_000, deadline - Date.now());
-        const feed = await fetchFeedWithTimeout(source.url, Math.min(timeoutMs, remainingMs));
-        const perSourceCap = Math.trunc(perSourceLimits[source.id] ?? maxPerSource);
+        const feed = await fetchFeedWithTimeout(
+          source.url,
+          Math.min(timeoutMs, remainingMs),
+        );
+        const perSourceCap = Math.trunc(
+          perSourceLimits[source.id] ?? maxPerSource,
+        );
         const entries = (feed.items || []).slice(0, Math.max(0, perSourceCap));
 
         for (const entry of entries) {
@@ -203,7 +244,9 @@ export async function fetchArticles(
             continue;
           }
 
-          const summary = cleanHtmlText(String(entry.summary || entry.contentSnippet || ""));
+          const summary = cleanHtmlText(
+            String(entry.summary || entry.contentSnippet || ""),
+          );
           const lead = extractLeadParagraph(entry);
           const contentText = [title, summary, lead].filter(Boolean).join(" ");
 
@@ -234,7 +277,12 @@ export async function fetchArticles(
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, sources.length)) }, () => worker()));
+  await Promise.all(
+    Array.from(
+      { length: Math.min(concurrency, Math.max(1, sources.length)) },
+      () => worker(),
+    ),
+  );
 
   return articles;
 }

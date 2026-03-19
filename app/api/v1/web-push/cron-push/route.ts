@@ -1,9 +1,13 @@
 import { listArchiveArticles } from "@/lib/domain/archive-articles";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
-import { WEB_PUSH_SUBSCRIBERS_KEY, webPushSubscriptionKey, webPushConfigKey } from "@/lib/integrations/web-push-redis-keys";
-import { sendPushNotification } from "@/lib/integrations/web-push-server";
+import {
+  WEB_PUSH_SUBSCRIBERS_KEY,
+  webPushConfigKey,
+  webPushSubscriptionKey,
+} from "@/lib/integrations/web-push-redis-keys";
 import type { PushSubscriptionData } from "@/lib/integrations/web-push-server";
+import { sendPushNotification } from "@/lib/integrations/web-push-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -28,7 +32,13 @@ export async function GET(request: Request): Promise<Response> {
     // 1. Get all subscriber user IDs
     const userIds = await redis.smembers(WEB_PUSH_SUBSCRIBERS_KEY);
     if (!userIds.length) {
-      return jsonResponse(200, { ok: true, subscribers: 0, sent: 0, failed: 0, expired: 0 });
+      return jsonResponse(200, {
+        ok: true,
+        subscribers: 0,
+        sent: 0,
+        failed: 0,
+        expired: 0,
+      });
     }
 
     // 2. Fetch articles once for all users
@@ -58,9 +68,10 @@ export async function GET(request: Request): Promise<Response> {
     const subscriptions = new Map<string, PushSubscriptionData>();
     for (let i = 0; i < userIds.length; i++) {
       const raw = subResponses[i];
-      const data = raw && typeof raw === "object" && "result" in raw
-        ? (raw as { result: unknown }).result
-        : raw;
+      const data =
+        raw && typeof raw === "object" && "result" in raw
+          ? (raw as { result: unknown }).result
+          : raw;
       if (!data || typeof data !== "object") continue;
       const rec = data as Record<string, string>;
       if (rec.endpoint && rec.p256dh && rec.auth) {
@@ -103,11 +114,23 @@ export async function GET(request: Request): Promise<Response> {
         }
       } else {
         const error = r.reason;
-        if (error && typeof error === "object" && "statusCode" in error && (error as { statusCode: number }).statusCode === 410) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "statusCode" in error &&
+          (error as { statusCode: number }).statusCode === 410
+        ) {
           cleanupCommands.push(
             ["SREM", WEB_PUSH_SUBSCRIBERS_KEY, userIds[i]],
             ["DEL", webPushSubscriptionKey(userIds[i])],
-            ["HSET", webPushConfigKey(userIds[i]), "enabled", "false", "updated_at", new Date().toISOString()],
+            [
+              "HSET",
+              webPushConfigKey(userIds[i]),
+              "enabled",
+              "false",
+              "updated_at",
+              new Date().toISOString(),
+            ],
           );
           expired += 1;
         } else {
@@ -129,6 +152,9 @@ export async function GET(request: Request): Promise<Response> {
       article_count: allArticles.length,
     });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

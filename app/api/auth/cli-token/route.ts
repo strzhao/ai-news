@@ -29,7 +29,10 @@ export async function POST(request: Request) {
 
   const accessToken = readCookie(request, "access_token");
   if (!accessToken) {
-    return NextResponse.json({ error: "No access token found" }, { status: 401 });
+    return NextResponse.json(
+      { error: "No access token found" },
+      { status: 401 },
+    );
   }
 
   return NextResponse.json({

@@ -1,5 +1,10 @@
 import { resolveStatsAuth } from "@/lib/auth/unified-auth";
-import { buildUpstashClient, keyToIsoDate, lastNDateKeys, parseHashResult } from "@/lib/domain/tracker-common";
+import {
+  buildUpstashClient,
+  keyToIsoDate,
+  lastNDateKeys,
+  parseHashResult,
+} from "@/lib/domain/tracker-common";
 import { jsonResponse } from "@/lib/infra/route-utils";
 
 export const runtime = "nodejs";
@@ -17,12 +22,18 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const upstash = buildUpstashClient();
     const dateKeys = lastNDateKeys(days);
-    const commands = dateKeys.map((dateKey) => ["HGETALL", `clicks:source:${dateKey}`] as Array<string | number>);
+    const commands = dateKeys.map(
+      (dateKey) =>
+        ["HGETALL", `clicks:source:${dateKey}`] as Array<string | number>,
+    );
     const responses = await upstash.pipeline(commands);
 
     const rows: Array<Record<string, unknown>> = [];
     responses.forEach((item, index) => {
-      const payload = item && typeof item === "object" && "result" in item ? (item as { result: unknown }).result : item;
+      const payload =
+        item && typeof item === "object" && "result" in item
+          ? (item as { result: unknown }).result
+          : item;
       const clicksBySource = parseHashResult(payload);
       const date = keyToIsoDate(dateKeys[index]);
       Object.entries(clicksBySource).forEach(([sourceId, clicks]) => {
@@ -42,6 +53,8 @@ export async function GET(request: Request): Promise<Response> {
       rows,
     });
   } catch (error) {
-    return jsonResponse(500, { error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

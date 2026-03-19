@@ -3,12 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchAuthUser } from "@/lib/client/auth";
-import type { AuthUser, ExtractedResource, ExtractionPlatform, ResourceType } from "@/lib/client/types";
+import type {
+  AuthUser,
+  ExtractedResource,
+  ExtractionPlatform,
+  ResourceType,
+} from "@/lib/client/types";
 import {
-  submitExtraction,
-  pollTaskStatus,
-  fetchTaskList,
   type ExtractionTaskResponse,
+  fetchTaskList,
+  pollTaskStatus,
+  submitExtraction,
 } from "@/lib/client/url-analysis";
 
 const POLL_INTERVAL_MS = 5_000;
@@ -73,7 +78,8 @@ function isTaskExpired(task: ExtractionTaskResponse): boolean {
   if (task.status !== "completed") return false;
   // Check blob_ttl_hours from completed_at
   if (task.completed_at && task.blob_ttl_hours) {
-    const expiry = new Date(task.completed_at).getTime() + task.blob_ttl_hours * 3600 * 1000;
+    const expiry =
+      new Date(task.completed_at).getTime() + task.blob_ttl_hours * 3600 * 1000;
     if (Date.now() > expiry) return true;
   }
   // Check if all resources have expired
@@ -87,7 +93,10 @@ function isTaskExpired(task: ExtractionTaskResponse): boolean {
 }
 
 function isResourceExpired(resource: ExtractedResource): boolean {
-  return !!resource.expires_at && new Date(resource.expires_at).getTime() < Date.now();
+  return (
+    !!resource.expires_at &&
+    new Date(resource.expires_at).getTime() < Date.now()
+  );
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -120,7 +129,7 @@ async function downloadFile(url: string, filename: string): Promise<void> {
 async function downloadAsZip(
   resources: Array<{ url: string; filename: string }>,
   zipFilename: string,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
 ): Promise<void> {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
@@ -153,7 +162,9 @@ async function downloadAsZip(
 
 function getThumbnailUrl(task: ExtractionTaskResponse): string | null {
   if (!task.resources) return null;
-  const thumb = task.resources.find((r) => r.type === "thumbnail" || r.type === "image");
+  const thumb = task.resources.find(
+    (r) => r.type === "thumbnail" || r.type === "image",
+  );
   return thumb?.url || null;
 }
 
@@ -172,7 +183,9 @@ export default function ParserPage(): React.ReactNode {
   const [archivedCollapsed, setArchivedCollapsed] = useState(true);
 
   // Polling: support multiple concurrent polls
-  const pollTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pollTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   const pollCountsRef = useRef<Map<string, number>>(new Map());
 
   // Auth check + load task list
@@ -221,52 +234,52 @@ export default function ParserPage(): React.ReactNode {
     pollCountsRef.current.delete(taskId);
   }, []);
 
-  const startPolling = useCallback(
-    (taskId: string) => {
-      pollCountsRef.current.set(taskId, 0);
+  const startPolling = useCallback((taskId: string) => {
+    pollCountsRef.current.set(taskId, 0);
 
-      async function poll(): Promise<void> {
-        const count = (pollCountsRef.current.get(taskId) || 0) + 1;
-        pollCountsRef.current.set(taskId, count);
+    async function poll(): Promise<void> {
+      const count = (pollCountsRef.current.get(taskId) || 0) + 1;
+      pollCountsRef.current.set(taskId, count);
 
-        if (count > MAX_POLL_ATTEMPTS) {
-          pollTimersRef.current.delete(taskId);
-          pollCountsRef.current.delete(taskId);
-          return;
-        }
+      if (count > MAX_POLL_ATTEMPTS) {
+        pollTimersRef.current.delete(taskId);
+        pollCountsRef.current.delete(taskId);
+        return;
+      }
 
-        try {
-          const result = await pollTaskStatus(taskId);
-          if (result.ok && result.task) {
-            setTasks((prev) => {
-              const nextTask = result.task!;
-              let changed = false;
-              const nextTasks = prev.map((t) => {
-                if (t.task_id !== taskId) return t;
-                const sameTask = JSON.stringify(t) === JSON.stringify(nextTask);
-                if (sameTask) return t;
-                changed = true;
-                return nextTask;
-              });
-              return changed ? nextTasks : prev;
+      try {
+        const result = await pollTaskStatus(taskId);
+        if (result.ok && result.task) {
+          setTasks((prev) => {
+            const nextTask = result.task!;
+            let changed = false;
+            const nextTasks = prev.map((t) => {
+              if (t.task_id !== taskId) return t;
+              const sameTask = JSON.stringify(t) === JSON.stringify(nextTask);
+              if (sameTask) return t;
+              changed = true;
+              return nextTask;
             });
-            if (result.task.status === "completed" || result.task.status === "failed") {
-              pollTimersRef.current.delete(taskId);
-              pollCountsRef.current.delete(taskId);
-              return;
-            }
+            return changed ? nextTasks : prev;
+          });
+          if (
+            result.task.status === "completed" ||
+            result.task.status === "failed"
+          ) {
+            pollTimersRef.current.delete(taskId);
+            pollCountsRef.current.delete(taskId);
+            return;
           }
-        } catch {
-          // Retry on network errors
         }
-
-        pollTimersRef.current.set(taskId, setTimeout(poll, POLL_INTERVAL_MS));
+      } catch {
+        // Retry on network errors
       }
 
       pollTimersRef.current.set(taskId, setTimeout(poll, POLL_INTERVAL_MS));
-    },
-    [],
-  );
+    }
+
+    pollTimersRef.current.set(taskId, setTimeout(poll, POLL_INTERVAL_MS));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -305,10 +318,18 @@ export default function ParserPage(): React.ReactNode {
 
       if (result.task) {
         // Replace temp task with real task
-        setTasks((prev) => [result.task!, ...prev.filter((t) => t.task_id !== tempId && t.task_id !== result.task!.task_id)]);
+        setTasks((prev) => [
+          result.task!,
+          ...prev.filter(
+            (t) => t.task_id !== tempId && t.task_id !== result.task!.task_id,
+          ),
+        ]);
         setSelectedTaskId(result.task.task_id);
 
-        if (result.task.status === "pending" || result.task.status === "processing") {
+        if (
+          result.task.status === "pending" ||
+          result.task.status === "processing"
+        ) {
           startPolling(result.task.task_id);
         }
       }
@@ -347,12 +368,18 @@ export default function ParserPage(): React.ReactNode {
 
   // Derived state
   const activeTasks = useMemo(
-    () => tasks.filter((t) => !isTaskExpired(t)).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    () =>
+      tasks
+        .filter((t) => !isTaskExpired(t))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [tasks],
   );
 
   const archivedTasks = useMemo(
-    () => tasks.filter((t) => isTaskExpired(t)).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    () =>
+      tasks
+        .filter((t) => isTaskExpired(t))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [tasks],
   );
 
@@ -366,7 +393,8 @@ export default function ParserPage(): React.ReactNode {
       <div className="page-header">
         <h1 className="page-title">万能解析</h1>
         <p className="page-meta">
-          支持 YouTube / Bilibili / Twitter / 小红书 / Instagram / 微信公众号 / 网页
+          支持 YouTube / Bilibili / Twitter / 小红书 / Instagram / 微信公众号 /
+          网页
         </p>
       </div>
 
@@ -374,7 +402,11 @@ export default function ParserPage(): React.ReactNode {
         <section className="content-block">
           <div className="analyze-login-prompt">
             <p>请先登录后使用万能解析功能。</p>
-            <button type="button" className="flomo-btn" onClick={startUnifiedLogin}>
+            <button
+              type="button"
+              className="flomo-btn"
+              onClick={startUnifiedLogin}
+            >
               统一账号登录
             </button>
           </div>
@@ -395,13 +427,21 @@ export default function ParserPage(): React.ReactNode {
                 disabled={submitting}
                 required
               />
-              <button type="submit" className="flomo-btn analyze-submit" disabled={submitting || !url.trim()}>
+              <button
+                type="submit"
+                className="flomo-btn analyze-submit"
+                disabled={submitting || !url.trim()}
+              >
                 {submitting ? "提取中..." : "提取"}
               </button>
             </div>
           </form>
 
-          {error ? <div className="error-banner" style={{ marginTop: 16 }}>{error}</div> : null}
+          {error ? (
+            <div className="error-banner" style={{ marginTop: 16 }}>
+              {error}
+            </div>
+          ) : null}
 
           {/* Active Tasks */}
           {tasksLoading ? (
@@ -415,7 +455,9 @@ export default function ParserPage(): React.ReactNode {
                 <div className="task-list">
                   <div className="task-list-header">
                     任务列表
-                    <span className="task-list-count">({activeTasks.length})</span>
+                    <span className="task-list-count">
+                      ({activeTasks.length})
+                    </span>
                   </div>
                   {activeTasks.map((t) => (
                     <TaskCard
@@ -427,7 +469,14 @@ export default function ParserPage(): React.ReactNode {
                   ))}
                 </div>
               ) : tasks.length === 0 ? (
-                <p style={{ marginTop: 24, color: "var(--muted)", fontSize: 14, textAlign: "center" }}>
+                <p
+                  style={{
+                    marginTop: 24,
+                    color: "var(--muted)",
+                    fontSize: 14,
+                    textAlign: "center",
+                  }}
+                >
                   暂无提取任务，输入 URL 开始提取
                 </p>
               ) : null}
@@ -462,7 +511,11 @@ export default function ParserPage(): React.ReactNode {
 
       {/* Drawer */}
       {drawerOpen && selectedTask ? (
-        <TaskDrawer task={selectedTask} expired={isTaskExpired(selectedTask)} onClose={closeDrawer} />
+        <TaskDrawer
+          task={selectedTask}
+          expired={isTaskExpired(selectedTask)}
+          onClose={closeDrawer}
+        />
       ) : null}
     </>
   );
@@ -485,7 +538,10 @@ function TaskCard({
   const icon = PLATFORM_ICONS[task.platform] || "?";
 
   return (
-    <div className={`task-card${isActive ? " is-active" : ""}`} onClick={onClick}>
+    <div
+      className={`task-card${isActive ? " is-active" : ""}`}
+      onClick={onClick}
+    >
       {thumb ? (
         <img className="task-card-thumb" src={thumb} alt="" loading="lazy" />
       ) : (
@@ -498,7 +554,10 @@ function TaskCard({
           <span>{formatRelativeTime(task.created_at)}</span>
         </div>
       </div>
-      <div className={`task-card-status status-${task.status}`} title={task.status} />
+      <div
+        className={`task-card-status status-${task.status}`}
+        title={task.status}
+      />
     </div>
   );
 }
@@ -516,14 +575,21 @@ function ArchivedTaskCard({
 
   return (
     <div className="archived-card" onClick={onClick}>
-      <span className="analyze-platform-badge" style={{ fontSize: 11, padding: "2px 6px" }}>
+      <span
+        className="analyze-platform-badge"
+        style={{ fontSize: 11, padding: "2px 6px" }}
+      >
         {platform}
       </span>
       <span className="archived-card-title">
         {task.metadata?.title || task.url}
       </span>
-      <span className="archived-card-url" title={task.url}>{task.url}</span>
-      <span className="archived-card-meta">{formatRelativeTime(task.created_at)}</span>
+      <span className="archived-card-url" title={task.url}>
+        {task.url}
+      </span>
+      <span className="archived-card-meta">
+        {formatRelativeTime(task.created_at)}
+      </span>
     </div>
   );
 }
@@ -540,9 +606,14 @@ function TaskDrawer({
   onClose: () => void;
 }): React.ReactNode {
   const isPending = task.status === "pending" || task.status === "processing";
-  const [activeFilters, setActiveFilters] = useState<Set<ResourceType>>(new Set());
+  const [activeFilters, setActiveFilters] = useState<Set<ResourceType>>(
+    new Set(),
+  );
   const [downloading, setDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+  const [downloadProgress, setDownloadProgress] = useState({
+    current: 0,
+    total: 0,
+  });
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   useEffect(() => {
@@ -586,15 +657,19 @@ function TaskDrawer({
     setDownloading(true);
     setDownloadProgress({ current: 0, total: downloadableResources.length });
 
-    const isMobile = isMobileDevice || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isMobile =
+      isMobileDevice || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     if (isMobile || downloadableResources.length > 3) {
       try {
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+        const timestamp = new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/:/g, "-");
         await downloadAsZip(
           downloadableResources,
           `resources-${timestamp}.zip`,
-          (current, total) => setDownloadProgress({ current, total })
+          (current, total) => setDownloadProgress({ current, total }),
         );
       } catch (error) {
         console.error("ZIP download failed:", error);
@@ -602,7 +677,10 @@ function TaskDrawer({
     } else {
       for (let i = 0; i < downloadableResources.length; i++) {
         const r = downloadableResources[i];
-        setDownloadProgress({ current: i + 1, total: downloadableResources.length });
+        setDownloadProgress({
+          current: i + 1,
+          total: downloadableResources.length,
+        });
         try {
           await downloadFile(r.url, r.filename);
         } catch {
@@ -621,7 +699,12 @@ function TaskDrawer({
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer-panel" role="dialog" aria-modal="true">
-        <button type="button" className="drawer-close" onClick={onClose} aria-label="关闭">
+        <button
+          type="button"
+          className="drawer-close"
+          onClick={onClose}
+          aria-label="关闭"
+        >
           ✕
         </button>
 
@@ -630,7 +713,9 @@ function TaskDrawer({
             <div className="analyze-spinner" />
             <p className="analyze-pending-text">
               正在提取资源
-              {task.platform ? ` (${PLATFORM_LABELS[task.platform] || task.platform})` : ""}
+              {task.platform
+                ? ` (${PLATFORM_LABELS[task.platform] || task.platform})`
+                : ""}
               ，通常需要 30-120 秒...
             </p>
             <p className="analyze-pending-hint">提取完成后将自动展示结果。</p>
@@ -667,13 +752,27 @@ function TaskDrawer({
             ) : null}
 
             <div className="analyze-metadata">
-              {task.metadata?.author ? <span>作者: {task.metadata.author}</span> : null}
-              {task.metadata?.duration ? <span>时长: {formatDuration(task.metadata.duration)}</span> : null}
-              {task.metadata?.published_at ? <span>发布: {task.metadata.published_at}</span> : null}
+              {task.metadata?.author ? (
+                <span>作者: {task.metadata.author}</span>
+              ) : null}
+              {task.metadata?.duration ? (
+                <span>时长: {formatDuration(task.metadata.duration)}</span>
+              ) : null}
+              {task.metadata?.published_at ? (
+                <span>发布: {task.metadata.published_at}</span>
+              ) : null}
             </div>
 
             <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-              原始链接：<a href={task.url} target="_blank" rel="noreferrer noopener" style={{ color: "var(--accent)" }}>{task.url}</a>
+              原始链接：
+              <a
+                href={task.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                style={{ color: "var(--accent)" }}
+              >
+                {task.url}
+              </a>
             </p>
 
             {task.metadata?.description ? (
@@ -683,7 +782,9 @@ function TaskDrawer({
             {task.metadata?.tags?.length ? (
               <div className="analyze-tags">
                 {task.metadata.tags.map((tag) => (
-                  <span key={tag} className="tag-chip">{tag}</span>
+                  <span key={tag} className="tag-chip">
+                    {tag}
+                  </span>
                 ))}
               </div>
             ) : null}
@@ -691,7 +792,9 @@ function TaskDrawer({
             {task.resources?.length ? (
               <div className="resource-list">
                 <div className="resource-list-header">
-                  <h3 className="resource-list-title">提取的资源 ({task.resources.length})</h3>
+                  <h3 className="resource-list-title">
+                    提取的资源 ({task.resources.length})
+                  </h3>
                   {downloadableResources.length > 0 ? (
                     <div className="resource-download-all-wrapper">
                       <button
@@ -704,8 +807,12 @@ function TaskDrawer({
                           ? `下载中 (${downloadProgress.current}/${downloadProgress.total})...`
                           : `↓ ${activeFilters.size > 0 ? "下载筛选" : "下载全部"} (${downloadableResources.length})`}
                       </button>
-                      {(isMobileDevice || downloadableResources.length > 3) && downloadableResources.length > 1 && !downloading ? (
-                        <span className="resource-download-zip-hint">将打包为 ZIP</span>
+                      {(isMobileDevice || downloadableResources.length > 3) &&
+                      downloadableResources.length > 1 &&
+                      !downloading ? (
+                        <span className="resource-download-zip-hint">
+                          将打包为 ZIP
+                        </span>
                       ) : null}
                     </div>
                   ) : null}
@@ -720,22 +827,28 @@ function TaskDrawer({
                     >
                       全部
                     </button>
-                    {Array.from(resourceTypeCounts.entries()).map(([type, count]) => (
-                      <button
-                        key={type}
-                        type="button"
-                        className={`resource-filter-pill resource-filter-${type}${activeFilters.has(type) ? " is-active" : ""}`}
-                        onClick={() => toggleFilter(type)}
-                      >
-                        {RESOURCE_TYPE_LABELS[type] || type} ({count})
-                      </button>
-                    ))}
+                    {Array.from(resourceTypeCounts.entries()).map(
+                      ([type, count]) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={`resource-filter-pill resource-filter-${type}${activeFilters.has(type) ? " is-active" : ""}`}
+                          onClick={() => toggleFilter(type)}
+                        >
+                          {RESOURCE_TYPE_LABELS[type] || type} ({count})
+                        </button>
+                      ),
+                    )}
                   </div>
                 ) : null}
 
                 {filteredResources.length > 0 ? (
                   filteredResources.map((resource, idx) => (
-                    <ResourceCard key={`${resource.type}-${idx}`} resource={resource} taskExpired={expired} />
+                    <ResourceCard
+                      key={`${resource.type}-${idx}`}
+                      resource={resource}
+                      taskExpired={expired}
+                    />
                   ))
                 ) : (
                   <p className="resource-filter-empty">当前筛选条件下无资源</p>
@@ -802,30 +915,62 @@ function ResourceCard({
   return (
     <div className="resource-card">
       <div className="resource-card-header">
-        <span className={`resource-type-badge resource-type-${resource.type}`}>{typeLabel}</span>
+        <span className={`resource-type-badge resource-type-${resource.type}`}>
+          {typeLabel}
+        </span>
         <span className="resource-filename">{resource.filename}</span>
-        {resource.size_bytes ? <span className="resource-size">{formatFileSize(resource.size_bytes)}</span> : null}
-        {resource.format ? <span className="resource-format">{resource.format}</span> : null}
-        {resource.language ? <span className="resource-language">{resource.language}</span> : null}
+        {resource.size_bytes ? (
+          <span className="resource-size">
+            {formatFileSize(resource.size_bytes)}
+          </span>
+        ) : null}
+        {resource.format ? (
+          <span className="resource-format">{resource.format}</span>
+        ) : null}
+        {resource.language ? (
+          <span className="resource-language">{resource.language}</span>
+        ) : null}
       </div>
 
       {/* Skip media previews for expired resources */}
       {!resourceIsExpired ? (
         <>
           {resource.type === "video" && resource.url ? (
-            <video className="resource-video" controls preload="metadata" src={resource.url} />
+            <video
+              className="resource-video"
+              controls
+              preload="metadata"
+              src={resource.url}
+            />
           ) : null}
 
           {resource.type === "audio" && resource.url ? (
-            <audio className="resource-audio" controls preload="metadata" src={resource.url} />
+            <audio
+              className="resource-audio"
+              controls
+              preload="metadata"
+              src={resource.url}
+            />
           ) : null}
 
           {resource.type === "image" && resource.url ? (
-            <img className="resource-image" src={resource.url} alt={resource.filename} loading="lazy" />
+            <img
+              className="resource-image"
+              src={resource.url}
+              alt={resource.filename}
+              loading="lazy"
+            />
           ) : null}
         </>
       ) : isLargeMedia ? (
-        <p style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic", margin: "8px 0" }}>
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--muted)",
+            fontStyle: "italic",
+            margin: "8px 0",
+          }}
+        >
           资源已过期，无法预览
         </p>
       ) : null}
@@ -849,7 +994,12 @@ function ResourceCard({
       <div className="resource-card-footer">
         {resource.type === "text" && resource.url && !resourceIsExpired ? (
           <>
-            <button type="button" className="resource-download" onClick={handleLoadText} disabled={textLoading}>
+            <button
+              type="button"
+              className="resource-download"
+              onClick={handleLoadText}
+              disabled={textLoading}
+            >
               {textLoading ? "加载中..." : textExpanded ? "收起" : "查看内容"}
             </button>
             <button
@@ -862,11 +1012,18 @@ function ResourceCard({
             </button>
           </>
         ) : resource.url && !resourceIsExpired ? (
-          <button type="button" className="resource-download" onClick={handleDownload} disabled={saving}>
+          <button
+            type="button"
+            className="resource-download"
+            onClick={handleDownload}
+            disabled={saving}
+          >
             {saving ? "下载中..." : "下载"}
           </button>
         ) : null}
-        {expiry ? <span className="expiry-badge expiry-badge-small">{expiry}</span> : null}
+        {expiry ? (
+          <span className="expiry-badge expiry-badge-small">{expiry}</span>
+        ) : null}
       </div>
     </div>
   );

@@ -2,7 +2,10 @@ export const WORTH_MUST_READ = "必读";
 export const WORTH_WORTH_READING = "可读";
 export const WORTH_SKIP = "跳过";
 
-export type Worth = typeof WORTH_MUST_READ | typeof WORTH_WORTH_READING | typeof WORTH_SKIP;
+export type Worth =
+  | typeof WORTH_MUST_READ
+  | typeof WORTH_WORTH_READING
+  | typeof WORTH_SKIP;
 
 export interface SourceConfig {
   id: string;

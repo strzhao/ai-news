@@ -153,14 +153,20 @@ async function trackClick(params: Record<string, string>): Promise<void> {
 export async function GET(request: Request): Promise<Response> {
   const secret = String(process.env.TRACKER_SIGNING_SECRET || "").trim();
   if (!secret) {
-    return NextResponse.json({ error: "Missing TRACKER_SIGNING_SECRET" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Missing TRACKER_SIGNING_SECRET" },
+      { status: 500 },
+    );
   }
 
   const params = signedParams(request.url);
   const signature = queryValue(request.url, "sig");
   const requiredKeys = ["u", "sid", "aid", "d", "ch"];
   if (requiredKeys.some((key) => !String(params[key] || "").trim())) {
-    return NextResponse.json({ error: "Missing required query params" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing required query params" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -168,7 +174,10 @@ export async function GET(request: Request): Promise<Response> {
       throw new Error("empty");
     }
     const normalized = normalizeUrl(params.u);
-    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+    if (
+      !normalized.startsWith("http://") &&
+      !normalized.startsWith("https://")
+    ) {
       throw new Error("invalid");
     }
   } catch {
@@ -183,7 +192,10 @@ export async function GET(request: Request): Promise<Response> {
     ch: params.ch,
   };
 
-  if (!verifySignature(params, signature, secret) && !verifySignature(legacyParams, signature, secret)) {
+  if (
+    !verifySignature(params, signature, secret) &&
+    !verifySignature(legacyParams, signature, secret)
+  ) {
     const upstash = buildUpstashClientOrNone();
     if (upstash) {
       try {

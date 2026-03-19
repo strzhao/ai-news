@@ -12,11 +12,15 @@ export function getAuthIssuer(): string {
 }
 
 function getAuthorizePath(): string {
-  return process.env.NEXT_PUBLIC_AUTH_AUTHORIZE_PATH ?? DEFAULT_AUTH_AUTHORIZE_PATH;
+  return (
+    process.env.NEXT_PUBLIC_AUTH_AUTHORIZE_PATH ?? DEFAULT_AUTH_AUTHORIZE_PATH
+  );
 }
 
 function getCallbackPath(): string {
-  return process.env.NEXT_PUBLIC_AUTH_CALLBACK_PATH ?? DEFAULT_AUTH_CALLBACK_PATH;
+  return (
+    process.env.NEXT_PUBLIC_AUTH_CALLBACK_PATH ?? DEFAULT_AUTH_CALLBACK_PATH
+  );
 }
 
 function getAppOrigin(): string {
@@ -32,16 +36,24 @@ function getAuthLogoutPath(): string {
 }
 
 export function generateAuthState(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function buildAuthorizeUrlForCurrentOrigin(state: string, prompt?: string): string {
+export function buildAuthorizeUrlForCurrentOrigin(
+  state: string,
+  prompt?: string,
+): string {
   const runtimeOrigin =
-    typeof window !== "undefined" && window.location?.origin ? window.location.origin : getAppOrigin();
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : getAppOrigin();
   const returnTo = new URL(getCallbackPath(), runtimeOrigin).toString();
 
   const authorizeUrl = new URL(getAuthorizePath(), getAuthIssuer());
@@ -60,8 +72,13 @@ function toRuntimeAbsoluteUrl(rawPathOrUrl: string): string {
     return value;
   }
   const runtimeOrigin =
-    typeof window !== "undefined" && window.location?.origin ? window.location.origin : getAppOrigin();
-  return new URL(value.startsWith("/") ? value : `/${value}`, runtimeOrigin).toString();
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : getAppOrigin();
+  return new URL(
+    value.startsWith("/") ? value : `/${value}`,
+    runtimeOrigin,
+  ).toString();
 }
 
 export function buildAuthMeUrl(): string {

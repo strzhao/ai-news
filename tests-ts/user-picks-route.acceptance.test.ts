@@ -33,7 +33,8 @@ vi.mock("@/lib/infra/upstash", () => {
   return {
     buildUpstashClient: () => ({
       zadd: (...args: unknown[]) => zaddMock(...args),
-      zrevrangeWithScores: (...args: unknown[]) => zrevrangeWithScoresMock(...args),
+      zrevrangeWithScores: (...args: unknown[]) =>
+        zrevrangeWithScoresMock(...args),
       hset: (...args: unknown[]) => hsetMock(...args),
       hgetall: (...args: unknown[]) => hgetallMock(...args),
       expire: (...args: unknown[]) => expireMock(...args),
@@ -42,7 +43,7 @@ vi.mock("@/lib/infra/upstash", () => {
   };
 });
 
-import { POST, GET } from "@/app/api/v1/user-picks/route";
+import { GET, POST } from "@/app/api/v1/user-picks/route";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -97,7 +98,10 @@ describe("POST /api/v1/user-picks", () => {
   });
 
   it("returns 400 when article_id is missing", async () => {
-    resolveUserMock.mockResolvedValue({ ok: true, user: { id: "usr_123", email: "u@example.com" } });
+    resolveUserMock.mockResolvedValue({
+      ok: true,
+      user: { id: "usr_123", email: "u@example.com" },
+    });
 
     const body = { ...SAMPLE_PICK };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,7 +117,10 @@ describe("POST /api/v1/user-picks", () => {
 
   it("saves pick and auto-hearts on valid submission", async () => {
     const userId = "usr_123";
-    resolveUserMock.mockResolvedValue({ ok: true, user: { id: userId, email: "u@example.com" } });
+    resolveUserMock.mockResolvedValue({
+      ok: true,
+      user: { id: userId, email: "u@example.com" },
+    });
     zaddMock.mockResolvedValue(1);
     hsetMock.mockResolvedValue("OK");
     expireMock.mockResolvedValue(1);
@@ -128,25 +135,32 @@ describe("POST /api/v1/user-picks", () => {
     // Verify user_picks sorted set write
     const zaddCalls = zaddMock.mock.calls;
     const userPicksZadd = zaddCalls.find(
-      (call: unknown[]) => typeof call[0] === "string" && (call[0] as string).includes("user_picks"),
+      (call: unknown[]) =>
+        typeof call[0] === "string" &&
+        (call[0] as string).includes("user_picks"),
     );
     expect(userPicksZadd).toBeDefined();
 
     // Verify hearts sorted set write (auto-heart)
     const heartsZadd = zaddCalls.find(
-      (call: unknown[]) => typeof call[0] === "string" && (call[0] as string).includes("hearts"),
+      (call: unknown[]) =>
+        typeof call[0] === "string" && (call[0] as string).includes("hearts"),
     );
     expect(heartsZadd).toBeDefined();
 
     // Verify metadata hashes written
     const hsetCalls = hsetMock.mock.calls;
     const userPicksMeta = hsetCalls.find(
-      (call: unknown[]) => typeof call[0] === "string" && (call[0] as string).includes("user_picks:meta"),
+      (call: unknown[]) =>
+        typeof call[0] === "string" &&
+        (call[0] as string).includes("user_picks:meta"),
     );
     expect(userPicksMeta).toBeDefined();
 
     const heartsMeta = hsetCalls.find(
-      (call: unknown[]) => typeof call[0] === "string" && (call[0] as string).includes("hearts:meta"),
+      (call: unknown[]) =>
+        typeof call[0] === "string" &&
+        (call[0] as string).includes("hearts:meta"),
     );
     expect(heartsMeta).toBeDefined();
   });
@@ -166,7 +180,9 @@ describe("GET /api/v1/user-picks", () => {
   it("returns 401 when not authenticated", async () => {
     resolveUserMock.mockResolvedValue({ ok: false, error: "unauthorized" });
 
-    const response = await GET(new Request("https://example.com/api/v1/user-picks"));
+    const response = await GET(
+      new Request("https://example.com/api/v1/user-picks"),
+    );
     const payload = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(401);
@@ -176,7 +192,10 @@ describe("GET /api/v1/user-picks", () => {
 
   it("returns items list in reverse chronological order", async () => {
     const userId = "usr_123";
-    resolveUserMock.mockResolvedValue({ ok: true, user: { id: userId, email: "u@example.com" } });
+    resolveUserMock.mockResolvedValue({
+      ok: true,
+      user: { id: userId, email: "u@example.com" },
+    });
 
     const now = Date.now();
     zrevrangeWithScoresMock.mockResolvedValue([
@@ -209,8 +228,13 @@ describe("GET /api/v1/user-picks", () => {
       });
     });
 
-    const response = await GET(new Request("https://example.com/api/v1/user-picks"));
-    const payload = (await response.json()) as { ok: boolean; items: Array<Record<string, unknown>> };
+    const response = await GET(
+      new Request("https://example.com/api/v1/user-picks"),
+    );
+    const payload = (await response.json()) as {
+      ok: boolean;
+      items: Array<Record<string, unknown>>;
+    };
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);

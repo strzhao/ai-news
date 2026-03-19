@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { NextResponse } from "next/server";
+import type { NextResponse } from "next/server";
 
 export const AUTH_STATE_COOKIE_NAME = "ai_news_auth_state";
 export const GATEWAY_SESSION_COOKIE_NAME = "ai_news_gateway_session";
@@ -34,7 +34,10 @@ function secret(): string {
 }
 
 function sign(payload: string): string {
-  return crypto.createHmac("sha256", secret()).update(payload).digest("base64url");
+  return crypto
+    .createHmac("sha256", secret())
+    .update(payload)
+    .digest("base64url");
 }
 
 function encodeSignedPayload(input: Record<string, unknown>): string {
@@ -52,7 +55,10 @@ function decodeSignedPayload(input: string): Record<string, unknown> | null {
 
   const expectedSig = sign(encoded);
   try {
-    const valid = crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(providedSig));
+    const valid = crypto.timingSafeEqual(
+      Buffer.from(expectedSig),
+      Buffer.from(providedSig),
+    );
     if (!valid) return null;
   } catch {
     return null;
@@ -60,7 +66,8 @@ function decodeSignedPayload(input: string): Record<string, unknown> | null {
 
   try {
     const parsed = JSON.parse(base64urlDecode(encoded)) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return null;
     return parsed as Record<string, unknown>;
   } catch {
     return null;
@@ -85,7 +92,11 @@ function parseCookie(request: Request, name: string): string {
   return "";
 }
 
-export function createAuthStateCookieValue(state: string, nextPath: string, ttlSeconds = 600): string {
+export function createAuthStateCookieValue(
+  state: string,
+  nextPath: string,
+  ttlSeconds = 600,
+): string {
   const now = Date.now();
   return encodeSignedPayload({
     state,
@@ -95,7 +106,10 @@ export function createAuthStateCookieValue(state: string, nextPath: string, ttlS
   });
 }
 
-export function verifyAuthStateCookieValue(raw: string, expectedState: string): AuthStatePayload | null {
+export function verifyAuthStateCookieValue(
+  raw: string,
+  expectedState: string,
+): AuthStatePayload | null {
   const decoded = decodeSignedPayload(raw);
   if (!decoded) return null;
 
@@ -111,26 +125,42 @@ export function verifyAuthStateCookieValue(raw: string, expectedState: string): 
   return { state, next, issuedAt, expiresAt };
 }
 
-export function createGatewaySessionCookieValue(userId: string, email: string, ttlSeconds = 2_592_000): string {
+export function createGatewaySessionCookieValue(
+  userId: string,
+  email: string,
+  ttlSeconds = 2_592_000,
+): string {
   const now = Date.now();
   return encodeSignedPayload({
     userId: String(userId || "").trim(),
-    email: String(email || "").trim().toLowerCase(),
+    email: String(email || "")
+      .trim()
+      .toLowerCase(),
     issuedAt: now,
     expiresAt: now + ttlSeconds * 1000,
   });
 }
 
-export function verifyGatewaySessionCookieValue(raw: string): GatewaySessionPayload | null {
+export function verifyGatewaySessionCookieValue(
+  raw: string,
+): GatewaySessionPayload | null {
   const decoded = decodeSignedPayload(raw);
   if (!decoded) return null;
 
   const userId = String(decoded.userId || "").trim();
-  const email = String(decoded.email || "").trim().toLowerCase();
+  const email = String(decoded.email || "")
+    .trim()
+    .toLowerCase();
   const issuedAt = Number(decoded.issuedAt || 0);
   const expiresAt = Number(decoded.expiresAt || 0);
 
-  if (!userId || !email || !Number.isFinite(issuedAt) || !Number.isFinite(expiresAt)) return null;
+  if (
+    !userId ||
+    !email ||
+    !Number.isFinite(issuedAt) ||
+    !Number.isFinite(expiresAt)
+  )
+    return null;
   if (Date.now() > expiresAt) return null;
 
   return { userId, email, issuedAt, expiresAt };
@@ -144,7 +174,10 @@ export function readGatewaySessionCookie(request: Request): string {
   return parseCookie(request, GATEWAY_SESSION_COOKIE_NAME);
 }
 
-export function applyAuthStateCookie(response: NextResponse, value: string): void {
+export function applyAuthStateCookie(
+  response: NextResponse,
+  value: string,
+): void {
   const secure = process.env.NODE_ENV === "production";
   response.cookies.set({
     name: AUTH_STATE_COOKIE_NAME,
@@ -170,7 +203,10 @@ export function clearAuthStateCookie(response: NextResponse): void {
   });
 }
 
-export function applyGatewaySessionCookie(response: NextResponse, value: string): void {
+export function applyGatewaySessionCookie(
+  response: NextResponse,
+  value: string,
+): void {
   const secure = process.env.NODE_ENV === "production";
   response.cookies.set({
     name: GATEWAY_SESSION_COOKIE_NAME,
@@ -196,7 +232,9 @@ export function clearGatewaySessionCookie(response: NextResponse): void {
   });
 }
 
-export function readGatewaySessionFromRequest(request: Request): GatewaySessionPayload | null {
+export function readGatewaySessionFromRequest(
+  request: Request,
+): GatewaySessionPayload | null {
   const raw = readGatewaySessionCookie(request);
   if (!raw) return null;
   return verifyGatewaySessionCookieValue(raw);

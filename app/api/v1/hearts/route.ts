@@ -1,8 +1,8 @@
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
-import { heartsKey, heartsMetaKey } from "@/lib/integrations/hearts-redis-keys";
-import { userPicksMetaKey } from "@/lib/integrations/user-picks-redis-keys";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
+import { heartsKey, heartsMetaKey } from "@/lib/integrations/hearts-redis-keys";
+import { userPicksMetaKey } from "@/lib/integrations/user-picks-redis-keys";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,10 @@ const PAGE_SIZE_MAX = 100;
 export async function POST(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {
@@ -59,20 +62,38 @@ export async function POST(request: Request): Promise<Response> {
 
     return jsonResponse(200, { ok: true, hearted: true });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await resolveUserFromRequest(request);
   if (!auth.ok || !auth.user) {
-    return jsonResponse(401, { ok: false, error: auth.error || "unauthorized" });
+    return jsonResponse(401, {
+      ok: false,
+      error: auth.error || "unauthorized",
+    });
   }
 
   try {
     const url = new URL(request.url);
-    const page = Math.max(0, Number.parseInt(url.searchParams.get("page") || "0", 10) || 0);
-    const size = Math.max(1, Math.min(PAGE_SIZE_MAX, Number.parseInt(url.searchParams.get("size") || String(PAGE_SIZE_DEFAULT), 10) || PAGE_SIZE_DEFAULT));
+    const page = Math.max(
+      0,
+      Number.parseInt(url.searchParams.get("page") || "0", 10) || 0,
+    );
+    const size = Math.max(
+      1,
+      Math.min(
+        PAGE_SIZE_MAX,
+        Number.parseInt(
+          url.searchParams.get("size") || String(PAGE_SIZE_DEFAULT),
+          10,
+        ) || PAGE_SIZE_DEFAULT,
+      ),
+    );
 
     const redis = buildUpstashClient();
     const key = heartsKey(auth.user.id);
@@ -112,7 +133,9 @@ export async function GET(request: Request): Promise<Response> {
     }, []);
     if (needBackfill.length > 0) {
       const picksMetas = await Promise.all(
-        needBackfill.map((i) => redis.hgetall(userPicksMetaKey(items[i].article_id))),
+        needBackfill.map((i) =>
+          redis.hgetall(userPicksMetaKey(items[i].article_id)),
+        ),
       );
       for (let j = 0; j < needBackfill.length; j++) {
         const picksMeta = picksMetas[j];
@@ -124,6 +147,9 @@ export async function GET(request: Request): Promise<Response> {
 
     return jsonResponse(200, { ok: true, items, total, page, size });
   } catch (error) {
-    return jsonResponse(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return jsonResponse(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

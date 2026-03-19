@@ -1,9 +1,11 @@
-import { Article } from "@/lib/domain/models";
+import type { Article } from "@/lib/domain/models";
 
 const MULTISPACE_RE = /\s+/g;
 
 function normalizeText(value: string, maxLen = 1200): string {
-  const normalized = String(value || "").replace(MULTISPACE_RE, " ").trim();
+  const normalized = String(value || "")
+    .replace(MULTISPACE_RE, " ")
+    .trim();
   if (normalized.length <= maxLen) {
     return normalized;
   }

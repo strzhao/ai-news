@@ -122,10 +122,7 @@ describe("article_summary API route (design-doc acceptance)", () => {
       const { GET } = await import(
         "@/app/api/article_summary/[article_id]/route"
       );
-      const response = await GET(
-        buildRequest(""),
-        buildParams(""),
-      );
+      const response = await GET(buildRequest(""), buildParams(""));
 
       expect(response.status).toBe(400);
       const payload = await response.json();

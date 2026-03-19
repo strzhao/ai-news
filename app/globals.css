@@ -1,18 +1,18 @@
 :root {
-  --home-bg: oklch(0.975 0.010 95);
+  --home-bg: oklch(0.975 0.01 95);
   --home-fg: oklch(0.155 0.006 95);
   --home-muted: oklch(0.595 0.005 95);
   --home-accent: oklch(0.488 0.088 158);
-  --home-accent-hover: oklch(0.620 0.075 160);
-  --home-accent-foreground: oklch(0.975 0.010 95);
-  --home-accent-mist: oklch(0.940 0.025 158);
-  --home-border: oklch(0.850 0.012 120 / 0.40);
+  --home-accent-hover: oklch(0.62 0.075 160);
+  --home-accent-foreground: oklch(0.975 0.01 95);
+  --home-accent-mist: oklch(0.94 0.025 158);
+  --home-border: oklch(0.85 0.012 120 / 0.4);
   --home-surface: oklch(0.992 0.006 95 / 0.72);
-  --home-shadow: oklch(0.300 0.050 158 / 0.28);
+  --home-shadow: oklch(0.3 0.05 158 / 0.28);
   --home-focus: oklch(0.488 0.088 158);
 
   --home-mist: oklch(0.928 0.005 95);
-  --home-charcoal: oklch(0.400 0.005 95);
+  --home-charcoal: oklch(0.4 0.005 95);
   --home-amber: oklch(0.668 0.155 68);
   --home-vermilion: oklch(0.548 0.168 23);
   --home-sky: oklch(0.568 0.118 242);
@@ -23,7 +23,7 @@
   --ink-soft: var(--home-charcoal);
   --muted: var(--home-muted);
   --line: var(--home-border);
-  --line-soft: oklch(0.900 0.006 95 / 0.55);
+  --line-soft: oklch(0.9 0.006 95 / 0.55);
   --accent: var(--home-accent);
   --accent-hover: var(--home-accent-hover);
   --danger: var(--home-vermilion);
@@ -44,7 +44,9 @@ body {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
+  font-family:
+    "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
+    "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -105,7 +107,9 @@ a {
   font-weight: 500;
   color: var(--muted);
   text-decoration: none;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .sidebar-link:hover {
@@ -142,7 +146,9 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .sidebar-user-chip:hover {
@@ -184,7 +190,9 @@ a {
 
 .page-title {
   margin: 0;
-  font-family: "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
+  font-family:
+    "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
+    "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
   font-size: clamp(28px, 4vw, 38px);
   font-weight: 650;
   letter-spacing: -0.02em;
@@ -413,7 +421,9 @@ a {
 
 .article-headline {
   margin: 10px 0 0;
-  font-family: "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
+  font-family:
+    "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
+    "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
   font-size: 26px;
   line-height: 1.22;
   letter-spacing: -0.015em;
@@ -433,7 +443,7 @@ a {
 }
 
 .article-headline a:hover {
-  border-bottom-color: oklch(0.400 0.005 95 / 0.45);
+  border-bottom-color: oklch(0.4 0.005 95 / 0.45);
 }
 
 .article-dek {
@@ -516,17 +526,19 @@ a {
   line-height: 1;
   padding: 2px 4px;
   color: var(--muted);
-  transition: color 0.15s ease, transform 0.15s ease;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
   font-family: inherit;
 }
 
 .heart-btn:hover {
-  color: oklch(0.588 0.200 15);
+  color: oklch(0.588 0.2 15);
   transform: scale(1.15);
 }
 
 .heart-btn.is-hearted {
-  color: oklch(0.588 0.200 15);
+  color: oklch(0.588 0.2 15);
 }
 
 .heart-btn.is-hearted:hover {
@@ -586,7 +598,7 @@ a {
 }
 
 .archive-day[open] {
-  background: oklch(0.940 0.025 158 / 0.32);
+  background: oklch(0.94 0.025 158 / 0.32);
 }
 
 .archive-day-summary {
@@ -645,14 +657,14 @@ a {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid oklch(0.548 0.168 23 / 0.28);
-  background: oklch(0.980 0.020 23 / 0.8);
+  background: oklch(0.98 0.02 23 / 0.8);
   color: var(--danger);
   font-size: 13px;
 }
 
 .auth-error-banner {
   border-color: oklch(0.548 0.168 23 / 0.25);
-  background: oklch(0.980 0.020 23 / 0.75);
+  background: oklch(0.98 0.02 23 / 0.75);
 }
 
 .block-head-actions {
@@ -748,7 +760,7 @@ a {
 
 .flomo-message.is-error {
   color: var(--danger);
-  background: oklch(0.980 0.020 23 / 0.75);
+  background: oklch(0.98 0.02 23 / 0.75);
   border: 1px solid oklch(0.548 0.168 23 / 0.25);
 }
 
@@ -1066,7 +1078,9 @@ button:focus-visible {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .analyze-pending-text {
@@ -1111,8 +1125,8 @@ button:focus-visible {
   height: 26px;
   padding: 0 10px;
   border-radius: 6px;
-  background: oklch(0.960 0.060 68 / 0.6);
-  color: oklch(0.500 0.120 55);
+  background: oklch(0.96 0.06 68 / 0.6);
+  color: oklch(0.5 0.12 55);
   font-size: 12px;
   font-weight: 560;
 }
@@ -1229,7 +1243,9 @@ button:focus-visible {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-.resource-filter-bar::-webkit-scrollbar { display: none; }
+.resource-filter-bar::-webkit-scrollbar {
+  display: none;
+}
 
 .resource-filter-pill {
   flex-shrink: 0;
@@ -1246,16 +1262,47 @@ button:focus-visible {
   cursor: pointer;
   transition: all 0.15s;
 }
-.resource-filter-pill:hover { border-color: var(--ink-soft); color: var(--ink-soft); }
-.resource-filter-pill.is-active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.resource-filter-pill:hover {
+  border-color: var(--ink-soft);
+  color: var(--ink-soft);
+}
+.resource-filter-pill.is-active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
 
-.resource-filter-video.is-active { background: oklch(0.400 0.100 280); border-color: oklch(0.400 0.100 280); color: #fff; }
-.resource-filter-audio.is-active { background: oklch(0.400 0.080 158); border-color: oklch(0.400 0.080 158); color: #fff; }
-.resource-filter-subtitle.is-active { background: oklch(0.450 0.090 68); border-color: oklch(0.450 0.090 68); color: #fff; }
+.resource-filter-video.is-active {
+  background: oklch(0.4 0.1 280);
+  border-color: oklch(0.4 0.1 280);
+  color: #fff;
+}
+.resource-filter-audio.is-active {
+  background: oklch(0.4 0.08 158);
+  border-color: oklch(0.4 0.08 158);
+  color: #fff;
+}
+.resource-filter-subtitle.is-active {
+  background: oklch(0.45 0.09 68);
+  border-color: oklch(0.45 0.09 68);
+  color: #fff;
+}
 .resource-filter-thumbnail.is-active,
-.resource-filter-image.is-active { background: oklch(0.420 0.080 320); border-color: oklch(0.420 0.080 320); color: #fff; }
-.resource-filter-text.is-active { background: var(--home-charcoal); border-color: var(--home-charcoal); color: #fff; }
-.resource-filter-metadata.is-active { background: var(--muted); border-color: var(--muted); color: #fff; }
+.resource-filter-image.is-active {
+  background: oklch(0.42 0.08 320);
+  border-color: oklch(0.42 0.08 320);
+  color: #fff;
+}
+.resource-filter-text.is-active {
+  background: var(--home-charcoal);
+  border-color: var(--home-charcoal);
+  color: #fff;
+}
+.resource-filter-metadata.is-active {
+  background: var(--muted);
+  border-color: var(--muted);
+  color: #fff;
+}
 
 .resource-filter-empty {
   color: var(--muted);
@@ -1291,13 +1338,31 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
-.resource-type-video { background: oklch(0.910 0.060 280); color: oklch(0.400 0.100 280); }
-.resource-type-audio { background: oklch(0.920 0.050 158); color: oklch(0.400 0.080 158); }
-.resource-type-subtitle { background: oklch(0.920 0.040 68); color: oklch(0.450 0.090 68); }
+.resource-type-video {
+  background: oklch(0.91 0.06 280);
+  color: oklch(0.4 0.1 280);
+}
+.resource-type-audio {
+  background: oklch(0.92 0.05 158);
+  color: oklch(0.4 0.08 158);
+}
+.resource-type-subtitle {
+  background: oklch(0.92 0.04 68);
+  color: oklch(0.45 0.09 68);
+}
 .resource-type-thumbnail,
-.resource-type-image { background: oklch(0.920 0.050 320); color: oklch(0.420 0.080 320); }
-.resource-type-text { background: var(--home-mist); color: var(--home-charcoal); }
-.resource-type-metadata { background: var(--home-mist); color: var(--muted); }
+.resource-type-image {
+  background: oklch(0.92 0.05 320);
+  color: oklch(0.42 0.08 320);
+}
+.resource-type-text {
+  background: var(--home-mist);
+  color: var(--home-charcoal);
+}
+.resource-type-metadata {
+  background: var(--home-mist);
+  color: var(--muted);
+}
 
 .resource-filename {
   color: var(--ink);
@@ -1523,7 +1588,9 @@ button:focus-visible {
   border: 1px solid var(--line);
   border-radius: 10px;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   background: var(--surface);
 }
 
@@ -1608,8 +1675,13 @@ button:focus-visible {
 }
 
 @keyframes pulse-status {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ── Archive Section (Analyze) ── */
@@ -1731,7 +1803,9 @@ button:focus-visible {
   justify-content: center;
   font-size: 18px;
   color: var(--muted);
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
   z-index: 1;
 }
 
@@ -1751,13 +1825,21 @@ button:focus-visible {
 }
 
 @keyframes drawer-slide-in {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes drawer-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1856,7 +1938,9 @@ button:focus-visible {
   border: 1px solid var(--accent);
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   white-space: nowrap;
 }
 
@@ -2026,8 +2110,13 @@ button:focus-visible {
 }
 
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 0.8; }
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 /* ══════════════════════════════════════════════════
@@ -2273,7 +2362,9 @@ button:focus-visible {
 .url-float-card {
   background: var(--bg);
   border-radius: 12px;
-  box-shadow: 0 4px 24px oklch(0 0 0 / 0.14), 0 1px 4px oklch(0 0 0 / 0.08);
+  box-shadow:
+    0 4px 24px oklch(0 0 0 / 0.14),
+    0 1px 4px oklch(0 0 0 / 0.08);
   padding: 16px;
   border: 1px solid var(--line);
 }
@@ -2406,9 +2497,15 @@ button:focus-visible {
 }
 
 @keyframes url-float-spin {
-  0% { box-shadow: 0 0 0 0 oklch(0.55 0.15 250 / 0.3); }
-  50% { box-shadow: 0 0 0 4px oklch(0.55 0.15 250 / 0); }
-  100% { box-shadow: 0 0 0 0 oklch(0.55 0.15 250 / 0.3); }
+  0% {
+    box-shadow: 0 0 0 0 oklch(0.55 0.15 250 / 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px oklch(0.55 0.15 250 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.55 0.15 250 / 0.3);
+  }
 }
 
 /* Done card */

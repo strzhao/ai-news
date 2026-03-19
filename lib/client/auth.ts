@@ -9,11 +9,18 @@ function firstNonEmptyString(...values: unknown[]): string {
   return "";
 }
 
-export function extractAuthUser(payload: Record<string, unknown>): AuthUser | null {
-  const nestedUser = payload.user && typeof payload.user === "object" ? (payload.user as Record<string, unknown>) : null;
+export function extractAuthUser(
+  payload: Record<string, unknown>,
+): AuthUser | null {
+  const nestedUser =
+    payload.user && typeof payload.user === "object"
+      ? (payload.user as Record<string, unknown>)
+      : null;
   const dataUser =
     payload.data && typeof payload.data === "object"
-      ? ((payload.data as Record<string, unknown>).user as Record<string, unknown> | undefined) || null
+      ? ((payload.data as Record<string, unknown>).user as
+          | Record<string, unknown>
+          | undefined) || null
       : null;
 
   const id = firstNonEmptyString(
@@ -27,14 +34,26 @@ export function extractAuthUser(payload: Record<string, unknown>): AuthUser | nu
     dataUser?.user_id,
     dataUser?.sub,
   );
-  const email = firstNonEmptyString(payload.email, nestedUser?.email, dataUser?.email);
-  const status = firstNonEmptyString(payload.status, nestedUser?.status, dataUser?.status, "ACTIVE");
+  const email = firstNonEmptyString(
+    payload.email,
+    nestedUser?.email,
+    dataUser?.email,
+  );
+  const status = firstNonEmptyString(
+    payload.status,
+    nestedUser?.status,
+    dataUser?.status,
+    "ACTIVE",
+  );
 
   if (!id || !email) return null;
   return { id, email, status };
 }
 
-export async function fetchAuthUser(): Promise<{ user: AuthUser | null; error: string | null }> {
+export async function fetchAuthUser(): Promise<{
+  user: AuthUser | null;
+  error: string | null;
+}> {
   try {
     const response = await fetch(buildAuthMeUrl(), {
       cache: "no-store",

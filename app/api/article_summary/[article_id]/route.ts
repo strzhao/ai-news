@@ -1,5 +1,5 @@
-import { fetchArticleSummary } from "@/lib/integrations/article-db-client";
 import { NextResponse } from "next/server";
+import { fetchArticleSummary } from "@/lib/integrations/article-db-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -11,7 +11,10 @@ export async function GET(
   const params = await context.params;
   const articleId = String(params.article_id || "").trim();
   if (!articleId) {
-    return NextResponse.json({ ok: false, error: "Missing article_id" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Missing article_id" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -22,7 +25,10 @@ export async function GET(
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : String(error) },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 },
     );
   }
