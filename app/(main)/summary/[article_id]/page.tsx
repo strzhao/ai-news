@@ -29,12 +29,8 @@ export default function SummaryPage(): React.ReactNode {
       try {
         // Fetch meta + summary in parallel
         const [metaRes, summaryRes] = await Promise.all([
-          fetch(`/api/v1/article-meta/${encodeURIComponent(articleId)}`, {
-            cache: "no-store",
-          }),
-          fetch(`/api/article_summary/${encodeURIComponent(articleId)}`, {
-            cache: "no-store",
-          }),
+          fetch(`/api/v1/article-meta/${encodeURIComponent(articleId)}`),
+          fetch(`/api/article_summary/${encodeURIComponent(articleId)}`),
         ]);
 
         if (cancelled) return;

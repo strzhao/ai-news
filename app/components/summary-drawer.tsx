@@ -64,7 +64,6 @@ export function SummaryDrawer({
     try {
       const response = await fetch(
         `/api/article_summary/${encodeURIComponent(articleId)}`,
-        { cache: "no-store" },
       );
       const data = await response.json();
       if (activeArticleIdRef.current !== articleId) return;

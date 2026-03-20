@@ -19,9 +19,13 @@ export async function GET(
 
   try {
     const result = await fetchArticleSummary(articleId);
+    const cacheControl =
+      result.status === "completed" && result.summary_markdown
+        ? "public, s-maxage=300, stale-while-revalidate=3600"
+        : "no-store, max-age=0";
     return NextResponse.json(result, {
       status: 200,
-      headers: { "Cache-Control": "no-store, max-age=0" },
+      headers: { "Cache-Control": cacheControl },
     });
   } catch (error) {
     return NextResponse.json(
