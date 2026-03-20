@@ -67,6 +67,11 @@ function makeAssessment(
     actionHint: "",
     bestForRoles: [],
     confidence: 0.8,
+    evidenceSignals: [],
+    primaryType: "analysis",
+    secondaryTypes: [],
+    tagGroups: {},
+    cacheKey: `cache_${articleId}`,
   };
 }
 
