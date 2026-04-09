@@ -10,9 +10,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "lint": "biome check .",
     "lint:fix": "biome check --fix .",
     "format": "biome format --write .",
+    "analyze": "ANALYZE=true next build",
     "prepare": "husky"
   },
   "dependencies": {
@@ -34,6 +36,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",
+    "@next/bundle-analyzer": "^16.2.3",
+    "@playwright/test": "^1.59.1",
     "@types/js-yaml": "^4.0.9",
     "@types/jszip": "^3.4.0",
     "@types/node": "^22.13.10",

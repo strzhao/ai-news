@@ -15,3 +15,9 @@ coverage/
 .env*.local
 .claude/dev-loop.local.md
 .claude/autopilot.local.md
+
+# Playwright E2E
+test-results/
+playwright-report/
+blob-report/
+.playwright/

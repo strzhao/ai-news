@@ -52,6 +52,15 @@
     }
   },
   "files": {
-    "includes": ["**", "!!.next", "!!node_modules", "!!dist", "!!coverage"]
+    "includes": [
+      "**",
+      "!!.next",
+      "!!node_modules",
+      "!!dist",
+      "!!coverage",
+      "!!test-results",
+      "!!playwright-report",
+      "!!blob-report"
+    ]
   }
 }
