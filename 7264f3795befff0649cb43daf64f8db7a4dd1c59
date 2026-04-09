@@ -1,0 +1,29 @@
+app/(main)/hearts/page.tsx
+  92e5527ce6b1d2d3 23-36,39-44,46-54,70-129,142,144-147,242-246,248-397,400-464,498-501,507-529,537-544,547,599
+lib/client/user-picks.ts
+  92e5527ce6b1d2d3 65-87
+app/api/v1/user-picks/route.ts
+  92e5527ce6b1d2d3 161-166,168-170
+tests-ts/inline-pick.acceptance.test.ts
+  92e5527ce6b1d2d3 1-58,60-217,219-267,269-607,609-695
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "7264f3795befff0649cb43daf64f8db7a4dd1c59",
+  "prompts": {
+    "92e5527ce6b1d2d3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d0b8fe97-5be8-416d-ba05-eaf3399c59aa",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "赵桂雄",
+      "messages": [],
+      "total_additions": 1103,
+      "total_deletions": 16,
+      "accepted_lines": 1081,
+      "overriden_lines": 9
+    }
+  }
+}
