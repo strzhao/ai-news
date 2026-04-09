@@ -1,0 +1,39 @@
+.gitignore
+  cbfd2f191555e6e5 18-23
+tests-ts/e2e-infra.acceptance.test.ts
+  cbfd2f191555e6e5 1-171
+next.config.ts
+  cbfd2f191555e6e5 1,10-12
+biome.json
+  cbfd2f191555e6e5 55-64
+playwright.config.ts
+  cbfd2f191555e6e5 1-26
+tsconfig.json
+  cbfd2f191555e6e5 23
+e2e/tsconfig.json
+  cbfd2f191555e6e5 1-7
+package.json
+  cbfd2f191555e6e5 13,17
+e2e/home.spec.ts
+  cbfd2f191555e6e5 1-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "b1b3683c8a9b2a3c9656d2b782bc4eb87d5e77ea",
+  "prompts": {
+    "cbfd2f191555e6e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21ed9b86-f0a7-4d55-a31c-218ee7519e21",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "赵桂雄",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 307,
+      "overriden_lines": 0
+    }
+  }
+}
