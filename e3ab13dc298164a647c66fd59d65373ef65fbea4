@@ -1,0 +1,27 @@
+.claude/worktree-links
+  cbfd2f191555e6e5 1
+.env.example
+  cbfd2f191555e6e5 1-48
+.claude/doctor-report.md
+  cbfd2f191555e6e5 1-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "e3ab13dc298164a647c66fd59d65373ef65fbea4",
+  "prompts": {
+    "cbfd2f191555e6e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21ed9b86-f0a7-4d55-a31c-218ee7519e21",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "赵桂雄",
+      "messages": [],
+      "total_additions": 462,
+      "total_deletions": 10,
+      "accepted_lines": 465,
+      "overriden_lines": 3
+    }
+  }
+}
