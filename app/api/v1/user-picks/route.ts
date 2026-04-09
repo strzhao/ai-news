@@ -127,7 +127,6 @@ export async function PATCH(request: Request): Promise<Response> {
       error: auth.error || "unauthorized",
     });
   }
-
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const articleId = String(body.article_id || "").trim();
@@ -135,18 +134,46 @@ export async function PATCH(request: Request): Promise<Response> {
       return jsonResponse(400, { ok: false, error: "article_id is required" });
     }
 
-    const aiSummary = String(body.ai_summary || "").trim();
-    if (!aiSummary) {
-      return jsonResponse(400, { ok: false, error: "ai_summary is required" });
+    // Collect all optional updatable fields
+    const fields: Record<string, string> = {};
+    const fieldNames = [
+      "ai_summary",
+      "title",
+      "summary",
+      "image_url",
+      "source_host",
+      "url",
+      "original_url",
+    ] as const;
+    for (const name of fieldNames) {
+      const val = String(body[name] || "").trim();
+      if (val) fields[name] = val;
+    }
+
+    if (Object.keys(fields).length === 0) {
+      return jsonResponse(400, {
+        ok: false,
+        error: "at least one field is required",
+      });
     }
 
     const redis = buildUpstashClient();
+
+    // Ownership check: ensure article belongs to this user
+    const score = await redis.zscore(userPicksKey(auth.user.id), articleId);
+    if (score === null) {
+      return jsonResponse(403, {
+        ok: false,
+        error: "article not found in your picks",
+      });
+    }
+
     const picksMetaK = userPicksMetaKey(articleId);
     const hMetaK = heartsMetaKey(articleId);
 
     await Promise.all([
-      redis.hset(picksMetaK, { ai_summary: aiSummary }),
-      redis.hset(hMetaK, { ai_summary: aiSummary }),
+      redis.hset(picksMetaK, fields),
+      redis.hset(hMetaK, fields),
     ]);
 
     return jsonResponse(200, { ok: true });

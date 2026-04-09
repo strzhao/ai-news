@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 
 import { fetchAuthUser } from "@/lib/client/auth";
 import type { AuthUser } from "@/lib/client/types";
-import UrlSubmitFloat from "./url-submit-float";
 
 const NAV_ITEMS = [
   { href: "/", icon: "📰", label: "每日精选" },
@@ -132,9 +131,6 @@ export default function AppShell({
 
       {/* Main Content */}
       <main className="app-content">{children}</main>
-
-      {/* URL Submit Float */}
-      <UrlSubmitFloat authUser={authUser} />
 
       {/* Mobile Tab Bar */}
       <nav className="mobile-tabbar">

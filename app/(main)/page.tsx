@@ -577,16 +577,6 @@ export default function HomePage(): React.ReactNode {
         <header className="block-head">
           <h2>今日精选</h2>
           <span className="block-head-actions">
-            {authUser ? (
-              <button
-                className="pick-submit-btn"
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("url-submit-open"))
-                }
-              >
-                + 收录文章
-              </button>
-            ) : null}
             <span>{todayItems.length} 篇精选</span>
           </span>
         </header>

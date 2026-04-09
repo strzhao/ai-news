@@ -62,3 +62,26 @@ export async function updatePickSummary(
   });
   return (await response.json()) as { ok: boolean };
 }
+
+export interface UpdatePickFields {
+  ai_summary?: string;
+  title?: string;
+  summary?: string;
+  image_url?: string;
+  source_host?: string;
+  url?: string;
+  original_url?: string;
+}
+
+export async function updatePickFields(
+  articleId: string,
+  fields: UpdatePickFields,
+): Promise<{ ok: boolean }> {
+  const response = await fetch("/api/v1/user-picks", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ article_id: articleId, ...fields }),
+  });
+  return (await response.json()) as { ok: boolean };
+}

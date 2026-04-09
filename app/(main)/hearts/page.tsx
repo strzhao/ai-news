@@ -5,6 +5,8 @@ import { SummaryDrawer } from "@/app/components/summary-drawer";
 import { fetchAuthUser } from "@/lib/client/auth";
 import { toggleHeart as toggleHeartApi } from "@/lib/client/hearts";
 import type { AuthUser } from "@/lib/client/types";
+import { pollTaskStatus, submitExtraction } from "@/lib/client/url-analysis";
+import { saveUserPick, updatePickFields } from "@/lib/client/user-picks";
 
 interface HeartedArticle {
   article_id: string;
@@ -18,7 +20,37 @@ interface HeartedArticle {
   ai_summary?: string;
 }
 
+type PendingStatus = "extracting" | "done" | "failed" | "rate-limited";
+
+interface PendingArticle {
+  article_id: string;
+  url: string;
+  original_url: string;
+  source_host: string;
+  title: string;
+  summary: string;
+  image_url: string;
+  ai_summary: string;
+  _status: PendingStatus;
+}
+
 const PAGE_SIZE = 20;
+
+const ENRICH_STEPS = [
+  "正在阅读文章...",
+  "正在提取内容...",
+  "AI 正在总结...",
+  "快好了...",
+];
+
+async function generateArticleId(url: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(url);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `pick-${hex.slice(0, 12)}`;
+}
 
 export default function HeartsPage(): React.ReactNode {
   return (
@@ -34,6 +66,70 @@ export default function HeartsPage(): React.ReactNode {
   );
 }
 
+function PendingCard({ item }: { item: PendingArticle }): React.ReactNode {
+  const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (item._status !== "extracting") return;
+    const timer = setInterval(() => {
+      setStepIndex((i) => (i + 1) % ENRICH_STEPS.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [item._status]);
+
+  const cardClass = [
+    "article-row numbered-article article-card-enter",
+    item._status === "extracting" ? "article-pending" : "",
+    item._status === "done" ? "article-enrich-done" : "",
+    item._status === "failed" ? "article-enrich-failed" : "",
+    item._status === "rate-limited" ? "article-enrich-failed" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const displayUrl = item.original_url || item.url;
+  const displayTitle = item.title || item.url;
+
+  return (
+    <article className={cardClass}>
+      <div className="article-copy">
+        <div className="article-meta">
+          <span>{item.source_host || "正在识别来源..."}</span>
+        </div>
+        <h3 className="article-headline">
+          <a href={displayUrl} target="_blank" rel="noreferrer noopener">
+            {displayTitle}
+          </a>
+        </h3>
+
+        {item._status === "extracting" ? (
+          <>
+            <div className="article-skeleton">
+              <div className="article-skeleton-line" />
+              <div className="article-skeleton-line short" />
+            </div>
+            <p className="article-pending-step">{ENRICH_STEPS[stepIndex]}</p>
+          </>
+        ) : null}
+
+        {item._status === "done" && item.summary ? (
+          <p className="article-dek">{item.summary}</p>
+        ) : null}
+
+        {item._status === "failed" ? (
+          <span className="enrich-saved-tag">链接已保存</span>
+        ) : null}
+
+        {item._status === "rate-limited" ? (
+          <p className="article-dek" style={{ color: "var(--muted)" }}>
+            操作太频繁，请稍后再试
+          </p>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 function HeartsContent(): React.ReactNode {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -42,6 +138,12 @@ function HeartsContent(): React.ReactNode {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [pendingItems, setPendingItems] = useState<PendingArticle[]>([]);
+
+  const [urlInput, setUrlInput] = useState("");
+  const [inputHint, setInputHint] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [summaryArticle, setSummaryArticle] = useState<HeartedArticle | null>(
     null,
@@ -106,7 +208,6 @@ function HeartsContent(): React.ReactNode {
       summaryAutoOpenedRef.current = true;
       setSummaryArticle(found);
     } else {
-      // 文章不在当前用户收藏中 → fallback 到公共总结页
       summaryAutoOpenedRef.current = true;
       window.location.replace(`/summary/${encodeURIComponent(summaryId)}`);
     }
@@ -138,6 +239,229 @@ function HeartsContent(): React.ReactNode {
     }).format(new Date(ts));
   }
 
+  function showHint(msg: string): void {
+    setInputHint(msg);
+    setTimeout(() => setInputHint(""), 2000);
+  }
+
+  async function enrichArticle(articleId: string, url: string): Promise<void> {
+    try {
+      const result = await submitExtraction(url, true);
+
+      if (!result.ok) {
+        // Check for 429-like rate limiting
+        if (
+          result.error?.includes("429") ||
+          result.error?.includes("频繁") ||
+          result.error?.includes("rate")
+        ) {
+          setPendingItems((prev) =>
+            prev.map((p) =>
+              p.article_id === articleId
+                ? { ...p, _status: "rate-limited" }
+                : p,
+            ),
+          );
+          return;
+        }
+        setPendingItems((prev) =>
+          prev.map((p) =>
+            p.article_id === articleId ? { ...p, _status: "failed" } : p,
+          ),
+        );
+        return;
+      }
+
+      if (!result.task) {
+        setPendingItems((prev) =>
+          prev.map((p) =>
+            p.article_id === articleId ? { ...p, _status: "failed" } : p,
+          ),
+        );
+        return;
+      }
+
+      const taskId = result.task.task_id;
+      let task = result.task;
+      let consecutiveFailures = 0;
+
+      for (let i = 0; i < 120; i++) {
+        if (task.status === "completed") break;
+        if (task.status === "failed") {
+          setPendingItems((prev) =>
+            prev.map((p) =>
+              p.article_id === articleId ? { ...p, _status: "failed" } : p,
+            ),
+          );
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 5000));
+        const poll = await pollTaskStatus(taskId);
+        if (poll.ok && poll.task) {
+          task = poll.task;
+          consecutiveFailures = 0;
+        } else {
+          consecutiveFailures++;
+          if (consecutiveFailures >= 5) {
+            setPendingItems((prev) =>
+              prev.map((p) =>
+                p.article_id === articleId ? { ...p, _status: "failed" } : p,
+              ),
+            );
+            return;
+          }
+        }
+      }
+
+      if (task.status !== "completed") {
+        setPendingItems((prev) =>
+          prev.map((p) =>
+            p.article_id === articleId ? { ...p, _status: "failed" } : p,
+          ),
+        );
+        return;
+      }
+
+      // Build full fields
+      const thumbResource = task.resources?.find(
+        (r) => r.type === "thumbnail" || r.type === "image",
+      );
+      let sourceHost = "";
+      try {
+        sourceHost = new URL(task.url).hostname;
+      } catch {
+        /* ignore */
+      }
+
+      const fullFields = {
+        title: task.metadata?.title || task.url,
+        summary: task.metadata?.description || "",
+        image_url: thumbResource?.url || "",
+        source_host: sourceHost,
+        url: task.url,
+        original_url: task.url,
+        ai_summary: task.ai_summary || "",
+      };
+
+      // Persist to Redis
+      await updatePickFields(articleId, fullFields);
+
+      // Update pending card with full data + done status
+      setPendingItems((prev) =>
+        prev.map((p) =>
+          p.article_id === articleId
+            ? {
+                ...p,
+                ...fullFields,
+                _status: "done",
+              }
+            : p,
+        ),
+      );
+
+      // After 2s, move from pendingItems into items
+      setTimeout(() => {
+        setPendingItems((prev) => {
+          const found = prev.find((p) => p.article_id === articleId);
+          if (found) {
+            const newItem: HeartedArticle = {
+              article_id: found.article_id,
+              hearted_at: Date.now(),
+              title: found.title,
+              url: found.url,
+              original_url: found.original_url,
+              source_host: found.source_host,
+              image_url: found.image_url,
+              summary: found.summary,
+              ai_summary: found.ai_summary,
+            };
+            setItems((prevItems) => {
+              // Avoid duplicates
+              const exists = prevItems.some(
+                (it) => it.article_id === articleId,
+              );
+              if (exists) return prevItems;
+              return [newItem, ...prevItems];
+            });
+            setTotal((t) => t + 1);
+          }
+          return prev.filter((p) => p.article_id !== articleId);
+        });
+      }, 2000);
+    } catch {
+      setPendingItems((prev) =>
+        prev.map((p) =>
+          p.article_id === articleId ? { ...p, _status: "failed" } : p,
+        ),
+      );
+    }
+  }
+
+  async function handleSubmitUrl(
+    e: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> {
+    e.preventDefault();
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+
+    // Validate URL format
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(trimmed);
+    } catch {
+      showHint("请输入有效的 URL");
+      return;
+    }
+
+    // Check for duplicates
+    const isDuplicate = [
+      ...items.map((i) => i.original_url || i.url),
+      ...pendingItems.map((p) => p.original_url || p.url),
+    ].some((u) => u === trimmed);
+
+    if (isDuplicate) {
+      showHint("已收藏过这篇文章");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const articleId = await generateArticleId(trimmed);
+    const sourceHost = parsedUrl.hostname;
+
+    const minimalPayload = {
+      article_id: articleId,
+      title: trimmed,
+      url: trimmed,
+      original_url: trimmed,
+      source_host: sourceHost,
+      image_url: "",
+      summary: "",
+      ai_summary: "",
+    };
+
+    // Save minimal data to Redis immediately
+    const saveResult = await saveUserPick(minimalPayload);
+    if (!saveResult.ok) {
+      showHint("保存失败，请重试");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Insert pending card at top
+    const pendingCard: PendingArticle = {
+      ...minimalPayload,
+      _status: "extracting",
+    };
+    setPendingItems((prev) => [pendingCard, ...prev]);
+
+    // Clear input
+    setUrlInput("");
+    setIsSubmitting(false);
+
+    // Start background enrichment (non-blocking)
+    void enrichArticle(articleId, trimmed);
+  }
+
   if (!authChecked) {
     return (
       <div className="page-header">
@@ -147,7 +471,6 @@ function HeartsContent(): React.ReactNode {
   }
 
   if (!authUser) {
-    // 未登录但有 summary 参数 → 重定向到公共总结页
     const summaryId = new URLSearchParams(window.location.search).get(
       "summary",
     );
@@ -172,21 +495,56 @@ function HeartsContent(): React.ReactNode {
     );
   }
 
+  // IDs already shown in pendingItems, filter from items list
+  const pendingIds = new Set(pendingItems.map((p) => p.article_id));
+  const filteredItems = items.filter((i) => !pendingIds.has(i.article_id));
+
   return (
     <>
       <div className="page-header">
         <h1 className="page-title">我的收藏</h1>
         <p className="newsletter-subtitle">{total} 篇收藏文章</p>
+
+        <form
+          className="hearts-inline-form"
+          onSubmit={(e) => {
+            void handleSubmitUrl(e);
+          }}
+        >
+          <input
+            type="url"
+            className="hearts-url-input"
+            placeholder="粘贴文章链接，立即收录..."
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            disabled={isSubmitting}
+          />
+          <button
+            type="submit"
+            className="hearts-submit-btn"
+            disabled={isSubmitting || !urlInput.trim()}
+          >
+            {isSubmitting ? "保存中..." : "收录"}
+          </button>
+        </form>
+        {inputHint ? <p className="hearts-input-hint">{inputHint}</p> : null}
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="content-block">
         <div className="editorial-list">
-          {items.length === 0 && !loading ? (
+          {/* Pending cards first */}
+          {pendingItems.map((item) => (
+            <PendingCard key={item.article_id} item={item} />
+          ))}
+
+          {filteredItems.length === 0 &&
+          pendingItems.length === 0 &&
+          !loading ? (
             <p className="empty-note">还没有收藏文章，去首页看看吧。</p>
           ) : (
-            items.map((item) => {
+            filteredItems.map((item) => {
               const articleUrl = item.original_url || item.url;
               return (
                 <article
@@ -238,7 +596,7 @@ function HeartsContent(): React.ReactNode {
           )}
         </div>
 
-        {items.length < total ? (
+        {filteredItems.length < total ? (
           <div className="load-more-wrap">
             <button
               type="button"
