@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { resolveUserFromRequest } from "@/lib/auth/cookie-auth";
 import { jsonResponse } from "@/lib/infra/route-utils";
 import { buildUpstashClient } from "@/lib/infra/upstash";
@@ -30,15 +31,30 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const articleId = String(body.article_id || "").trim();
+    let articleId = String(body.article_id || "").trim();
+    const url = String(body.url || "").trim();
+
     if (!articleId) {
-      return jsonResponse(400, { ok: false, error: "article_id is required" });
+      if (!url) {
+        return jsonResponse(400, {
+          ok: false,
+          error: "url or article_id is required",
+        });
+      }
+      const hex = crypto.createHash("sha256").update(url).digest("hex");
+      articleId = `pick-${hex.slice(0, 12)}`;
     }
 
-    const title = String(body.title || "").trim();
-    const url = String(body.url || "").trim();
+    const title = String(body.title || url).trim();
     const originalUrl = String(body.original_url || "").trim();
-    const sourceHost = String(body.source_host || "").trim();
+    let sourceHost = String(body.source_host || "").trim();
+    if (!sourceHost && url) {
+      try {
+        sourceHost = new URL(url).hostname;
+      } catch {
+        // leave empty if URL is invalid
+      }
+    }
     const imageUrl = String(body.image_url || "").trim();
     const summary = String(body.summary || "").trim();
     const aiSummary = String(body.ai_summary || "").trim();

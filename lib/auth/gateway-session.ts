@@ -235,7 +235,10 @@ export function clearGatewaySessionCookie(response: NextResponse): void {
 export function readGatewaySessionFromRequest(
   request: Request,
 ): GatewaySessionPayload | null {
-  const raw = readGatewaySessionCookie(request);
+  const raw =
+    readGatewaySessionCookie(request) ||
+    request.headers.get("x-auth-session") ||
+    "";
   if (!raw) return null;
   return verifyGatewaySessionCookieValue(raw);
 }

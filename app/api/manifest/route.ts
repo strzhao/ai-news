@@ -185,6 +185,52 @@ const manifest = {
         },
       ],
     },
+    {
+      id: "hearts_save",
+      name: "hearts:save",
+      description: "Bookmark a URL to your hearts collection",
+      method: "POST",
+      path: "/api/v1/user-picks",
+      params: [
+        {
+          name: "url",
+          in: "body",
+          type: "string",
+          required: true,
+          description: "URL to bookmark",
+        },
+        {
+          name: "title",
+          in: "body",
+          type: "string",
+          required: false,
+          description: "Page title (optional, defaults to URL)",
+        },
+      ],
+    },
+    {
+      id: "hearts_list",
+      name: "hearts:list",
+      description: "List your bookmarked hearts",
+      method: "GET",
+      path: "/api/v1/hearts",
+      params: [
+        {
+          name: "page",
+          in: "query",
+          type: "string",
+          required: false,
+          description: "Page number",
+        },
+        {
+          name: "size",
+          in: "query",
+          type: "string",
+          required: false,
+          description: "Page size",
+        },
+      ],
+    },
   ],
 };
 
