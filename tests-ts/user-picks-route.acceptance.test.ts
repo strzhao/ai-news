@@ -97,7 +97,7 @@ describe("POST /api/v1/user-picks", () => {
     expect(hsetMock).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when article_id is missing", async () => {
+  it("returns 400 when both article_id and url are missing", async () => {
     resolveUserMock.mockResolvedValue({
       ok: true,
       user: { id: "usr_123", email: "u@example.com" },
@@ -106,6 +106,8 @@ describe("POST /api/v1/user-picks", () => {
     const body = { ...SAMPLE_PICK };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (body as any).article_id;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (body as any).url;
 
     const response = await POST(jsonRequest("POST", body));
     const payload = (await response.json()) as Record<string, unknown>;
@@ -113,6 +115,28 @@ describe("POST /api/v1/user-picks", () => {
     expect(response.status).toBe(400);
     expect(payload.ok).toBeFalsy();
     expect(zaddMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-generates article_id from url when article_id is missing", async () => {
+    resolveUserMock.mockResolvedValue({
+      ok: true,
+      user: { id: "usr_123", email: "u@example.com" },
+    });
+    zaddMock.mockResolvedValue(1);
+    hsetMock.mockResolvedValue("OK");
+    expireMock.mockResolvedValue(1);
+    zcardMock.mockResolvedValue(1);
+
+    const body = { ...SAMPLE_PICK };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (body as any).article_id;
+
+    const response = await POST(jsonRequest("POST", body));
+    const payload = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(zaddMock).toHaveBeenCalled();
   });
 
   it("saves pick and auto-hearts on valid submission", async () => {
