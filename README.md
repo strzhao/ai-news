@@ -40,6 +40,9 @@
 - `ARTICLE_DB_API_TOKEN`：调用 `article-db` 的 Bearer Token（如启用鉴权）
 - `CRON_SECRET`：保护 cron 触发接口
 
+`ai-news` 不再直接连接 Postgres。生产环境不应再配置 `DATABASE_URL` / `POSTGRES_URL*`；
+文章归档、分析、flomo 批次状态等数据库读写统一由 `article-db` 服务负责。
+
 ### flomo
 
 - `FLOMO_API_URL`
@@ -81,3 +84,9 @@ npm test
 - `0 11 * * *` (UTC, 北京 19:00) -> `/api/v1/flomo/cron-push`
 
 `article-db` 的 ingestion cron（每小时）已迁移到 `article-db` 仓库中维护。
+
+切换到独立库时：
+
+1. 先在 `article-db` 项目完成新库迁移与验证
+2. 保持 `ai-news` 的 `ARTICLE_DB_BASE_URL` 指向 `article-db` 正式域名
+3. 删除 `ai-news` 项目中的旧 `DATABASE_URL` / `POSTGRES_URL*`

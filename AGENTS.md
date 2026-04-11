@@ -6,15 +6,13 @@
   - `app/components/`: shared client components (e.g., `sw-register.tsx`).
   - `app/archive-review/`: archive review UI.
 - `lib/`: core business logic by domain.
-  - `lib/article-db/`: ingestion, repository, auth, migration.
   - `lib/domain/`: archive, tracker, and shared domain utilities.
   - `lib/output/`: markdown/flomo formatters.
-  - `lib/integrations/`, `lib/tracking/`, `lib/fetch/`, `lib/llm/`: external clients and pipelines.
+  - `lib/integrations/`, `lib/tracking/`, `lib/fetch/`, `lib/llm/`: 外部客户端与消费层数据整合逻辑；文章主数据来自独立 `article-db` 服务。
   - `lib/client/`: browser-side API helpers (auth, flomo, web-push).
 - `public/`: PWA assets (manifest.json, sw.js, icons).
 - `tests-ts/`: Vitest unit/integration-style tests (`*.test.ts`).
 - `config/`: source and type configuration YAML.
-- `db/`: SQL or DB artifacts.
 
 ## Build, Test, and Development Commands
 - `npm run dev`: run local Next.js dev server.
@@ -57,6 +55,7 @@
 - Never commit secrets. Use `.env.local` for local values.
 - Key sensitive vars: `CRON_SECRET`, `TRACKER_SIGNING_SECRET`, `ARTICLE_DB_API_TOKEN`, `FLOMO_API_URL`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 - When changing cron-triggered APIs, update both `vercel.json` and `README.md` together.
+- `ai-news` 不应依赖 `DATABASE_URL` / `POSTGRES_URL*`；如果看到这些变量，默认视为历史残留，应从项目环境中删除。
 
 ## Flomo Integration Rules (Important)
 - Flomo push uses two paths: `GET /api/v1/flomo/cron-push` (scheduled, iterates all subscribers) and `POST /api/v1/flomo/push` (user-triggered, per-user).
