@@ -1,0 +1,23 @@
+tests-ts/user-picks-route.acceptance.test.ts
+  880c30292a94ff9c 100,109-110,120-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "5764b2238b03278fa8ee13de79a32c383e644cc5",
+  "prompts": {
+    "880c30292a94ff9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b6b70a0-fa13-4ce9-b59d-5b8a6ab590d0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "赵桂雄",
+      "messages": [],
+      "total_additions": 25,
+      "total_deletions": 1,
+      "accepted_lines": 25,
+      "overriden_lines": 0
+    }
+  }
+}
